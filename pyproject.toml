@@ -1,0 +1,42 @@
+[project]
+name = "argp"
+version = "1.0.0"
+requires-python = ">=3.10"
+description = ""
+authors = [
+    { name = "Yu-Ting Wei", email = "ytsimon2004@gmail.com" },
+    { name = "Ta-Shun Su", email = "antoniost29@gmail.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+keywords = ["argparse", "validator"]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    'Intended Audience :: Science/Research',
+    "Typing :: Typed",
+]
+
+dependencies = ['rich']
+
+
+[project.optional-dependencies]
+
+doc = ['sphinx', 'pydata-sphinx-theme']
+
+
+[project.urls]
+Homepage = "https://github.com/ytsimon2004/argp"
+#Documentation = ""
+Repository = "https://github.com/ytsimon2004/argp"
+Issues = "https://github.com/ytsimon2004/argp/issues"
+
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0"]
