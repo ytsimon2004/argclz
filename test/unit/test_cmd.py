@@ -1,6 +1,7 @@
 import unittest
 
 from argp import *
+from argp.core import parse_command_args
 
 
 class CommandParserTest(unittest.TestCase):

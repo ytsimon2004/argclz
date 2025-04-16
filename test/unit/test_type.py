@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional, Literal
 
 from argp import *
+from argp.core import parse_args
 
 
 class TypeAnnotationTest(unittest.TestCase):
@@ -93,6 +94,19 @@ class TypeAnnotationTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a', 'C'])
 
+    def test_literal_complete(self):
+        class Opt:
+            a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(complete=False))
+
+        with self.assertRaises(RuntimeError):
+            opt = parse_args(Opt(), ['-a', 'A'])
+
+        class Opt:
+            a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(complete=True))
+
+        opt = parse_args(Opt(), ['-a', 'A'])
+        self.assertEqual(opt.a, 'AAA')
+
     def test_optional_literal(self):
         class Opt:
             a: Literal['A', 'B', None] = argument('-a')
@@ -149,6 +163,16 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['12', '34'])
         self.assertListEqual(opt.a, ['12', '34'])
 
+    def test_list_type_var_arg(self):
+        class Opt:
+            a: list[str] = var_argument('...')
+
+        opt = parse_args(Opt(), [])
+        self.assertListEqual(opt.a, [])
+
+        opt = parse_args(Opt(), ['12', '34'])
+        self.assertListEqual(opt.a, ['12', '34'])
+
     def test_list_type_append(self):
         class Opt:
             a: list[str] = argument('-a', action='append')
@@ -168,6 +192,58 @@ class TypeAnnotationTest(unittest.TestCase):
 
         opt = parse_args(Opt(), ['12', '34'])
         self.assertListEqual(opt.a, [12, 34])
+
+    def test_list_type_infer_var_arg(self):
+        class Opt:
+            a: list[int] = var_argument('...')
+
+        opt = parse_args(Opt(), ['12', '34'])
+        self.assertListEqual(opt.a, [12, 34])
+
+    def test_list_type_comma(self):
+        class Opt:
+            a: list[int] = argument('-a', type=list_type(int))
+
+        opt = parse_args(Opt(), ['-a=1,2'])
+        self.assertListEqual(opt.a, [1, 2])
+
+    def test_list_type_comma_prepend(self):
+        class Opt:
+            a: list[int] = argument('-a', type=list_type(int, prepend=[0]))
+
+        opt = parse_args(Opt(), ['-a=1,2'])
+        self.assertListEqual(opt.a, [1, 2])
+        opt = parse_args(Opt(), ['-a=+,1,2'])
+        self.assertListEqual(opt.a, [0, 1, 2])
+
+    def test_tuple_type(self):
+        class Opt:
+            a: tuple[int, str] = argument('-a', type=tuple_type(int, str))
+
+        opt = parse_args(Opt(), ['-a=1,2'])
+        self.assertTupleEqual(opt.a, (1, '2'))
+
+    def test_tuple_type_ellipse(self):
+        class Opt:
+            a: tuple[int, ...] = argument('-a', type=tuple_type(int, ...))
+
+        opt = parse_args(Opt(), ['-a=1,2'])
+        self.assertTupleEqual(opt.a, (1, 2))
+        opt = parse_args(Opt(), ['-a=1,2,3'])
+        self.assertTupleEqual(opt.a, (1, 2, 3))
+
+    def test_dict_type(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', type=dict_type(literal_value_type))
+
+        opt = parse_args(Opt(), ['-a=a=1'])
+        self.assertDictEqual(opt.a, {'a': 1})
+
+        opt = parse_args(Opt(), ['-a=a=1', '-a=b:2'])
+        self.assertDictEqual(opt.a, {'a': 1, 'b': 2})
+
+        opt = parse_args(Opt(), ['-a=a=1', '-a=b:2', '-a=c'])
+        self.assertDictEqual(opt.a, {'a': 1, 'b': 2, 'c': ''})
 
 
 if __name__ == '__main__':

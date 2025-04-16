@@ -6,16 +6,23 @@ from collections.abc import Sequence, Iterable, Callable
 from typing import Type, TypeVar, Union, Literal, overload, Any, Optional, get_type_hints, TextIO
 
 __all__ = [
+    # parser
     'AbstractParser',
     'new_parser',
     'new_command_parser',
     'parse_args',
     'parse_command_args',
+    # argument
+    'Argument',
     'argument',
     'pos_argument',
     'var_argument',
     'aliased_argument',
     'as_argument',
+    # utilities
+    'with_defaults',
+    'set_options',
+    'as_dict'
 ]
 
 T = TypeVar('T')
@@ -257,7 +264,10 @@ class Argument(object):
             from ._types import TypeCasterWithValidator
 
             type_caster = self.kwargs.get('type', None)
-            self.kwargs['type'] = TypeCasterWithValidator(type_caster, type_validator)
+            if isinstance(type_caster, TypeCasterWithValidator):
+                self.kwargs['type'] = TypeCasterWithValidator(type_caster.caster, type_validator)
+            else:
+                self.kwargs['type'] = TypeCasterWithValidator(type_caster, type_validator)
 
         if self.hidden:
             self.kwargs['help'] = argparse.SUPPRESS

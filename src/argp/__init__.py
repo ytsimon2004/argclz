@@ -140,5 +140,12 @@ See detailed in :attr:`~argp.validator`
 
 """
 from ._validator import *
-from .core import *
+from .core import (
+    AbstractParser,
+    argument,
+    pos_argument,
+    var_argument,
+    aliased_argument,
+    as_argument
+)
 from .types import *

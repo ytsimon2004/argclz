@@ -19,7 +19,7 @@ def caster_by_annotation(a_name: str, a_type):
 
     if a_type_ori == Literal:
         from .types import literal_type
-        return literal_type(*get_args(a_type))
+        return literal_type(get_args(a_type))
 
     elif a_type_ori == Union or a_type_ori == UnionType:
         a_type_args = get_args(a_type)
@@ -101,7 +101,8 @@ def _complete_arg_kwargs_for_collection(self: Argument):
 
     a_type_arg = get_args(self.attr_type)  # Coll[T]
     if len(a_type_arg) == 0:
-        self.kwargs['type'] = self.attr_type
+        # XXX what kinds of collection it is?
+        raise RuntimeError()
     elif len(a_type_arg) == 1:
         self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
     else:
@@ -119,7 +120,12 @@ def _complete_arg_kwargs_for_literal(self: Argument):
     literal_values = get_args(self.attr_type)
     literal_values = [it for it in literal_values if isinstance(it, str)]
 
-    self.kwargs.setdefault('choices', literal_values)
+    if isinstance(t := self.kwargs.get('type', None), literal_type):
+        if not t.complete:
+            self.kwargs.setdefault('choices', literal_values)
+    else:
+        self.kwargs.setdefault('choices', literal_values)
+
     self.kwargs.setdefault('metavar', '|'.join(literal_values))
 
 

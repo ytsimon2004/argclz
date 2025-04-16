@@ -82,12 +82,11 @@ def list_type(value_type: Callable[[str], T] = str, *, split=',', prepend: list[
     """
 
     def _cast(arg: str) -> list[T]:
-        value = list(map(value_type, arg.split(split)))
-
-        if arg.startswith('+') and prepend is not None:
+        if arg.startswith(remove := ('+' + split)) and prepend is not None:
+            value = list(map(value_type, arg[len(remove):].split(split)))
             return [*prepend, *value]
         else:
-            return list(value)
+            return list(map(value_type, arg.split(split)))
 
     return _cast
 
@@ -107,7 +106,7 @@ def union_type(*t: Callable[[str], T]):
     return _type
 
 
-def dict_type(default: dict[str, T], value_type: Callable[[str], T] = None):
+def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] = None):
     """Dict arg value.
 
     :param default: default dict content
@@ -177,10 +176,10 @@ class literal_type:
             self.set_candidate(candidate)
 
     def set_candidate(self, candidate: type[Literal] | tuple[str, ...], overwrite: bool = False):
-        if len(candidate) == 1 and not isinstance(candidate[0], str) and get_origin(candidate[0]) == Literal:
-            candidate = get_args(candidate[0])
+        if get_origin(candidate) is Literal:
+            candidate = get_args(candidate)
 
-        if overwrite or len(self.candidate) == 0:
+        if overwrite or self.candidate is None:
             self.optional = None in candidate
             if self.optional:
                 candidate = [it for it in candidate if it is not None]

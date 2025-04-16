@@ -2,6 +2,7 @@ import unittest
 from typing import Literal
 
 from argp import *
+from argp.core import with_defaults, as_dict
 
 
 class WithDefaultTest(unittest.TestCase):
