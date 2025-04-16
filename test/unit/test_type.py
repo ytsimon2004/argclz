@@ -90,10 +90,23 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), [])
         self.assertIsNone(opt.a)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a', 'C'])
 
     def test_optional_literal(self):
+        class Opt:
+            a: Literal['A', 'B', None] = argument('-a')
+
+        opt = parse_args(Opt(), ['-a', 'A'])
+        self.assertEqual(opt.a, 'A')
+
+        opt = parse_args(Opt(), [])
+        self.assertIsNone(opt.a)
+
+        with self.assertRaises(RuntimeError):
+            parse_args(Opt(), ['-a', 'C'])
+
+    def test_optional_literal_2(self):
         class Opt:
             a: Optional[Literal['A', 'B']] = argument('-a')
 
@@ -103,15 +116,28 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), [])
         self.assertIsNone(opt.a)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
+            parse_args(Opt(), ['-a', 'C'])
+
+    def test_optional_literal_3(self):
+        class Opt:
+            a: Literal['A', 'B'] | None = argument('-a')
+
+        opt = parse_args(Opt(), ['-a', 'A'])
+        self.assertEqual(opt.a, 'A')
+
+        opt = parse_args(Opt(), [])
+        self.assertIsNone(opt.a)
+
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a', 'C'])
 
     def test_literal_with_choice(self):
         class Opt:
             a: Literal['A', 'B'] = argument('-a', choices=('A', 'B', 'C'))
 
-        opt = parse_args(Opt(), ['-a', 'C'])
-        self.assertEqual(opt.a, 'C')
+        with self.assertRaises(RuntimeError):
+            parse_args(Opt(), ['-a', 'C'])
 
     def test_list_type_extend(self):
         class Opt:

@@ -2,6 +2,7 @@ import abc
 import argparse
 import collections
 import sys
+from types import UnionType
 from typing import (
     Iterable, Sequence, Type, TypeVar, Union, Literal, Callable,
     overload, get_origin, get_args, Any, Optional, get_type_hints
@@ -288,10 +289,16 @@ class Argument(object):
                 self.kwargs.setdefault('action', 'store')
 
             if self.kwargs['action'] in ('store', 'store_const'):  # value type
+                a_type_ori = get_origin(self.attr_type)
+                if a_type_ori == Union or a_type_ori == UnionType:
+                    a_type_args = get_args(self.attr_type)
+                    if len(a_type_args) == 2 and a_type_args[1] == type(None):
+                        self.kwargs.setdefault('default', None)
+
                 from ._type import caster_by_annotation
                 self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
                 if get_origin(self.attr_type) == Literal and 'metavar' not in self.kwargs:
-                    self.kwargs['metavar'] = '|'.join(get_args(self.attr_type))
+                    self.kwargs['metavar'] = '|'.join([it for it in get_args(self.attr_type) if it is not None])
 
             elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
                 self.kwargs.setdefault('default', get_origin(self.attr_type)())
