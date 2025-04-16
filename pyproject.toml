@@ -30,6 +30,7 @@ dependencies = []
 [project.optional-dependencies]
 
 opt = ['rich']
+test = ['argp[opt]', 'coverage']
 doc = ['sphinx', 'pydata-sphinx-theme']
 
 
