@@ -1,9 +1,13 @@
-from types import UnionType
-from typing import TypeVar, Union, Literal, get_origin, get_args, Any
+from __future__ import annotations
 
-__all__ = [
-    'caster_by_annotation',
-]
+from collections.abc import Callable
+from types import UnionType
+from typing import TypeVar, Union, Literal, get_origin, get_args, Any, TYPE_CHECKING, Generic
+
+if TYPE_CHECKING:
+    from .core import Argument
+
+__all__ = []
 
 T = TypeVar('T')
 
@@ -34,3 +38,100 @@ def caster_by_annotation(a_name: str, a_type):
 
     else:
         raise RuntimeError(f'{a_name} {a_type}')
+
+
+def complete_arg_kwargs(self: Argument):
+    if len(self.options) == 0:  # positional argument
+        if 'default' not in self.kwargs:
+            self.kwargs.setdefault('nargs', '?')
+
+    if 'type' not in self.kwargs:
+        # complete bool argument for action and default
+        if self.attr_type == bool:
+            _complete_arg_kwargs_for_bool(self)
+
+        if get_origin(self.attr_type) is list:
+            self.kwargs.setdefault('action', 'append')
+        else:
+            self.kwargs.setdefault('action', 'store')
+
+        if self.kwargs['action'] in ('store', 'store_const'):  # value type
+            _complete_arg_kwargs_for_value(self)
+
+        elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
+            _complete_arg_kwargs_for_collection(self)
+
+    if get_origin(self.attr_type) is Literal:
+        _complete_arg_kwargs_for_literal(self)
+
+
+def _complete_arg_kwargs_for_bool(self: Argument):
+    assert self.attr_type == bool
+
+    if 'default' not in self.kwargs:
+        if 'nargs' in self.kwargs:
+            from .types import bool_type
+            self.kwargs['type'] = bool_type
+            self.kwargs['action'] = 'store'
+        else:
+            self.kwargs.setdefault('action', 'store_true')
+            self.kwargs.setdefault('default', False)
+
+    elif self.kwargs['default']:
+        self.kwargs.setdefault('action', 'store_false')
+        self.kwargs.setdefault('default', True)
+
+    else:
+        self.kwargs.setdefault('action', 'store_true')
+        self.kwargs.setdefault('default', False)
+
+
+def _complete_arg_kwargs_for_value(self: Argument):
+    a_type_ori = get_origin(self.attr_type)
+    if a_type_ori == Union or a_type_ori == UnionType:
+        a_type_args = get_args(self.attr_type)
+        if len(a_type_args) == 2 and a_type_args[1] == type(None):
+            self.kwargs.setdefault('default', None)
+
+    self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
+
+
+def _complete_arg_kwargs_for_collection(self: Argument):
+    self.kwargs.setdefault('default', get_origin(self.attr_type)())
+
+    a_type_arg = get_args(self.attr_type)  # Coll[T]
+    if len(a_type_arg) == 0:
+        self.kwargs['type'] = self.attr_type
+    elif len(a_type_arg) == 1:
+        self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
+    else:
+        raise RuntimeError()
+
+
+def _complete_arg_kwargs_for_literal(self: Argument):
+    assert get_origin(self.attr_type) is Literal
+
+    from .types import literal_type
+    t: literal_type | None
+    if isinstance(t := self.kwargs.get('type', None), literal_type):
+        t.set_candidate(self.attr_type)
+
+    literal_values = get_args(self.attr_type)
+    literal_values = [it for it in literal_values if isinstance(it, str)]
+
+    self.kwargs.setdefault('choices', literal_values)
+    self.kwargs.setdefault('metavar', '|'.join(literal_values))
+
+
+class TypeCasterWithValidator(Generic[T]):
+    def __init__(self, caster: Callable[[str], T] | None, validator: Callable[[T], bool]):
+        self.caster = caster
+        self.validator = validator
+
+    def __call__(self, value: str) -> T:
+        raw_value = value
+        if self.caster is not None:
+            value = self.caster(value)
+        if not self.validator(value):
+            raise ValueError(f'fail validation : "{raw_value}"')
+        return value

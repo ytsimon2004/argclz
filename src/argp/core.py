@@ -2,11 +2,8 @@ import abc
 import argparse
 import collections
 import sys
-from types import UnionType
-from typing import (
-    Iterable, Sequence, Type, TypeVar, Union, Literal, Callable,
-    overload, get_origin, get_args, Any, Optional, get_type_hints
-)
+from collections.abc import Sequence, Iterable, Callable
+from typing import Type, TypeVar, Union, Literal, overload, Any, Optional, get_type_hints, TextIO
 
 __all__ = [
     'AbstractParser',
@@ -14,15 +11,11 @@ __all__ = [
     'new_command_parser',
     'parse_args',
     'parse_command_args',
-    'set_options',
     'argument',
+    'pos_argument',
+    'var_argument',
+    'aliased_argument',
     'as_argument',
-    'with_defaults',
-    'print_help',
-    'as_dict',
-    'copy_argument',
-    #
-    'Argument'
 ]
 
 T = TypeVar('T')
@@ -72,10 +65,6 @@ class AbstractParser(metaclass=abc.ABCMeta):
         obj = object.__new__(cls)
         with_defaults(obj)
         return obj
-
-    def __init__(self, ref: T | None = None, /, **kwargs):
-        if ref is not None:
-            copy_argument(self, ref, **kwargs)
 
     @classmethod
     def new_parser(cls, **kwargs) -> ArgumentParser:
@@ -261,76 +250,14 @@ class Argument(object):
             else:
                 self.validate_on_set = True
 
-        if len(self.options) == 0:  # positional argument
-            if 'default' not in self.kwargs:
-                self.kwargs.setdefault('nargs', '?')
-
-        if 'type' not in self.kwargs:
-            # complete bool argument for action and default
-            if self.attr_type == bool:
-                if 'default' not in self.kwargs:
-                    if 'nargs' in self.kwargs:
-                        from .types import bool_type
-                        self.kwargs['type'] = bool_type
-                        self.kwargs['action'] = 'store'
-                    else:
-                        self.kwargs.setdefault('action', 'store_true')
-                        self.kwargs.setdefault('default', False)
-                elif self.kwargs['default']:
-                    self.kwargs.setdefault('action', 'store_false')
-                    self.kwargs.setdefault('default', True)
-                else:
-                    self.kwargs.setdefault('action', 'store_true')
-                    self.kwargs.setdefault('default', False)
-
-            if get_origin(self.attr_type) is list:
-                self.kwargs.setdefault('action', 'append')
-            else:
-                self.kwargs.setdefault('action', 'store')
-
-            if self.kwargs['action'] in ('store', 'store_const'):  # value type
-                a_type_ori = get_origin(self.attr_type)
-                if a_type_ori == Union or a_type_ori == UnionType:
-                    a_type_args = get_args(self.attr_type)
-                    if len(a_type_args) == 2 and a_type_args[1] == type(None):
-                        self.kwargs.setdefault('default', None)
-
-                from ._types import caster_by_annotation
-                self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
-                if get_origin(self.attr_type) == Literal and 'metavar' not in self.kwargs:
-                    self.kwargs['metavar'] = '|'.join([it for it in get_args(self.attr_type) if it is not None])
-
-            elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
-                self.kwargs.setdefault('default', get_origin(self.attr_type)())
-
-                a_type_arg = get_args(self.attr_type)  # Coll[T]
-                if len(a_type_arg) == 0:
-                    self.kwargs['type'] = self.attr_type
-                elif len(a_type_arg) == 1:
-                    from ._types import caster_by_annotation
-                    self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
-                else:
-                    raise RuntimeError()
-
-        from .types import literal_type
-        if get_origin(self.attr_type) is Literal and isinstance(t := self.kwargs.get('type', None), literal_type):
-            t.set_candidate(self.attr_type)
-
-        if 'choices' not in self.kwargs and get_origin(self.attr_type) == Literal:
-            self.kwargs['choices'] = get_args(self.attr_type)
+        from ._types import complete_arg_kwargs
+        complete_arg_kwargs(self)
 
         if (type_validator := self.validator) is not None:
+            from ._types import TypeCasterWithValidator
+
             type_caster = self.kwargs.get('type', None)
-
-            def _type_caster(value: str):
-                raw_value = value
-                if type_caster is not None:
-                    value = type_caster(value)
-                if not type_validator(value):
-                    raise ValueError(f'fail validation : "{raw_value}"')
-                return value
-
-            self.kwargs['type'] = _type_caster
+            self.kwargs['type'] = TypeCasterWithValidator(type_caster, type_validator)
 
         if self.hidden:
             self.kwargs['help'] = argparse.SUPPRESS
@@ -368,7 +295,7 @@ class Argument(object):
         except KeyError:
             pass
 
-    def add_argument(self, ap: argparse.ArgumentParser, instance):
+    def add_argument(self, ap: ArgumentParser, instance):
         """Add this into `argparse.ArgumentParser`.
 
         :param ap:
@@ -475,7 +402,7 @@ def argument(*options: str,
              nargs: Union[int, Nargs] = ...,
              const: T = ...,
              default: T = ...,
-             type: Union[Type, Callable[[str], T]] = ...,
+             type: Type | Callable[[str], T] = ...,
              validator: Callable[[T], bool] = ...,
              validate_on_set: bool = True,
              choices: Sequence[str] = ...,
@@ -511,6 +438,86 @@ def argument(*options: str, **kwargs):
     if not all([it.startswith('-') for it in options if isinstance(it, str)]):
         raise RuntimeError(f'options should startswith "-". {options}')
     return Argument(*options, **kwargs)
+
+
+@overload
+def pos_argument(option: str, *,
+                 nargs: Nargs = None,
+                 action: Actions = ...,
+                 const=...,
+                 default=...,
+                 type: Type | Callable[[str], T] = ...,
+                 validator: Callable[[T], bool] = ...,
+                 validate_on_set: bool = True,
+                 choices: Sequence[str] = ...,
+                 required: bool = False,
+                 help: str = ..., ) -> T:
+    pass
+
+
+def pos_argument(option: str, *, nargs=None, **kwargs):
+    return Argument(metavar=option, nargs=nargs, **kwargs)
+
+
+@overload
+def var_argument(option: str, *,
+                 nargs: Nargs = ...,
+                 action: Actions = ...,
+                 const=...,
+                 default=...,
+                 type: Type | Callable[[str], T] = ...,
+                 validator: Callable[[T], bool] = ...,
+                 validate_on_set: bool = True,
+                 choices: Sequence[str] = ...,
+                 help: str = ...) -> list[T]:
+    pass
+
+
+def var_argument(option: str, *, nargs='*', action='extend', **kwargs):
+    return Argument(metavar=option, nargs=nargs, action=action, **kwargs)
+
+
+class AliasArgument(Argument):
+    def __init__(self, *options,
+                 aliases: dict[str, Any],
+                 **kwargs):
+        super().__init__(*options, **kwargs)
+        self.aliases = aliases
+
+    def add_argument(self, ap: ArgumentParser, owner):
+        super().add_argument(ap, owner)
+
+        primary = self.options[0]
+        for name, values in self.aliases.items():
+            kw = dict(self.kwargs)
+            kw.pop('metavar', None)
+            kw.pop('type', None)
+            kw['action'] = 'store_const'
+            kw['const'] = values
+            kw['help'] = f'short for {primary}={values}.'
+            ap.add_argument(name, **kw, dest=self.attr)
+
+
+@overload
+def aliased_argument(options: str, *,
+                     aliases: dict[str, T],
+                     nargs: Nargs = ...,
+                     action: Actions = ...,
+                     const=...,
+                     default=...,
+                     type: Type | Callable[[str], T] = ...,
+                     validator: Callable[[T], bool] = ...,
+                     validate_on_set: bool = True,
+                     choices: Sequence[str] = ...,
+                     help: str = ...,
+                     group: str = None,
+                     ex_group: str = None,
+                     metavar: str = ...) -> T:
+    pass
+
+
+def aliased_argument(*options: str, aliases: dict[str, T], **kwargs):
+    return AliasArgument(*options, aliases=aliases, **kwargs)
 
 
 def as_argument(a) -> Argument:
@@ -713,9 +720,9 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     return pp
 
 
-def print_help(instance: T):
+def print_help(instance: T, file: TextIO = sys.stdout):
     """print help to stdout"""
-    new_parser(instance).print_help(sys.stdout)
+    new_parser(instance).print_help(file)
 
 
 def with_defaults(instance: T) -> T:
