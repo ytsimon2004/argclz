@@ -1,28 +1,30 @@
 [project]
 name = "argp"
-version = "1.0.0"
+version = "0.0.0"
 requires-python = ">=3.10"
-description = ""
+description = "Create commandline interface via dataclass-like class"
 authors = [
     { name = "Yu-Ting Wei", email = "ytsimon2004@gmail.com" },
     { name = "Ta-Shun Su", email = "antoniost29@gmail.com" }
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
-keywords = ["argparse", "validator"]
+keywords = ["commandline"]
 classifiers = [
+    # https://pypi.org/classifiers/
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: BSD License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering",
-    'Intended Audience :: Science/Research',
+    "Topic :: Utilities",
+    'Intended Audience :: Developers',
     "Typing :: Typed",
 ]
 
-dependencies = ['rich']
+dependencies = []
 
 
 [project.optional-dependencies]
