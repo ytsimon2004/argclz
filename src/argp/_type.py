@@ -1,6 +1,9 @@
-from typing import TypeVar, Callable, Union, overload, Literal, get_origin, get_args
+from types import UnionType
+from typing import TypeVar, Callable, Union, overload, Literal, get_origin, get_args, Any
 
 __all__ = [
+    'literal_value_type',
+    'bool_type',
     'try_int_type',
     'try_float_type',
     'int_tuple_type',
@@ -10,17 +13,65 @@ __all__ = [
     'list_type',
     'union_type',
     'dict_type',
-    'slice_type'
+    'slice_type',
+    'literal_type',
+    'caster_by_annotation',
 ]
 
 T = TypeVar('T')
 
 
-def tuple_type(value_type: Callable[[str], T]):
+def literal_value_type(arg: str) -> bool | int | float | str:
+    if arg.upper() == 'TRUE':
+        return True
+    elif arg.upper() == 'FALSE':
+        return False
+    try:
+        return int(arg)
+    except ValueError:
+        pass
+
+    try:
+        return float(arg)
+    except ValueError:
+        pass
+
+    return arg
+
+
+def bool_type(value: str) -> bool:
+    value = value.lower()
+    if value in ('-', '0', 'f', 'false', 'n', 'no', 'x'):
+        return False
+    elif value in ('', '+', '1', 't', 'true', 'yes', 'y'):
+        return True
+    else:
+        raise ValueError()
+
+
+def tuple_type(*value_type: Callable[[str], T] | Ellipsis):
     def _type(arg: str) -> tuple[T, ...]:
-        return tuple(map(value_type, arg.split(',')))
+        ret = []
+        remain = ...
+        for i, a in enumerate(arg.split(',')):
+            if remain is not ...:
+                ret.append(remain(a))
+            else:
+                t = value_type[i]
+                if t is ...:
+                    remain = value_type[i - 1]
+                    ret.append(remain(a))
+                else:
+                    ret.append(t(a))
+
+        return tuple(ret)
 
     return _type
+
+
+str_tuple_type = tuple_type(str, ...)
+int_tuple_type = tuple_type(int, ...)
+float_tuple_type = tuple_type(float, ...)
 
 
 def list_type(value_type: Callable[[str], T] = str, *, split=',', prepend: list[T] = None):
@@ -43,18 +94,16 @@ def list_type(value_type: Callable[[str], T] = str, *, split=',', prepend: list[
     return _cast
 
 
-str_tuple_type = tuple_type(str)
-int_tuple_type = tuple_type(int)
-float_tuple_type = tuple_type(float)
+def union_type(*t: Callable[[str], T]):
+    none_type = type(None)
 
-
-def union_type(*t):
     def _type(arg: str):
         for _t in t:
-            try:
-                return _t(arg)
-            except (TypeError, ValueError):
-                pass
+            if _t is not none_type:
+                try:
+                    return _t(arg)
+                except (TypeError, ValueError):
+                    pass
         raise TypeError
 
     return _type
@@ -118,28 +167,35 @@ def try_float_type(arg: str) -> Union[float, str, None]:
         return arg
 
 
-@overload
-def literal_type(candidate: type[Literal], *, complete: bool = False):
-    pass
+class literal_type:
 
+    @overload
+    def __init__(self, candidate: type[Literal], *, complete: bool = False):
+        pass
 
-@overload
-def literal_type(*candidate: str, complete: bool = False):
-    pass
+    @overload
+    def __init__(self, *candidate: str, complete: bool = False):
+        pass
 
+    @overload
+    def __init__(self, *, complete: bool = False):
+        pass
 
-def literal_type(*candidate, complete: bool = False):
-    if len(candidate) == 1 and not isinstance(candidate[0], str) and get_origin(candidate[0]) == Literal:
-        candidate = get_args(candidate[0])
+    def __init__(self, *candidate, complete: bool = False):
+        if len(candidate) == 1 and not isinstance(candidate[0], str) and get_origin(candidate[0]) == Literal:
+            candidate = get_args(candidate[0])
 
-    def _literal_type(arg: str):
-        if arg in candidate:
+        self.candidate = candidate
+        self.complete = complete
+
+    def __call__(self, arg: str):
+        if arg in self.candidate:
             return arg
 
-        if not complete:
+        if not self.complete:
             raise ValueError
 
-        match [it for it in candidate if it.startswith(arg)]:
+        match [it for it in self.candidate if it.startswith(arg)]:
             case []:
                 raise ValueError()
             case [match]:
@@ -147,4 +203,18 @@ def literal_type(*candidate, complete: bool = False):
             case possible:
                 raise ValueError(f'confused {possible}')
 
-    return _literal_type
+
+def caster_by_annotation(a_name: str, a_type):
+    a_type_ori = get_origin(a_type)
+    if a_type == Any:
+        return None
+    if a_type_ori == Literal:
+        return literal_type(get_args(a_type))
+    elif a_type_ori == Union or a_type_ori == UnionType:
+        return union_type(get_args(a_type))
+    elif a_type_ori is not None and (callable(a_type_ori) or isinstance(a_type_ori, type)):
+        return a_type_ori
+    elif callable(a_type) or isinstance(a_type, type):
+        return a_type
+    else:
+        raise RuntimeError(f'{a_name} {a_type}')

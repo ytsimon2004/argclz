@@ -349,8 +349,6 @@ If any validation fails:
 - A :class:`ValidatorFailError` (or subclass) is raised, often rethrown as ``ValueError``
 in higher-level frameworks.
 
-- **Type mismatches** specifically raise :class:`ValidatorFailOnTypeError`.
-
 
 """
 from __future__ import annotations

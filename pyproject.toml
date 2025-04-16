@@ -29,6 +29,7 @@ dependencies = []
 
 [project.optional-dependencies]
 
+opt = ['rich']
 doc = ['sphinx', 'pydata-sphinx-theme']
 
 

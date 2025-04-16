@@ -129,8 +129,7 @@ class TypeAnnotationTest(unittest.TestCase):
             a: list[str] = argument('-a', action='append')
 
         opt = parse_args(Opt(), [])
-        # self.assertListEqual(opt.a, [])
-        self.assertIsNone(opt.a)  # should it be a []
+        self.assertListEqual(opt.a, [])
 
         opt = parse_args(Opt(), ['-a=1'])
         self.assertListEqual(opt.a, ['1'])
@@ -154,7 +153,7 @@ class TestValidator(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1'])
         self.assertEqual(opt.a, '1')
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a='])
 
         opt.a = '2'
@@ -172,10 +171,10 @@ class TestValidator(unittest.TestCase):
             b: tuple[int, ...] | None = argument('-b', type=int_tuple_type,
                                                  validator=lambda it: it is None or all([i < 5 for i in it]))
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a=10,2,3'])
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-b=6,2'])
 
     def test_validate_on_parse(self):
@@ -185,7 +184,7 @@ class TestValidator(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1'])
         self.assertEqual(opt.a, '1')
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a='])
 
         opt.a = '2'
@@ -202,7 +201,7 @@ class TestValidator(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1'])
         self.assertEqual(opt.a, 1)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a=-1'])
 
         opt.a = 1
@@ -215,7 +214,7 @@ class TestValidator(unittest.TestCase):
         class Opt:
             a: str = argument('-a', validator=lambda it: len(it) > 0)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a='])
 
         with self.assertRaises(ValueError):
@@ -225,7 +224,7 @@ class TestValidator(unittest.TestCase):
         class Opt:
             _a: str = argument('-a', validator=lambda it: len(it) > 0)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(RuntimeError):
             parse_args(Opt(), ['-a='])
 
         opt = Opt()
@@ -741,10 +740,10 @@ class AbstractParserTest(unittest.TestCase):
             a: str = argument('-a', default='default')
 
         with self.assertRaises(SystemExit):
-            Main().main(['-b'], exit_on_error=True)
+            Main().main(['-b'], system_exit=True)
 
         with self.assertRaises(RuntimeError):
-            Main().main(['-b'], exit_on_error=False)
+            Main().main(['-b'], system_exit=False)
 
 
 class CommandParserTest(unittest.TestCase):
@@ -767,8 +766,14 @@ class CommandParserTest(unittest.TestCase):
         class P1(AbstractParser):
             a: str = argument('-a', default='default')
 
+            def run(self):
+                pass
+
         class P2(AbstractParser):
             a: str = argument('-a', default='default')
+
+            def run(self):
+                pass
 
         parsers = dict(a=P1, b=P2)
         opt = parse_command_args(parsers, ['a'])

@@ -1,7 +1,7 @@
+import abc
 import argparse
 import collections
 import sys
-from types import UnionType
 from typing import (
     Iterable, Sequence, Type, TypeVar, Union, Literal, Callable,
     overload, get_origin, get_args, Any, Optional, get_type_hints
@@ -44,8 +44,21 @@ Actions = Literal[
 ]
 
 
-class AbstractParser:
-    USAGE: str = None
+class ArgumentParser(argparse.ArgumentParser):
+    exit_status: int | None = None
+    exit_message: str | None = None
+
+    def exit(self, status: int = 0, message: str = None):
+        self.exit_status = status
+        self.exit_message = message
+
+    def error(self, message: str):
+        self.exit_status = 2
+        self.exit_message = message
+
+
+class AbstractParser(metaclass=abc.ABCMeta):
+    USAGE: str | list[str] = None
     """parser usage."""
 
     DESCRIPTION: str = None
@@ -59,8 +72,12 @@ class AbstractParser:
         with_defaults(obj)
         return obj
 
+    def __init__(self, ref: T | None = None, /, **kwargs):
+        if ref is not None:
+            copy_argument(self, ref, **kwargs)
+
     @classmethod
-    def new_parser(cls, **kwargs) -> argparse.ArgumentParser:
+    def new_parser(cls, **kwargs) -> ArgumentParser:
         """create an ``argparse.ArgumentParser``.
 
         class variable: ``USAGE``, ``DESCRIPTION`` and ``EPILOG`` are used when creation.
@@ -75,68 +92,58 @@ class AbstractParser:
         """
         return new_parser(cls, **kwargs)
 
-    def main(self, args: list[str] | tuple[list[str] | list[str]] | None = None, *,
-             exit_on_error: bool = True):
+    def main(self, args: list[str] | None = None, *,
+             parse_only=False,
+             system_exit: bool | Type[BaseException] = True) -> int:
         """parsing the commandline input *args* and set the argument attributes,
         then call :meth:`.run()`.
 
-        **Example**
-
-        if overwrite with the argument default, use *args*
-
-        >>> AbstractParser().main((['--source=allen_mouse_25um', '--region=VISal,VISam,...'], []))
-
-        :param args: commandline arguments, or a tuple of (prepend, append) arguments
-        :param exit_on_error: exit when commandline parsed fail. Otherwise, raise a ``RuntimeError``.
+        :param args: command-line arguments
+        :param system_exit: exit when commandline parsed fail. Otherwise, raise a ``RuntimeError``.
         """
-        if args is not None:
-            if isinstance(args, list):
-                pass
-            elif isinstance(args, tuple):
-                prepend, append = args[0], args[1]
-                args = [*prepend, *sys.argv[1:], *append]
-            else:
-                raise TypeError('')
-
         parser = self.new_parser(reset=True)
-        self._action_validate(parser)
+        result = parser.parse_args(args)
+        set_options(self, result)
 
-        #
-        try:
-            result = parser.parse_args(args)
-        except SystemExit as e:
-            if exit_on_error:
-                raise
+        if parse_only:
+            return parser.exit_status
+
+        if parser.exit_status is not None and system_exit:
+            if system_exit is True:
+                if parser.exit_status != 0:
+                    parser.print_usage(sys.stderr)
+                    print(parser.exit_message, file=sys.stderr)
+                sys.exit(parser.exit_status)
             else:
-                raise RuntimeError() from e
-        else:
-            set_options(self, result)
-            self.post_parsing()
-            self.run()
+                raise system_exit(parser.exit_status)
 
-    @staticmethod
-    def _action_validate(parser: argparse.ArgumentParser):
-        for action in parser._actions:
-            try:
-                parser._get_formatter()._format_action(action)
-            except ValueError as e:
-                print("Error formatting help for argument:")
-                print("  Option strings:", action.option_strings)
-                print("  Destination:", action.dest)
-                print("  Help text:", action.help)
-                raise RuntimeError(repr(e))
+        self.run()
 
     def run(self):
         """called when all argument attributes are set"""
-        pass
+        raise RuntimeError()
 
-    def post_parsing(self):
-        """called when all argument attributes are set but before :meth:`.run()`.
+    def __str__(self):
+        return type(self).__name__
 
-        It is used for a common operation for a common option class,
-        for example, checking arguments before doing things.
-        """
-        pass
+    def __repr__(self):
+        """key value pair content"""
+        self_type = type(self)
+        ret = []
+        for a_name in dir(self_type):
+            a_value = getattr(self_type, a_name)
+            if isinstance(a_value, Argument) and not a_name.startswith('_'):
+                try:
+                    ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
+                except:
+                    ret.append(f'{a_name} = <error>')
+            elif isinstance(a_value, property):
+                try:
+                    ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
+                except:
+                    ret.append(f'{a_name} = <error>')
+
+        return '\n'.join(ret)
 
 
 class Argument(object):
@@ -190,6 +197,12 @@ class Argument(object):
         except KeyError:
             pass
 
+        if self.attr_type == bool:
+            return self.kwargs.get('action', 'store_true') != 'store_true'
+
+        if self.kwargs.get('action', None) in ('append', 'extend', 'append_const'):
+            return []
+
         raise ValueError
 
     @property
@@ -198,6 +211,9 @@ class Argument(object):
             return self.kwargs['const']
         except KeyError:
             pass
+
+        if self.attr_type == bool:
+            return self.kwargs.get('action', 'store_true') == 'store_true'
 
         raise ValueError
 
@@ -214,6 +230,23 @@ class Argument(object):
         return self.kwargs.get('required', False)
 
     @property
+    def type(self) -> type | Callable[[str], T]:
+        try:
+            return self.kwargs['type']
+        except KeyError:
+            pass
+
+        attr_type = self.attr_type
+        if attr_type == bool:
+            from ._type import bool_type
+            return bool_type
+        elif attr_type in (str, int, float):
+            return attr_type
+        else:
+            from ._type import caster_by_annotation
+            return caster_by_annotation(self.attr, attr_type)
+
+    @property
     def help(self) -> Optional[str]:
         return self.kwargs.get('help', None)
 
@@ -226,6 +259,75 @@ class Argument(object):
                 self.validate_on_set = False
             else:
                 self.validate_on_set = True
+
+        if len(self.options) == 0:  # positional argument
+            if 'default' not in self.kwargs:
+                self.kwargs.setdefault('nargs', '?')
+
+        if 'type' not in self.kwargs:
+            # complete bool argument for action and default
+            if self.attr_type == bool:
+                if 'default' not in self.kwargs:
+                    if 'nargs' in self.kwargs:
+                        from ._type import bool_type
+                        self.kwargs['type'] = bool_type
+                        self.kwargs['action'] = 'store'
+                    else:
+                        self.kwargs.setdefault('action', 'store_true')
+                        self.kwargs.setdefault('default', False)
+                elif self.kwargs['default']:
+                    self.kwargs.setdefault('action', 'store_false')
+                    self.kwargs.setdefault('default', True)
+                else:
+                    self.kwargs.setdefault('action', 'store_true')
+                    self.kwargs.setdefault('default', False)
+
+            if get_origin(self.attr_type) is list:
+                self.kwargs.setdefault('action', 'append')
+            else:
+                self.kwargs.setdefault('action', 'store')
+
+            if self.kwargs['action'] in ('store', 'store_const'):  # value type
+                from ._type import caster_by_annotation
+                self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
+                if get_origin(self.attr_type) == Literal and 'metavar' not in self.kwargs:
+                    self.kwargs['metavar'] = '|'.join(get_args(self.attr_type))
+
+            elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
+                self.kwargs.setdefault('default', get_origin(self.attr_type)())
+
+                a_type_arg = get_args(self.attr_type)  # Coll[T]
+                if len(a_type_arg) == 0:
+                    self.kwargs['type'] = self.attr_type
+                elif len(a_type_arg) == 1:
+                    from ._type import caster_by_annotation
+                    self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
+                else:
+                    raise RuntimeError()
+
+        from ._type import literal_type
+        t: literal_type
+        if get_origin(self.attr_type) is Literal and isinstance(t := self.kwargs.get('type', None), literal_type) and len(t.candidate) == 0:
+            t.candidate = get_args(self.attr_type)
+
+        if 'choices' not in self.kwargs and get_origin(self.attr_type) == Literal:
+            self.kwargs['choices'] = get_args(self.attr_type)
+
+        if (type_validator := self.validator) is not None:
+            type_caster = self.kwargs.get('type', None)
+
+            def _type_caster(value: str):
+                raw_value = value
+                if type_caster is not None:
+                    value = type_caster(value)
+                if not type_validator(value):
+                    raise ValueError(f'fail validation : "{raw_value}"')
+                return value
+
+            self.kwargs['type'] = _type_caster
+
+        if self.hidden:
+            self.kwargs['help'] = argparse.SUPPRESS
 
     def __get__(self, instance, owner=None):
         if instance is None:
@@ -267,75 +369,14 @@ class Argument(object):
         :param instance:
         :return:
         """
-        kwargs = self.complete_kwargs()
-
-        if self.hidden:
-            kwargs['help'] = argparse.SUPPRESS
-
         try:
-            return ap.add_argument(*self.options, **kwargs, dest=self.attr)
+            return ap.add_argument(*self.options, **self.kwargs, dest=self.attr)
         except TypeError as e:
             if isinstance(instance, type):
                 name = instance.__name__
             else:
                 name = type(instance).__name__
             raise RuntimeError(f'{name}.{self.attr} : ' + repr(e)) from e
-
-    def complete_kwargs(self) -> dict[str, Any]:
-        """infer missing keywords.
-
-        :return: kwargs
-        """
-        attr_type = self.attr_type
-        kwargs = dict(self.kwargs)
-
-        if self.ex_group is not None:
-            kwargs.pop('required', False)  # has passed to the add_mutually_exclusive_group
-
-        if 'type' not in kwargs:
-            if attr_type == bool:
-                if 'action' not in kwargs:
-                    if kwargs.get('default', False) is False:
-                        kwargs['action'] = 'store_true'
-                        kwargs.setdefault('default', False)
-                    else:
-                        kwargs['action'] = 'store_false'
-                        kwargs.setdefault('default', True)
-
-            elif get_origin(attr_type) == Literal:
-                kwargs.setdefault('choices', get_args(attr_type))
-
-            elif get_origin(attr_type) is Union or get_origin(attr_type) is UnionType:
-                type_args = get_args(attr_type)
-                if len(type_args) == 2 and type_args[1] is type(None):
-                    if get_origin(type_args[0]) == Literal:
-                        kwargs.setdefault('choices', get_args(type_args[0]))
-                    elif callable(type_args[0]):
-                        kwargs['type'] = type_args[0]
-
-            elif kwargs.get('action', None) in ['append', 'extend']:
-                coll_attr_type = get_origin(attr_type)
-                if coll_attr_type == list:
-                    kwargs['type'] = get_args(attr_type)[0]
-                else:
-                    raise RuntimeError(f"cannot infer type. {self.attr} missing keyword type.")
-            elif callable(attr_type):
-                kwargs['type'] = attr_type
-
-        if (type_validator := self.validator) is not None:
-            type_caster = kwargs.get('type', None)
-
-            def _type_caster(value: str):
-                raw_value = value
-                if type_caster is not None:
-                    value = type_caster(value)
-                if not type_validator(value):
-                    raise ValueError(f'fail validation : "{raw_value}"')
-                return value
-
-            kwargs['type'] = _type_caster
-
-        return kwargs
 
     @overload
     def with_options(self,
@@ -495,7 +536,7 @@ def foreach_arguments(instance: Union[T, type[T]]) -> Iterable[Argument]:
                     yield arg
 
 
-def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> argparse.ArgumentParser:
+def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentParser:
     """Create ``ArgumentParser`` for instance.
 
     :param instance:
@@ -504,7 +545,10 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> argparse.A
     :return:
     """
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
-        kwargs.setdefault('usage', instance.USAGE)
+        usage = instance.USAGE
+        if isinstance(usage, list):
+            usage = '\n'.join(['\t' + it for it in usage])
+        kwargs.setdefault('usage', usage)
         kwargs.setdefault('description', instance.DESCRIPTION)
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
         epilog = instance.EPILOG
@@ -512,7 +556,7 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> argparse.A
             epilog = epilog()
         kwargs.setdefault('epilog', epilog)
 
-    ap = argparse.ArgumentParser(**kwargs)
+    ap = ArgumentParser(**kwargs)
 
     groups: dict[str, list[Argument]] = collections.defaultdict(list)
 
@@ -565,7 +609,7 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> argparse.A
 def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractParser]]],
                        usage: str = None,
                        description: str = None,
-                       reset=False) -> argparse.ArgumentParser:
+                       reset=False) -> ArgumentParser:
     """Create ``ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
 
     :param parsers: dict of command to :class:`~argp.core.AbstractParser`.
@@ -574,7 +618,12 @@ def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     :param reset: reset argument attributes. do nothing if *parsers*'s value isn't an instance.
     :return:
     """
-    ap = argparse.ArgumentParser(usage=usage, description=description)
+    ap = ArgumentParser(
+        usage=usage,
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
     sp = ap.add_subparsers()
 
     for cmd, pp in parsers.items():
@@ -610,13 +659,18 @@ def parse_args(instance: T, args: list[str] = None) -> T:
     :param args: commandline inputs
     :return:
     """
-    return set_options(instance, new_parser(instance, reset=True).parse_args(args))
+    ap = new_parser(instance, reset=True)
+    ot = ap.parse_args(args)
+    if ap.exit_status is not None:
+        raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
+    return set_options(instance, ot)
 
 
 def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractParser]]],
                        args: list[str] = None,
                        usage: str = None,
                        description: str = None,
+                       parse_only=False,
                        run_main=True) -> Optional[AbstractParser]:
     """Create ``argparse.ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
     Then parsing the commandline input *args* and setting up correspond :class:`~argp.core.AbstractParser`.
@@ -631,6 +685,9 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     ap = new_command_parser(parsers, usage, description, reset=True)
     res = ap.parse_args(args)
 
+    if ap.exit_status is not None:
+        raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
+
     pp: AbstractParser = getattr(res, 'main', None)
     if isinstance(pp, type):
         pp = pp()
@@ -638,13 +695,14 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     if pp is not None:
         set_options(pp, res)
 
+    if parse_only:
+        return pp
+
     if run_main:
         if pp is not None:
-            pp.post_parsing()
             pp.run()
         else:
-            from rich import print
-            print(f'[bold red]should be one of {", ".join(parsers.keys())}')
+            print(f'should be one of {", ".join(parsers.keys())}')
 
     return pp
 
@@ -661,19 +719,10 @@ def with_defaults(instance: T) -> T:
     :return: *instance* itself
     """
     for arg in foreach_arguments(instance):
-        ck = arg.complete_kwargs()
         try:
-            value = ck['default']
-        except KeyError:
-            if 'action' in ck:
-                match ck['action']:
-                    case 'store_true':
-                        arg.__set__(instance, False)
-                    case 'store_false':
-                        arg.__set__(instance, True)
-                    case 'append' | 'extend' | 'append_const':
-                        arg.__set__(instance, [])
-
+            value = arg.default
+        except ValueError:
+            arg.__delete__(instance)
         else:
             arg.__set__(instance, value)
     return instance
