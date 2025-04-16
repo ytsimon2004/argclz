@@ -139,6 +139,6 @@ See detailed in :attr:`~argp.validator`
 
 
 """
-from ._type import *
 from ._validator import *
 from .core import *
+from .types import *

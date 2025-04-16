@@ -1,5 +1,4 @@
-from types import UnionType
-from typing import TypeVar, Callable, Union, overload, Literal, get_origin, get_args, Any
+from typing import TypeVar, Callable, Union, Literal, get_origin, get_args
 
 __all__ = [
     'literal_value_type',
@@ -15,7 +14,6 @@ __all__ = [
     'dict_type',
     'slice_type',
     'literal_type',
-    'caster_by_annotation',
 ]
 
 T = TypeVar('T')
@@ -169,28 +167,25 @@ def try_float_type(arg: str) -> Union[float, str, None]:
 
 class literal_type:
 
-    @overload
-    def __init__(self, candidate: type[Literal], *, complete: bool = False):
-        pass
+    def __init__(self, candidate: type[Literal] | tuple[str, ...] = None, *,
+                 complete: bool = False):
+        self.candidate = None
+        self.optional = False
+        self.complete = complete
 
-    @overload
-    def __init__(self, *candidate: str, complete: bool = False):
-        pass
+        if candidate is not None:
+            self.set_candidate(candidate)
 
-    @overload
-    def __init__(self, *, complete: bool = False):
-        pass
-
-    def __init__(self, *candidate, complete: bool = False):
+    def set_candidate(self, candidate: type[Literal] | tuple[str, ...], overwrite: bool = False):
         if len(candidate) == 1 and not isinstance(candidate[0], str) and get_origin(candidate[0]) == Literal:
             candidate = get_args(candidate[0])
 
-        self.optional = None in candidate
-        if self.optional:
-            candidate = [it for it in candidate if it is not None]
+        if overwrite or len(self.candidate) == 0:
+            self.optional = None in candidate
+            if self.optional:
+                candidate = [it for it in candidate if it is not None]
 
-        self.candidate = candidate
-        self.complete = complete
+            self.candidate = tuple(candidate)
 
     def __call__(self, arg: str):
         if arg in self.candidate:
@@ -211,23 +206,3 @@ class literal_type:
         return 'Literal' + ('*' if self.complete else '') + '[' + ', '.join(self.candidate) + ']'
 
     __repr__ = __str__
-
-
-def caster_by_annotation(a_name: str, a_type):
-    a_type_ori = get_origin(a_type)
-    if a_type == Any:
-        return None
-    if a_type_ori == Literal:
-        return literal_type(*get_args(a_type))
-    elif a_type_ori == Union or a_type_ori == UnionType:
-        a_type_args = get_args(a_type)
-        if len(a_type_args) == 2 and get_origin(a_type_args[0]) is Literal and a_type_args[1] == type(None):
-            return literal_type(*get_args(a_type_args[0]), None)
-
-        return union_type(*get_args(a_type))
-    elif a_type_ori is not None and (callable(a_type_ori) or isinstance(a_type_ori, type)):
-        return a_type_ori
-    elif callable(a_type) or isinstance(a_type, type):
-        return a_type
-    else:
-        raise RuntimeError(f'{a_name} {a_type}')

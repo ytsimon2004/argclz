@@ -239,12 +239,12 @@ class Argument(object):
 
         attr_type = self.attr_type
         if attr_type == bool:
-            from ._type import bool_type
+            from .types import bool_type
             return bool_type
         elif attr_type in (str, int, float):
             return attr_type
         else:
-            from ._type import caster_by_annotation
+            from ._types import caster_by_annotation
             return caster_by_annotation(self.attr, attr_type)
 
     @property
@@ -270,7 +270,7 @@ class Argument(object):
             if self.attr_type == bool:
                 if 'default' not in self.kwargs:
                     if 'nargs' in self.kwargs:
-                        from ._type import bool_type
+                        from .types import bool_type
                         self.kwargs['type'] = bool_type
                         self.kwargs['action'] = 'store'
                     else:
@@ -295,7 +295,7 @@ class Argument(object):
                     if len(a_type_args) == 2 and a_type_args[1] == type(None):
                         self.kwargs.setdefault('default', None)
 
-                from ._type import caster_by_annotation
+                from ._types import caster_by_annotation
                 self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
                 if get_origin(self.attr_type) == Literal and 'metavar' not in self.kwargs:
                     self.kwargs['metavar'] = '|'.join([it for it in get_args(self.attr_type) if it is not None])
@@ -307,15 +307,14 @@ class Argument(object):
                 if len(a_type_arg) == 0:
                     self.kwargs['type'] = self.attr_type
                 elif len(a_type_arg) == 1:
-                    from ._type import caster_by_annotation
+                    from ._types import caster_by_annotation
                     self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
                 else:
                     raise RuntimeError()
 
-        from ._type import literal_type
-        t: literal_type
-        if get_origin(self.attr_type) is Literal and isinstance(t := self.kwargs.get('type', None), literal_type) and len(t.candidate) == 0:
-            t.candidate = get_args(self.attr_type)
+        from .types import literal_type
+        if get_origin(self.attr_type) is Literal and isinstance(t := self.kwargs.get('type', None), literal_type):
+            t.set_candidate(self.attr_type)
 
         if 'choices' not in self.kwargs and get_origin(self.attr_type) == Literal:
             self.kwargs['choices'] = get_args(self.attr_type)
