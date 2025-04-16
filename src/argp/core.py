@@ -571,7 +571,7 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentPa
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
         usage = instance.USAGE
         if isinstance(usage, list):
-            usage = '\n'.join(['\t' + it for it in usage])
+            usage = '\n       '.join(usage)
         kwargs.setdefault('usage', usage)
         kwargs.setdefault('description', instance.DESCRIPTION)
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
@@ -731,9 +731,26 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     return pp
 
 
+@overload
+def print_help(instance: T, file: TextIO = sys.stdout):
+    pass
+
+
+@overload
+def print_help(instance: T, file: Literal[None]) -> str:
+    pass
+
+
 def print_help(instance: T, file: TextIO = sys.stdout):
     """print help to stdout"""
+    buf = None
+    if file is None:
+        import io
+        buf = file = io.StringIO()
+
     new_parser(instance).print_help(file)
+    if buf is not None:
+        return buf.getvalue()
 
 
 def with_defaults(instance: T) -> T:
