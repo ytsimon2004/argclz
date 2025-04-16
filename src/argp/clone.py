@@ -1,4 +1,6 @@
-from typing import TypeVar, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from .core import ArgumentParser, copy_argument
 
@@ -7,27 +9,26 @@ if TYPE_CHECKING:
 
 __all__ = ['Cloneable']
 
-T = TypeVar('T', bound=ArgumentParser)
-
 
 class Cloneable:
-    def __init__(self, ref: T | pl.DataFrame | None = None, /, **kwargs):
+    def __init__(self, ref: ArgumentParser | Cloneable | pl.DataFrame | None = None, /, **kwargs):
         if ref is not None:
-            copy_argument(self, ref, **kwargs)
+            _copy_argument(self, ref, kwargs)
 
 
-def _copy_argument(self: Cloneable, ref: T | pl.DataFrame, kwargs: dict):
-    assert isinstance(self, ArgumentParser)
-
+def _copy_argument(self: Cloneable, ref: Cloneable | pl.DataFrame, kwargs: dict):
     try:
         import polars as pl
     except ImportError:
         copy_argument(self, ref, **kwargs)
     else:
-        _copy_argument_polars_dataframe(self, ref, kwargs)
+        if isinstance(ref, pl.DataFrame):
+            _copy_argument_polars_dataframe(self, ref, kwargs)
+        else:
+            copy_argument(self, ref, **kwargs)
 
 
-def _copy_argument_polars_dataframe(self: ArgumentParser, ref: pl.DataFrame, kwargs: dict):
+def _copy_argument_polars_dataframe(self: Cloneable, ref: pl.DataFrame, kwargs: dict):
     dataset = ref.unique()
     if len(dataset) > 1:
         raise RuntimeError(f'dataset not unique : {ref}')

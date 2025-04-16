@@ -1,8 +1,15 @@
 import unittest
 from typing import Literal
+from unittest import skipIf
 
 from argp import *
-from argp.core import with_defaults, as_dict
+from argp.clone import Cloneable
+from argp.core import with_defaults, as_dict, parse_args, copy_argument
+
+try:
+    import polars as pl
+except ImportError:
+    pl = None
 
 
 class WithDefaultTest(unittest.TestCase):
@@ -109,8 +116,53 @@ class AbstractParserTest(unittest.TestCase):
 
 
 class CopyArgsTest(unittest.TestCase):
-    # TODO
-    pass
+    def test_copy_argument(self):
+        class Opt:
+            a: str = argument('-a')
+
+        opt = parse_args(Opt(), ['-a=2'])
+        self.assertEqual(opt.a, '2')
+        ano = copy_argument(Opt(), opt)
+        self.assertEqual(ano.a, '2')
+
+    def test_copy_argument_from_dict(self):
+        class Opt:
+            a: str = argument('-a')
+
+        ano = copy_argument(Opt(), None, a='2')
+        self.assertEqual(ano.a, '2')
+
+    def test_copy_argument_from_distinct(self):
+        class Opt1:
+            a: str = argument('-a')
+
+        class Opt2:
+            a: str = argument('-a')
+
+        opt = parse_args(Opt1(), ['-a=2'])
+        self.assertEqual(opt.a, '2')
+
+        ano = copy_argument(Opt2(), opt)
+        self.assertEqual(ano.a, '2')
+
+    def test_cloneable(self):
+        class Opt(Cloneable):
+            a: str = argument('-a')
+
+        opt = parse_args(Opt(), ['-a=2'])
+        self.assertEqual(opt.a, '2')
+
+        ano = Opt(opt)
+        self.assertEqual(ano.a, '2')
+
+    @skipIf(pl is None, reason='no polars installed')
+    def test_cloneable_from_dataframe(self):
+        class Opt(Cloneable):
+            a: str = argument('-a')
+
+        data = pl.DataFrame([{'a': '2'}])
+        opt = Opt(data)
+        self.assertEqual(opt.a, '2')
 
 
 if __name__ == '__main__':

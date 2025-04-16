@@ -22,6 +22,7 @@ __all__ = [
     # utilities
     'with_defaults',
     'set_options',
+    'copy_argument',
     'as_dict'
 ]
 
