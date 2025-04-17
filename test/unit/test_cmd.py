@@ -13,11 +13,11 @@ class CommandParserTest(unittest.TestCase):
             a: str = argument('-a', default='default')
 
         parsers = dict(a=P1, b=P2)
-        opt = parse_command_args(parsers, ['a'], run_main=False)
+        opt = parse_command_args(parsers, ['a'], parse_only=True)
         self.assertIsInstance(opt, P1)
-        opt = parse_command_args(parsers, ['b'], run_main=False)
+        opt = parse_command_args(parsers, ['b'], parse_only=True)
         self.assertIsInstance(opt, P2)
-        opt = parse_command_args(parsers, [], run_main=False)
+        opt = parse_command_args(parsers, [], parse_only=True)
         self.assertIsNone(opt)
 
     def test_command_parser_main(self):

@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import abc
 import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import Type, TypeVar, Union, Literal, overload, Any, Optional, get_type_hints, TextIO
+from typing import Type, TypeVar, Union, Literal, overload, Any, Optional, get_type_hints, TextIO, NamedTuple
+
+from typing_extensions import Self
 
 __all__ = [
     # parser
@@ -20,9 +24,11 @@ __all__ = [
     'aliased_argument',
     'as_argument',
     # utilities
+    'foreach_arguments',
     'with_defaults',
     'set_options',
     'copy_argument',
+    'print_help',
     'as_dict'
 ]
 
@@ -47,7 +53,7 @@ Actions = Literal[
 
 
 class ArgumentParser(argparse.ArgumentParser):
-    exit_status: int | None = None
+    exit_status: int = 0
     exit_message: str | None = None
 
     def exit(self, status: int = 0, message: str = None):
@@ -57,6 +63,28 @@ class ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str):
         self.exit_status = 2
         self.exit_message = message
+
+
+class ArgumentParsingResult(NamedTuple):
+    exit_status: int
+    exit_message: str | None
+
+    def __bool__(self):
+        return self.exit_status == 0
+
+    def __int__(self):
+        return self.exit_status
+
+    def __str__(self):
+        return self.exit_message
+
+    @classmethod
+    def success(cls) -> ArgumentParsingResult:
+        return ArgumentParsingResult(0, None)
+
+    @classmethod
+    def of(cls, parser: ArgumentParser) -> ArgumentParsingResult:
+        return ArgumentParsingResult(parser.exit_status, parser.exit_message)
 
 
 class AbstractParser(metaclass=abc.ABCMeta):
@@ -92,34 +120,42 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
-             system_exit: bool | Type[BaseException] = True) -> int:
+             system_exit: bool | Type[BaseException] = True) -> ArgumentParsingResult:
         """parsing the commandline input *args* and set the argument attributes,
         then call :meth:`.run()`.
 
         :param args: command-line arguments
-        :param system_exit: exit when commandline parsed fail. Otherwise, raise a ``RuntimeError``.
+        :param parse_only: parse command-line arguments only, do not invoke ``run()``
+        :param system_exit: exit when commandline parsed fail.
+        :return: parsing result.
         """
         parser = self.new_parser(reset=True)
         result = parser.parse_args(args)
         set_options(self, result)
 
+        ret = ArgumentParsingResult.of(parser)
         if parse_only:
-            return parser.exit_status
+            return ret
 
-        if parser.exit_status is not None and system_exit:
+        if not ret:
             if system_exit is True:
-                if parser.exit_status != 0:
+                if ret.exit_status != 0:
                     parser.print_usage(sys.stderr)
-                    print(parser.exit_message, file=sys.stderr)
-                sys.exit(parser.exit_status)
+                    print(ret.exit_message, file=sys.stderr)
+                sys.exit(ret.exit_status)
+            elif system_exit is False:
+                return ret
+            elif issubclass(system_exit, BaseException):
+                raise system_exit(ret.exit_status)
             else:
-                raise system_exit(parser.exit_status)
+                sys.exit(ret.exit_status)
 
         self.run()
+        return ret
 
     def run(self):
         """called when all argument attributes are set"""
-        raise RuntimeError()
+        pass
 
     def __str__(self):
         return type(self).__name__
@@ -249,6 +285,9 @@ class Argument(object):
         return self.kwargs.get('help', None)
 
     def __set_name__(self, owner: Type, name: str):
+        if self.attr is not None:
+            raise RuntimeError('reuse Argument')
+
         self.attr = name
         self.attr_type = get_type_hints(owner).get(name, Any)
 
@@ -338,10 +377,10 @@ class Argument(object):
                      hidden: bool = None,
                      help: str = None,
                      group: str = None,
-                     metavar: str = None) -> 'Argument':
+                     metavar: str = None) -> Self:
         pass
 
-    def with_options(self, *options, **kwargs) -> 'Argument':
+    def with_options(self, *options, **kwargs) -> Self:
         """Modify or update keyword parameter and return a new argument.
 
         option flags update rule:
@@ -685,7 +724,7 @@ def parse_args(instance: T, args: list[str] = None) -> T:
     """
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
-    if ap.exit_status is not None:
+    if ap.exit_status != 0:
         raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
     return set_options(instance, ot)
 
@@ -695,7 +734,7 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        usage: str = None,
                        description: str = None,
                        parse_only=False,
-                       run_main=True) -> Optional[AbstractParser]:
+                       system_exit: bool | Type[BaseException] = True) -> AbstractParser | ArgumentParsingResult | None:
     """Create ``argparse.ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
     Then parsing the commandline input *args* and setting up correspond :class:`~argp.core.AbstractParser`.
 
@@ -706,27 +745,35 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     :param run_main: run :meth:`~argp.core.AbstractParser.run()`
     :return: used :class:`~argp.core.AbstractParser`
     """
-    ap = new_command_parser(parsers, usage, description, reset=True)
-    res = ap.parse_args(args)
+    parser = new_command_parser(parsers, usage, description, reset=True)
+    result = parser.parse_args(args)
 
-    if ap.exit_status is not None:
-        raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
+    ret = ArgumentParsingResult.of(parser)
+    if not ret:
+        if system_exit is True:
+            if ret.exit_status != 0:
+                parser.print_usage(sys.stderr)
+                print(ret.exit_message, file=sys.stderr)
+            sys.exit(ret.exit_status)
+        elif system_exit is False:
+            return ret
+        elif issubclass(system_exit, BaseException):
+            raise system_exit(ret.exit_status)
+        else:
+            sys.exit(ret.exit_status)
 
-    pp: AbstractParser = getattr(res, 'main', None)
+    pp: AbstractParser = getattr(result, 'main', None)
     if isinstance(pp, type):
         pp = pp()
 
     if pp is not None:
-        set_options(pp, res)
+        set_options(pp, result)
 
     if parse_only:
         return pp
 
-    if run_main:
-        if pp is not None:
-            pp.run()
-        else:
-            print(f'should be one of {", ".join(parsers.keys())}')
+    if pp is not None:
+        pp.run()
 
     return pp
 

@@ -112,7 +112,27 @@ class AbstractParserTest(unittest.TestCase):
             Main().main(['-b'], system_exit=True)
 
         with self.assertRaises(RuntimeError):
-            Main().main(['-b'], system_exit=False)
+            Main().main(['-b'], system_exit=RuntimeError)
+
+        ret = Main().main(['-b'], system_exit=False)
+        self.assertNotEqual(ret.exit_status, 0)
+
+    def test_parse_only(self):
+        class Main(AbstractParser):
+            a: int = argument('-a')
+
+            def run(self):
+                raise RuntimeError('message')
+
+        with self.assertRaises(RuntimeError) as capture:
+            Main().main(['-a=1'])
+
+        self.assertEqual(capture.exception.args[0], 'message')
+
+        main = Main()
+        ret = main.main(['-a=1'], parse_only=True)
+        self.assertEqual(ret.exit_status, 0)
+        self.assertEqual(main.a, 1)
 
 
 class CopyArgsTest(unittest.TestCase):
