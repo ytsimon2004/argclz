@@ -1,0 +1,115 @@
+import inspect
+import sys
+from typing import get_origin, get_args, Literal, Callable, TypeVar
+
+from .core import ARGP_DISPATCH_COMMAND, DispatchCommand
+from .._types import TypeCasterWithValidator
+from ..validator import Validator
+
+__all__ = ['DispatchCommandBuilder']
+
+T = TypeVar('T')
+P = inspect.Parameter
+
+
+class DispatchCommandBuilder:
+    def __init__(self, func):
+        self.func = func
+        self.signature = inspect.signature(func, eval_str=True)
+        self.validators = {}
+
+    @classmethod
+    def of(cls, f):
+        ret = getattr(f, ARGP_DISPATCH_COMMAND, None)
+        if ret is None:
+            ret = DispatchCommandBuilder(f)
+            setattr(f, ARGP_DISPATCH_COMMAND, ret)
+        elif isinstance(ret, DispatchCommandBuilder):
+            pass
+        elif isinstance(ret, DispatchCommand):
+            raise RuntimeError(f'{f.__name__} already frozen')
+        else:
+            raise TypeError()
+        return ret
+
+    def validator_for(self, arg: str, caster: Callable[[str], T] = None, validator: Validator = None):
+        try:
+            p = self.signature.parameters[arg]
+        except KeyError:
+            print(f'unknown arg name : {arg} for function {self.func.__name__}', file=sys.stderr)
+            return
+
+        if caster is None:
+            from .._types import caster_by_annotation
+            if p.annotation is P.empty:
+                raise RuntimeError(f'missing type : {self.func.__name__}({arg})')
+
+            caster = caster_by_annotation(arg, p.annotation)
+
+        self.validators[arg] = TypeCasterWithValidator(caster, validator)
+
+    def build(self, command: str,
+              aliases: tuple[str, ...],
+              order: float = 5,
+              group: str = None,
+              usage: list[str] = None,
+              hidden=False) -> DispatchCommand:
+        ret = DispatchCommand(None, group, command, aliases, order, usage, self.func, self.validators, hidden)
+        setattr(self.func, ARGP_DISPATCH_COMMAND, ret)
+        return ret
+
+    def build_usage(self) -> list[str]:
+        """
+
+        * non-annotated argument (`arg`): `ARG`
+        * literal argument (`Literal['A', 'B']`) : `A|B` for
+        * var arguments (`*args`) : `ARGS...`
+        * ignore keyword arguments
+        * *keyword* str argument (`arg`="text"): `arg=TEXT`
+        * *keyword* int, float argument (`arg`=1): `arg=1`
+        * *keyword* argument (`arg`): `arg=`
+        * has default argument: suffix with '?'
+
+        :return:
+        """
+        ret = []
+
+        for n, p in self.signature.parameters.items():
+            if n == 'self':
+                continue
+            elif p.kind in (P.KEYWORD_ONLY, P.VAR_KEYWORD):
+                break
+
+            if (t := p.annotation) is P.empty:
+                m = n.upper()
+            elif get_origin(t) == Literal:
+                m = '|'.join(get_args(t))
+            elif p.kind == P.VAR_POSITIONAL:
+                m = f'{n.upper()}...'
+            else:
+                if t == str:
+                    if p.default is P.empty:
+                        m = 'TEXT'
+                    else:
+                        m = str(p.default)
+                elif t == bool:
+                    if p.default is P.empty:
+                        m = 'BOOL'
+                    else:
+                        m = 'true' if p.default else 'false'
+                elif t in (int, float):
+                    if p.default is P.empty:
+                        m = 'VALUE'
+                    else:
+                        m = str(p.default)
+                else:
+                    m = n.upper()
+
+            if p.default is not P.empty:
+                m = f'{n}?={m}'
+            else:
+                m = f'{n}={m}'
+
+            ret.append(m)
+
+        return ret

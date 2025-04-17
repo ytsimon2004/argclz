@@ -130,7 +130,8 @@ def _complete_arg_kwargs_for_literal(self: Argument):
 
 
 class TypeCasterWithValidator(Generic[T]):
-    def __init__(self, caster: Callable[[str], T] | None, validator: Callable[[T], bool]):
+    def __init__(self, caster: Callable[[str], T] | None,
+                 validator: Callable[[T], bool]):
         self.caster = caster
         self.validator = validator
 
@@ -138,6 +139,6 @@ class TypeCasterWithValidator(Generic[T]):
         raw_value = value
         if self.caster is not None:
             value = self.caster(value)
-        if not self.validator(value):
+        if self.validator is not None and not self.validator(value):
             raise ValueError(f'fail validation : "{raw_value}"')
         return value
