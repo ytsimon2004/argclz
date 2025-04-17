@@ -48,7 +48,7 @@ class DispatchCommand(NamedTuple):
             try:
                 new_value = validator(val)
             except (ValueError, TypeError, IndexError, KeyError) as e:
-                raise ValueError(f'command {self.command} argument {par}: {val}') from e
+                raise ValueError(f'command {self.command} argument "{par}" : {e}') from e
 
             a.arguments[par] = new_value
 
