@@ -13,10 +13,12 @@ provides short examples followed by a reference table of the builder’s methods
 
 
 String Validation
-=================
+-------------------
+use :attr:`ValidatorBuilder.str`
+
 
 Examples
---------
+^^^^^^^^^^
 **Minimum String Length**::
 
     from argp import validator
@@ -39,8 +41,11 @@ Examples
     opt.a = 'a1'    # OK
     opt.a = 'A1'    # Raises ValueError
 
+
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~StrValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
@@ -62,10 +67,12 @@ Method Reference
 
 
 Integer Validation
-==================
+-------------------
+use :attr:`ValidatorBuilder.int`
 
 Examples
---------
+^^^^^^^^^^
+
 **Integer Range**::
 
     class Opt:
@@ -86,8 +93,11 @@ Examples
     opt.a = 10  # OK
     opt.a = 0   # Raises ValueError
 
+
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~IntValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
@@ -103,10 +113,11 @@ Method Reference
 
 
 Float Validation
-================
+-------------------
+use :attr:`ValidatorBuilder.float`
 
 Examples
---------
+^^^^^^^^^^^
 **Range + NaN Handling**::
 
     class Opt:
@@ -121,7 +132,9 @@ Examples
     opt.a = float('nan')# Raises ValueError (NaN not allowed)
 
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~FloatValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
@@ -141,10 +154,11 @@ Method Reference
 
 
 List Validation
-===============
+----------------
+use :attr:`ValidatorBuilder.list`
 
 Examples
---------
+^^^^^^^^^^^
 **List of Integers**::
 
     class Opt:
@@ -168,7 +182,9 @@ Examples
     opt.a = [1, -1]      # Raises ValueError
 
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~ListValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
@@ -184,10 +200,11 @@ Method Reference
 
 
 Tuple Validation
-================
+-----------------
+use :attr:`ValidatorBuilder.tuple`
 
 Examples
---------
+^^^^^^^^^^
 **Fixed-Length Tuple**::
 
     class Opt:
@@ -240,7 +257,9 @@ Examples
     # Raises ValueError: value out of range [0, 100]: 999
 
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~TupleValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
@@ -255,10 +274,11 @@ Method Reference
 
 
 Path Validation
-=================
+-----------------
+use :attr:`ValidatorBuilder.path`
 
 Examples
---------
+^^^^^^^^^^^^^^^^^^^^
 **Path suffix**::
 
     class Opt:
@@ -270,7 +290,9 @@ Examples
 
 
 Method Reference
-----------------
+^^^^^^^^^^^^^^^^^^^^
+refer to :class:`~PathValidatorBuilder`
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70

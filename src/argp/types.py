@@ -1,3 +1,4 @@
+from types import EllipsisType
 from typing import TypeVar, Callable, Union, Literal, get_origin, get_args
 
 __all__ = [
@@ -47,7 +48,7 @@ def bool_type(value: str) -> bool:
         raise ValueError()
 
 
-def tuple_type(*value_type: Callable[[str], T] | Ellipsis):
+def tuple_type(*value_type: Callable[[str], T] | EllipsisType):
     def _type(arg: str) -> tuple[T, ...]:
         ret = []
         remain = ...

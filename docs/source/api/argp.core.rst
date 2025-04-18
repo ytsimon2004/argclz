@@ -12,19 +12,23 @@ argp.core
    new_command_parser
    parse_args
    parse_command_args
-   set_options
+   Argument
    argument
+   pos_argument
+   var_argument
+   aliased_argument
    as_argument
+   foreach_arguments
    with_defaults
+   set_options
+   copy_argument
    print_help
    as_dict
-   copy_argument
-   Argument
 
 
 .. automodule:: argp.core
    :members:
-   :exclude-members: AbstractParser, new_parser, new_command_parser, parse_args, parse_command_args, set_options, argument, as_argument, with_defaults, print_help, as_dict, copy_argument, Argument
+   :exclude-members: AbstractParser, new_parser, new_command_parser, parse_args, parse_command_args, Argument, argument, pos_argument, var_argument, aliased_argument, as_argument, foreach_arguments, with_defaults, set_options, copy_argument, print_help, as_dict
    :undoc-members:
    :inherited-members:
    :show-inheritance:
