@@ -5,5 +5,6 @@ argp package
     :maxdepth: 1
 
     argp.core
-    argp.dispatch
+    argp.types
     argp.validator
+    argp.dispatch
