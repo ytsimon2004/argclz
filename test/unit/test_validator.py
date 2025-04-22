@@ -13,7 +13,7 @@ class TestValidator(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1'])
         self.assertEqual(opt.a, '1')
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             parse_args(Opt(), ['-a='])
 
         opt.a = '2'
@@ -31,28 +31,11 @@ class TestValidator(unittest.TestCase):
             b: tuple[int, ...] | None = argument('-b', type=int_tuple_type,
                                                  validator=lambda it: it is None or all([i < 5 for i in it]))
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             parse_args(Opt(), ['-a=10,2,3'])
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             parse_args(Opt(), ['-b=6,2'])
-
-    def test_validate_on_parse(self):
-        class Opt:
-            a: str = argument('-a', validator=lambda it: len(it) > 0, validate_on_set=False)
-
-        opt = parse_args(Opt(), ['-a=1'])
-        self.assertEqual(opt.a, '1')
-
-        with self.assertRaises(RuntimeError):
-            parse_args(Opt(), ['-a='])
-
-        opt.a = '2'
-        self.assertEqual(opt.a, '2')
-        opt.a = ''
-        self.assertEqual(opt.a, '')
-        opt.a = None
-        self.assertIsNone(opt.a, None)
 
     def test_validator_with_type_caster(self):
         class Opt:
@@ -61,7 +44,7 @@ class TestValidator(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1'])
         self.assertEqual(opt.a, 1)
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             parse_args(Opt(), ['-a=-1'])
 
         opt.a = 1
@@ -74,22 +57,12 @@ class TestValidator(unittest.TestCase):
         class Opt:
             a: str = argument('-a', validator=lambda it: len(it) > 0)
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             parse_args(Opt(), ['-a='])
 
         with self.assertRaises(ValueError):
             Opt().a = ''
 
-    def test_validate_on_set_on_protected_attr(self):
-        class Opt:
-            _a: str = argument('-a', validator=lambda it: len(it) > 0)
-
-        with self.assertRaises(RuntimeError):
-            parse_args(Opt(), ['-a='])
-
-        opt = Opt()
-        opt._a = ''
-        self.assertEqual(opt._a, '')
 
 
 class TestValidateBuilder(unittest.TestCase):
@@ -224,6 +197,36 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             opt.a = ['a']
+
+    def test_list_type_append_element(self):
+        class Opt:
+            a: list[int] = argument('-a', action='append', validator=validator.list(int))
+
+        opt = Opt()
+        opt.a = []
+        opt.a = [1, 2]
+
+        self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
+        self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
+
+        with self.assertRaises(ValueError):
+            opt.a = 1
+
+    def test_list_type_extend_element(self):
+        class Opt:
+            a: list[int] = argument('-a', action='extend', type=list_type(int), validator=validator.list(int))
+
+        opt = Opt()
+        opt.a = []
+        opt.a = [1, 2]
+
+        self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
+        self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
+        self.assertListEqual(parse_args(Opt(), ['-a=1,2']).a, [1, 2])
+        self.assertListEqual(parse_args(Opt(), ['-a=1,2', '-a=3']).a, [1, 2, 3])
+
+        with self.assertRaises(ValueError):
+            opt.a = 1
 
     def test_list_element_validating(self):
         class Opt:
@@ -501,6 +504,38 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('0', '1')
+
+    def test_reuse_validator(self):
+        class Opt:
+            a: int = argument('-a', (v := validator.int))
+            b: int = argument('-b', v.positive())
+
+        opt = Opt()
+        opt.a = -1
+
+
+class TestValidateBuilderOnOtherArgument(unittest.TestCase):
+    def test_on_pos_argument(self):
+        class Opt:
+            a: int = pos_argument('A', validator.int.positive(include_zero=False))
+
+        self.assertEqual(parse_args(Opt(), ['1']).a, 1)
+
+        with self.assertRaises(ValueError):
+            parse_args(Opt(), ['0'])
+
+    def test_on_var_argument(self):
+        class Opt:
+            a: list[int] = var_argument('A', validator.list(int).on_item(validator.int.positive(include_zero=False)))
+
+        self.assertListEqual(parse_args(Opt(), ['1']).a, [1])
+        self.assertListEqual(parse_args(Opt(), ['1', '2']).a, [1, 2])
+
+        with self.assertRaises(ValueError):
+            parse_args(Opt(), ['0'])
+
+        with self.assertRaises(ValueError):
+            parse_args(Opt(), ['1', '0'])
 
 
 if __name__ == '__main__':

@@ -1,9 +1,8 @@
 import inspect
 import sys
-from typing import get_origin, get_args, Literal, Callable, TypeVar
+from typing import get_origin, get_args, Literal, Callable, TypeVar, Generic
 
 from .core import ARGP_DISPATCH_COMMAND, DispatchCommand
-from .._types import TypeCasterWithValidator
 from ..validator import Validator
 
 __all__ = ['DispatchCommandBuilder']
@@ -113,3 +112,32 @@ class DispatchCommandBuilder:
             ret.append(m)
 
         return ret
+
+
+class TypeCasterWithValidator(Generic[T]):
+    def __init__(self, caster: Callable[[str], T] | None,
+                 validator: Callable[[T], bool]):
+        self.caster = caster
+        self.validator = validator
+
+    def __call__(self, value: str) -> T:
+        raw_value = value
+
+        if self.caster is not None:
+            try:
+                value = self.caster(value)
+            except BaseException as e:
+                # print(e)
+                raise
+
+        if self.validator is not None:
+            try:
+                fail = not self.validator(value)
+            except BaseException as e:
+                # print(e)
+                raise
+            else:
+                if fail:
+                    raise ValueError(f'fail validation : "{raw_value}"')
+
+        return value

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from types import UnionType
-from typing import TypeVar, Union, Literal, get_origin, get_args, Any, TYPE_CHECKING, Generic
+from typing import TypeVar, Union, Literal, get_origin, get_args, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .core import Argument
 
-__all__ = []
+__all__ = ['caster_by_annotation', 'complete_arg_kwargs']
 
 T = TypeVar('T')
 
@@ -129,16 +128,3 @@ def _complete_arg_kwargs_for_literal(self: Argument):
     self.kwargs.setdefault('metavar', '|'.join(literal_values))
 
 
-class TypeCasterWithValidator(Generic[T]):
-    def __init__(self, caster: Callable[[str], T] | None,
-                 validator: Callable[[T], bool]):
-        self.caster = caster
-        self.validator = validator
-
-    def __call__(self, value: str) -> T:
-        raw_value = value
-        if self.caster is not None:
-            value = self.caster(value)
-        if self.validator is not None and not self.validator(value):
-            raise ValueError(f'fail validation : "{raw_value}"')
-        return value

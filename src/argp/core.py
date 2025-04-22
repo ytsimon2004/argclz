@@ -195,7 +195,6 @@ class Argument(object):
 
     def __init__(self, *options,
                  validator: Callable[[T], bool] = None,
-                 validate_on_set: bool = None,
                  group: str = None,
                  ex_group: str = None,
                  hidden: bool = False,
@@ -214,12 +213,17 @@ class Argument(object):
             validator = options[-1]
             options = options[:-1]
 
+        if not all([it.startswith('-') for it in options]):
+            raise RuntimeError(f'options should startswith "-". {options}')
+
+        if isinstance(validator, Validator):
+            validator = validator.freeze()
+
         self.attr = None
         self.attr_type = Any
         self.group = group
         self.ex_group = ex_group
         self.validator = validator
-        self.validate_on_set = validate_on_set
         self.options = options
         self.hidden = hidden
         self.kwargs = kwargs
@@ -291,23 +295,8 @@ class Argument(object):
         self.attr = name
         self.attr_type = get_type_hints(owner).get(name, Any)
 
-        if self.validate_on_set is None:
-            if name.startswith('_'):
-                self.validate_on_set = False
-            else:
-                self.validate_on_set = True
-
         from ._types import complete_arg_kwargs
         complete_arg_kwargs(self)
-
-        if (type_validator := self.validator) is not None:
-            from ._types import TypeCasterWithValidator
-
-            type_caster = self.kwargs.get('type', None)
-            if isinstance(type_caster, TypeCasterWithValidator):
-                self.kwargs['type'] = TypeCasterWithValidator(type_caster.caster, type_validator)
-            else:
-                self.kwargs['type'] = TypeCasterWithValidator(type_caster, type_validator)
 
         if self.hidden:
             self.kwargs['help'] = argparse.SUPPRESS
@@ -325,8 +314,8 @@ class Argument(object):
         raise AttributeError(self.attr)
 
     def __set__(self, instance, value):
-        if self.validate_on_set and (validator := self.validator) is not None:
-            from .validator import ValidatorFailError
+        if (validator := self.validator) is not None:
+            from .validator import Validator, ValidatorFailError
             try:
                 fail = not validator(value)
             except ValidatorFailError:
@@ -345,7 +334,7 @@ class Argument(object):
         except KeyError:
             pass
 
-    def add_argument(self, ap: ArgumentParser, instance):
+    def add_argument(self, ap: argparse._ActionsContainer, instance):
         """Add this into `argparse.ArgumentParser`.
 
         :param ap:
@@ -371,7 +360,6 @@ class Argument(object):
                      default: T = None,
                      type: Union[Type, Callable[[str], T]] = None,
                      validator: Callable[[T], bool] = None,
-                     validate_on_set: bool = None,
                      choices: Sequence[str] = None,
                      required: bool = None,
                      hidden: bool = None,
@@ -403,7 +391,6 @@ class Argument(object):
         kw['group'] = self.group
         kw['ex_group'] = self.ex_group
         kw['validator'] = self.validator
-        kw['validate_on_set'] = self.validate_on_set
         kw['hidden'] = self.hidden
         kw.update(kwargs)
 
@@ -454,7 +441,6 @@ def argument(*options: str,
              default: T = ...,
              type: Type | Callable[[str], T] = ...,
              validator: Callable[[T], bool] = ...,
-             validate_on_set: bool = True,
              choices: Sequence[str] = ...,
              required: bool = False,
              hidden: bool = False,
@@ -485,45 +471,45 @@ def argument(*options: str, **kwargs):
 
     :param kwargs: Please see ``argparse.ArgumentParser.add_argument`` for detailed.
     """
-    if not all([it.startswith('-') for it in options if isinstance(it, str)]):
-        raise RuntimeError(f'options should startswith "-". {options}')
     return Argument(*options, **kwargs)
 
 
 @overload
-def pos_argument(option: str, *,
+def pos_argument(option: str,
+                 validator: Callable[[T], bool] = ..., *,
                  nargs: Nargs = None,
                  action: Actions = ...,
                  const=...,
                  default=...,
                  type: Type | Callable[[str], T] = ...,
-                 validator: Callable[[T], bool] = ...,
-                 validate_on_set: bool = True,
                  choices: Sequence[str] = ...,
                  required: bool = False,
                  help: str = ..., ) -> T:
     pass
 
 
-def pos_argument(option: str, *, nargs=None, **kwargs):
+def pos_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs=None, **kwargs):
+    if validator is not ...:
+        kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, **kwargs)
 
 
 @overload
-def var_argument(option: str, *,
+def var_argument(option: str,
+                 validator: Callable[[T], bool] = ..., *,
                  nargs: Nargs = ...,
                  action: Actions = ...,
                  const=...,
                  default=...,
                  type: Type | Callable[[str], T] = ...,
-                 validator: Callable[[T], bool] = ...,
-                 validate_on_set: bool = True,
                  choices: Sequence[str] = ...,
                  help: str = ...) -> list[T]:
     pass
 
 
-def var_argument(option: str, *, nargs='*', action='extend', **kwargs):
+def var_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs='*', action='extend', **kwargs):
+    if validator is not ...:
+        kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, action=action, **kwargs)
 
 
@@ -534,8 +520,9 @@ class AliasArgument(Argument):
         super().__init__(*options, **kwargs)
         self.aliases = aliases
 
-    def add_argument(self, ap: ArgumentParser, owner):
-        super().add_argument(ap, owner)
+    def add_argument(self, ap: argparse._ActionsContainer, owner):
+        gp = ap.add_mutually_exclusive_group(required=self.required)
+        super().add_argument(gp, owner)
 
         primary = self.options[0]
         for name, values in self.aliases.items():
@@ -545,7 +532,7 @@ class AliasArgument(Argument):
             kw['action'] = 'store_const'
             kw['const'] = values
             kw['help'] = f'short for {primary}={values}.'
-            ap.add_argument(name, **kw, dest=self.attr)
+            gp.add_argument(name, **kw, dest=self.attr)
 
 
 @overload
@@ -557,7 +544,6 @@ def aliased_argument(options: str, *,
                      default=...,
                      type: Type | Callable[[str], T] = ...,
                      validator: Callable[[T], bool] = ...,
-                     validate_on_set: bool = True,
                      choices: Sequence[str] = ...,
                      help: str = ...,
                      group: str = None,

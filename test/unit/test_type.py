@@ -27,6 +27,29 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), [])
         self.assertTrue(opt.a)
 
+    def test_bool_value(self):
+        class Opt:
+            a: bool = argument('-a', type=bool_type)
+
+        self.assertTrue(parse_args(Opt(), ['-a=1']).a)
+        self.assertTrue(parse_args(Opt(), ['-a+']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=+']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=t']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=true']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=y']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=yes']).a)
+        self.assertTrue(parse_args(Opt(), ['-a=Y']).a)
+        self.assertFalse(parse_args(Opt(), ['-a-']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=-']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=0']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=f']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=false']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=n']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=no']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=x']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=N']).a)
+        self.assertFalse(parse_args(Opt(), ['-a=X']).a)
+
     def test_str(self):
         class Opt:
             a: str = argument('-a')
@@ -231,6 +254,23 @@ class TypeAnnotationTest(unittest.TestCase):
         self.assertTupleEqual(opt.a, (1, 2))
         opt = parse_args(Opt(), ['-a=1,2,3'])
         self.assertTupleEqual(opt.a, (1, 2, 3))
+
+    def test_tuple_type_func(self):
+        _ = tuple_type(int)
+        _ = tuple_type(int, int)
+        _ = tuple_type(int, ...)
+
+        with self.assertRaises(RuntimeError):
+            tuple_type(...)
+
+        with self.assertRaises(RuntimeError):
+            tuple_type(..., int)
+
+        with self.assertRaises(RuntimeError):
+            tuple_type(int, ..., int)
+
+        with self.assertRaises(RuntimeError):
+            tuple_type(int, ..., ...)
 
     def test_dict_type(self):
         class Opt:

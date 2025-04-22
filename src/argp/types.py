@@ -1,5 +1,5 @@
 from types import EllipsisType
-from typing import TypeVar, Callable, Union, Literal, get_origin, get_args
+from typing import TypeVar, Callable, Union, Literal, get_origin, get_args, Type
 
 __all__ = [
     'literal_value_type',
@@ -42,13 +42,21 @@ def bool_type(value: str) -> bool:
     value = value.lower()
     if value in ('-', '0', 'f', 'false', 'n', 'no', 'x'):
         return False
-    elif value in ('', '+', '1', 't', 'true', 'yes', 'y'):
+    elif value in ('+', '1', 't', 'true', 'yes', 'y'):
         return True
     else:
         raise ValueError()
 
 
-def tuple_type(*value_type: Callable[[str], T] | EllipsisType):
+def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
+    try:
+        i = value_type.index(...)
+    except ValueError:
+        pass
+    else:
+        if i == 0 or i != len(value_type) - 1:
+            raise RuntimeError()
+
     def _type(arg: str) -> tuple[T, ...]:
         ret = []
         remain = ...
@@ -73,7 +81,7 @@ int_tuple_type = tuple_type(int, ...)
 float_tuple_type = tuple_type(float, ...)
 
 
-def list_type(value_type: Callable[[str], T] = str, *, split=',', prepend: list[T] = None):
+def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prepend: list[T] = None):
     """:attr:`arg.type` caster which convert comma ',' spread string into list.
 
     :param split: split character

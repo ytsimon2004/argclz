@@ -1,6 +1,8 @@
+import builtins
 import unittest
 from typing import Literal
 from unittest import skipIf
+from unittest.mock import patch
 
 from argp import *
 from argp.clone import Cloneable
@@ -10,6 +12,15 @@ try:
     import polars as pl
 except ImportError:
     pl = None
+
+IMPORT = builtins.__import__
+
+
+def block_polars_import(name, globals, locals, fromlist, level):
+    if name == 'polars':
+        raise ImportError
+
+    return IMPORT(name, globals, locals, fromlist, level)
 
 
 class WithDefaultTest(unittest.TestCase):
@@ -135,6 +146,28 @@ class AbstractParserTest(unittest.TestCase):
         self.assertEqual(main.a, 1)
 
 
+class TestArguments(unittest.TestCase):
+    def test_required_argument(self):
+        class Opt:
+            a: str = argument('-a', required=True)
+
+        self.assertEqual(parse_args(Opt(), ['-a=1']).a, '1')
+
+        with self.assertRaises(RuntimeError):
+            parse_args(Opt(), [])
+
+    def test_alias_argument(self):
+        class Opt:
+            a: str = aliased_argument('-a', aliases={
+                '-b': 'B',
+                '-c': 'C',
+            })
+
+        self.assertEqual(parse_args(Opt(), ['-a=1']).a, '1')
+        self.assertEqual(parse_args(Opt(), ['-b']).a, 'B')
+        self.assertEqual(parse_args(Opt(), ['-c']).a, 'C')
+
+
 class CopyArgsTest(unittest.TestCase):
     def test_copy_argument(self):
         class Opt:
@@ -166,6 +199,24 @@ class CopyArgsTest(unittest.TestCase):
         self.assertEqual(ano.a, '2')
 
     def test_cloneable(self):
+        class Opt(Cloneable):
+            a: str = argument('-a')
+
+        opt = parse_args(Opt(), ['-a=2'])
+        self.assertEqual(opt.a, '2')
+
+        ano = Opt(opt)
+        self.assertEqual(ano.a, '2')
+
+    @patch('builtins.__import__', block_polars_import)
+    def test_cloneable_without_polars(self):
+        try:
+            import polars
+        except ImportError:
+            pass
+        else:
+            self.fail()
+
         class Opt(Cloneable):
             a: str = argument('-a')
 
