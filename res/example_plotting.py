@@ -1,8 +1,8 @@
 import contextlib
 from pathlib import Path
+from typing import ContextManager
 
 import matplotlib.pyplot as plt
-from decorator import ContextManager
 from matplotlib.axes import Axes
 
 from argp import argument
