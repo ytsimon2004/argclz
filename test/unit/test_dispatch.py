@@ -1,7 +1,7 @@
 import unittest
 
-from argp import *
-from argp.dispatch import *
+from argclz import *
+from argclz.dispatch import *
 
 
 class SimpleDispatch(AbstractParser, Dispatch):

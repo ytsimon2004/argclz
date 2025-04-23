@@ -1,7 +1,7 @@
-argp.dispatch.builder
-=====================
+argclz.dispatch.builder
+=======================
 
-.. currentmodule:: argp.dispatch.builder
+.. currentmodule:: argclz.dispatch.builder
 
 .. autosummary::
    :toctree: _autosummary
@@ -10,7 +10,7 @@ argp.dispatch.builder
    DispatchCommandBuilder
 
 
-.. automodule:: argp.dispatch.builder
+.. automodule:: argclz.dispatch.builder
    :members:
    :exclude-members: DispatchCommandBuilder
    :undoc-members:

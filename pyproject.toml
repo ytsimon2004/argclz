@@ -1,5 +1,5 @@
 [project]
-name = "argp"
+name = "argclz"
 version = "0.0.0"
 requires-python = ">=3.10"
 description = "Create commandline interface via dataclass-like class"
@@ -30,15 +30,15 @@ dependencies = ['typing_extensions']
 [project.optional-dependencies]
 
 opt = ['rich']
-dev = ['argp[opt]', 'pytest', 'pytest-cov']
+dev = ['argclz[opt]', 'pytest', 'pytest-cov']
 doc = ['sphinx', 'pydata-sphinx-theme', 'sphinx_prompt']
 
 
 [project.urls]
-Homepage = "https://github.com/ytsimon2004/argp"
-Documentation = "https://argp.readthedocs.io/en/latest/"
-Repository = "https://github.com/ytsimon2004/argp"
-Issues = "https://github.com/ytsimon2004/argp/issues"
+Homepage = "https://github.com/ytsimon2004/argclz"
+Documentation = "https://argclz.readthedocs.io/en/latest/"
+Repository = "https://github.com/ytsimon2004/argclz"
+Issues = "https://github.com/ytsimon2004/argclz/issues"
 
 
 [build-system]

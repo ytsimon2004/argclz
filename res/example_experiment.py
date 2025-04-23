@@ -1,7 +1,7 @@
 import abc
 from pathlib import Path
 
-from argp import AbstractParser, argument, validator
+from argclz import AbstractParser, argument, validator
 
 
 class GeneralOptions(AbstractParser, metaclass=abc.ABCMeta):

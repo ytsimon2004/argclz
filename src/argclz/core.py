@@ -186,7 +186,7 @@ class Argument(object):
 
     **Creation**
 
-    Use :func:`~argp.core.argument()`.
+    Use :func:`~argclz.core.argument()`.
 
     >>> class Example:
     ...     a: str = argument('-a')
@@ -563,7 +563,7 @@ def aliased_argument(*options: str, aliases: dict[str, T], **kwargs):
 
 
 def as_argument(a) -> Argument:
-    """cast argument attribute as an :class:`~argp.core.Argument` for type checking framework/IDE."""
+    """cast argument attribute as an :class:`~argclz.core.Argument` for type checking framework/IDE."""
     if isinstance(a, Argument):
         return a
     raise TypeError
@@ -665,9 +665,9 @@ def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        usage: str = None,
                        description: str = None,
                        reset=False) -> ArgumentParser:
-    """Create ``ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
+    """Create ``ArgumentParser`` for :class:`~argclz.core.AbstractParser` s.
 
-    :param parsers: dict of command to :class:`~argp.core.AbstractParser`.
+    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
     :param usage: parser usage
     :param description: parser description
     :param reset: reset argument attributes. do nothing if *parsers*'s value isn't an instance.
@@ -729,7 +729,7 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        system_exit: bool | Type[BaseException] = True) -> AbstractParser | ArgumentParsingResult | None:
     """Parse command-line arguments for subcommands, each associated with a different parser class
 
-    :param parsers: dict of command to :class:`~argp.core.AbstractParser`.
+    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
     :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
     :param usage: Optional usage string to override the auto-generated help
     :param description: Optional description for the main parser

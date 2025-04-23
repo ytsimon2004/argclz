@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'argp'
+project = 'argclz'
 copyright = '2025, yu-ting wei'
 author = 'yu-ting wei'
 

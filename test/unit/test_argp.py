@@ -2,9 +2,9 @@ import unittest
 from typing import Literal
 from unittest import skipIf
 
-from argp import *
-from argp.clone import Cloneable
-from argp.core import with_defaults, as_dict, parse_args, copy_argument
+from argclz import *
+from argclz.clone import Cloneable
+from argclz.core import with_defaults, as_dict, parse_args, copy_argument
 
 try:
     import polars as pl

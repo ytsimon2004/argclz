@@ -1,7 +1,7 @@
 import unittest
 
-from argp import *
-from argp.core import print_help
+from argclz import *
+from argclz.core import print_help
 
 RUNNER = ''
 

@@ -3,8 +3,8 @@ from collections.abc import Callable
 from typing import NamedTuple, TypeVar, Any
 
 __all__ = [
-    'ARGP_DISPATCH_GROUP',
-    'ARGP_DISPATCH_COMMAND',
+    'ARGCLZ_DISPATCH_GROUP',
+    'ARGCLZ_DISPATCH_COMMAND',
     'DispatchCommand',
     'DispatchCommandNotFound',
     'Dispatch',
@@ -13,8 +13,8 @@ __all__ = [
 T = TypeVar('T')
 R = TypeVar('R')
 
-ARGP_DISPATCH_GROUP = '__argp_dispatch_group__'
-ARGP_DISPATCH_COMMAND = '__argp_dispatch_command__'
+ARGCLZ_DISPATCH_GROUP = '__argp_dispatch_group__'
+ARGCLZ_DISPATCH_COMMAND = '__argp_dispatch_command__'
 
 
 class DispatchCommand(NamedTuple):
@@ -78,7 +78,7 @@ class Dispatch:
         ret = []
         for attr in dir(cls):
             attr_value = getattr(cls, attr)
-            if (info := getattr(attr_value, ARGP_DISPATCH_COMMAND, None)) is not None:
+            if (info := getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)) is not None:
                 if group is ... or group == info.group:
                     ret.append(info)
 
@@ -96,7 +96,7 @@ class Dispatch:
 
         for attr in dir(cls):
             attr_value = getattr(cls, attr)
-            if (info := getattr(attr_value, ARGP_DISPATCH_COMMAND, None)) is not None:
+            if (info := getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)) is not None:
                 if group is ... or group == info.group:
                     if command == info.command or command in info.aliases:
                         return info

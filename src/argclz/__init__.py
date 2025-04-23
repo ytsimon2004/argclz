@@ -13,11 +13,11 @@ argument
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Create an argument attribute
 
-refer to :func:`~argp.core.argument()`
+refer to :func:`~argclz.core.argument()`
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument
+    from argclz import AbstractParser, argument
 
     class MyArgs(AbstractParser):
 
@@ -59,11 +59,11 @@ pos_argument
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Create a positional (non-flag) command-line argument attribute
 
-refer to :func:`~argp.core.pos_argument()`
+refer to :func:`~argclz.core.pos_argument()`
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument
+    from argclz import AbstractParser, argument
 
     class MyArgs(AbstractParser):
 
@@ -90,11 +90,11 @@ var_argument
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Create a variable-length positional argument, suitable for capturing multiple values into a list
 
-refer to :func:`~argp.core.var_argument()`
+refer to :func:`~argclz.core.var_argument()`
 
 .. code-block:: python
 
-    from argp import AbstractParser, var_argument
+    from argclz import AbstractParser, var_argument
 
     class MyArgs(AbstractParser):
 
@@ -118,11 +118,11 @@ aliased_argument
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Create an argument that supports shorthand aliases for specific constant values
 
-refer to :func:`~argp.core.aliased_argument()`
+refer to :func:`~argclz.core.aliased_argument()`
 
 .. code-block:: python
 
-    from argp import AbstractParser, aliased_argument
+    from argclz import AbstractParser, aliased_argument
 
     class MyArgs(AbstractParser):
 
@@ -171,7 +171,7 @@ These can be used directly as `type=...` in any argument specification, offering
 
 .. code-block:: python
 
-    from argp import AbstractParser, float_tuple_type
+    from argclz import AbstractParser, float_tuple_type
 
     class MyArgs(AbstractParser):
 
@@ -189,7 +189,7 @@ These can be used directly as `type=...` in any argument specification, offering
 
 .. prompt:: bash $
 
-    python script.py --annotation 0.3,0.5,0.9
+    python script.py --anno 0.3,0.5,0.9
 
 **output**
 
@@ -199,7 +199,7 @@ These can be used directly as `type=...` in any argument specification, offering
 
 .. seealso ::
 
-    see more types options :mod:`argp.types`
+    see more types options :mod:`argclz.types`
 
 
 
@@ -214,7 +214,7 @@ that let you specify constraints like numeric ranges, string length ranges, rege
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument
+    from argclz import AbstractParser, argument
 
     class Opt(AbstractParser):
         # Accepts only even integers
@@ -229,7 +229,7 @@ that let you specify constraints like numeric ranges, string length ranges, rege
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument, validator
+    from argclz import AbstractParser, argument, validator
 
     class Opt(AbstractParser):
         # Accepts only integers in [10, 99]
@@ -248,7 +248,7 @@ that let you specify constraints like numeric ranges, string length ranges, rege
 
 .. seealso ::
 
-    see more validation options :mod:`argp.validator`
+    see more validation options :mod:`argclz.validator`
 
 
 Dispatch usage
@@ -256,14 +256,14 @@ Dispatch usage
 
 .. seealso ::
 
-    see dispatch usage in :mod:`argp.dispatch`
+    see dispatch usage in :mod:`argclz.dispatch`
 
 TODO DOC
 
 
 utility usage
 ------------------------------------
-Refer to :mod:`argp.core`
+Refer to :mod:`argclz.core`
 
 parse_args
 ^^^^^^^^^^^^^^^^^^^
@@ -273,7 +273,7 @@ Parse the provided list of command-line arguments and apply the parsed values to
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument, parse_args
+    from argclz import AbstractParser, argument, parse_args
 
     class Opt(AbstractParser):
         name: str = argument('--name', required=True)
@@ -297,7 +297,7 @@ collect all argument attributes into a dictionary with attribute name to its val
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument, as_dict
+    from argclz import AbstractParser, argument, as_dict
 
     class Opt(AbstractParser):
         name: str = argument('--name', default='guest')
@@ -321,11 +321,11 @@ with_options
 Option class can be composed by inherition. Child option class can also change the value from parent's
 argument. As well as disable it (by replacing a value)
 
-Use together with :func:`~argp.core.as_argument()`
+Use together with :func:`~argclz.core.as_argument()`
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument, as_argument
+    from argclz import AbstractParser, argument, as_argument
 
     class Parent(AbstractParser):
         mode: str = argument('--mode', choices=['train', 'test'], default='train')
@@ -344,7 +344,7 @@ Parse command-line arguments for subcommands, each associated with a different p
 
 .. code-block:: python
 
-    from argp import AbstractParser, argument, parse_command_args
+    from argclz import AbstractParser, argument, parse_command_args
 
     class InitCmd(AbstractParser):
 
@@ -380,6 +380,7 @@ from .core import (
     pos_argument,
     var_argument,
     aliased_argument,
-    as_argument
+    as_argument,
+    copy_argument
 )
 from .types import *

@@ -2,7 +2,7 @@ import inspect
 import sys
 from typing import get_origin, get_args, Literal, Callable, TypeVar
 
-from .core import ARGP_DISPATCH_COMMAND, DispatchCommand
+from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand
 from .._types import TypeCasterWithValidator
 from ..validator import Validator
 
@@ -20,10 +20,10 @@ class DispatchCommandBuilder:
 
     @classmethod
     def of(cls, f):
-        ret = getattr(f, ARGP_DISPATCH_COMMAND, None)
+        ret = getattr(f, ARGCLZ_DISPATCH_COMMAND, None)
         if ret is None:
             ret = DispatchCommandBuilder(f)
-            setattr(f, ARGP_DISPATCH_COMMAND, ret)
+            setattr(f, ARGCLZ_DISPATCH_COMMAND, ret)
         elif isinstance(ret, DispatchCommandBuilder):
             pass
         elif isinstance(ret, DispatchCommand):
@@ -55,7 +55,7 @@ class DispatchCommandBuilder:
               usage: list[str] = None,
               hidden=False) -> DispatchCommand:
         ret = DispatchCommand(None, group, command, aliases, order, usage, self.func, self.validators, hidden)
-        setattr(self.func, ARGP_DISPATCH_COMMAND, ret)
+        setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)
         return ret
 
     def build_usage(self) -> list[str]:

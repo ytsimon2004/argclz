@@ -21,7 +21,7 @@ Examples
 ^^^^^^^^^^
 **Minimum String Length**::
 
-    from argp import validator
+    from argclz import validator
 
     class Opt:
         # Must be at least 2 characters long

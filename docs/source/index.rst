@@ -1,4 +1,4 @@
-Welcome to Argp documentation!
+Welcome to Argclz documentation!
 ====================================
 
 
@@ -11,4 +11,4 @@ API Reference
    :caption: Packages
 
 
-   api/argp.rst
+   api/argclz.rst
