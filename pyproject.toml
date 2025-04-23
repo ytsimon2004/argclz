@@ -24,13 +24,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-dependencies = []
+dependencies = ['typing_extensions']
 
 
 [project.optional-dependencies]
 
 opt = ['rich']
-dev = ['argp[opt]', 'coverage']
+dev = ['argp[opt]', 'pytest', 'pytest-cov']
 doc = ['sphinx', 'pydata-sphinx-theme']
 
 
