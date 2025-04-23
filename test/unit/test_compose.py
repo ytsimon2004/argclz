@@ -1,7 +1,7 @@
 import unittest
 
-from argp import *
-from argp.core import foreach_arguments
+from argclz import *
+from argclz.core import foreach_arguments
 
 
 class ParserClassTest(unittest.TestCase):

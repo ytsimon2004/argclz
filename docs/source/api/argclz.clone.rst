@@ -1,7 +1,7 @@
-argp.clone
-==========
+argclz.clone
+============
 
-.. currentmodule:: argp.clone
+.. currentmodule:: argclz.clone
 
 .. autosummary::
    :toctree: _autosummary
@@ -10,7 +10,7 @@ argp.clone
    Cloneable
 
 
-.. automodule:: argp.clone
+.. automodule:: argclz.clone
    :members:
    :exclude-members: Cloneable
    :undoc-members:

@@ -186,7 +186,7 @@ class Argument(object):
 
     **Creation**
 
-    Use :func:`~argp.core.argument()`.
+    Use :func:`~argclz.core.argument()`.
 
     >>> class Example:
     ...     a: str = argument('-a')
@@ -452,22 +452,7 @@ def argument(*options: str,
 
 
 def argument(*options: str, **kwargs):
-    """create an argument attribute.
-
-    Example:
-
-    >>> class Example:
-    ...     # create a bool flag
-    ...     bool_flag: bool = argument('-f')
-    ...     # create a single value option
-    ...     str_value: str = argument('-a', metavar='VALUE')
-    ...     # create a single value option with type auto-casting
-    ...     int_value: int = argument('-i', metavar='VALUE')
-    ...     # create a position argument
-    ...     pos_value: str = argument(metavar='VALUE')
-    ...     # create a multiple value option
-    ...     list_value: list[str] = argument('-l', metavar='VALUE', nargs=2, action='append')
-
+    """create an argument attribute
 
     :param kwargs: Please see ``argparse.ArgumentParser.add_argument`` for detailed.
     """
@@ -489,6 +474,11 @@ def pos_argument(option: str,
 
 
 def pos_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs=None, **kwargs):
+    """create a positional (non-flag) command-line argument attribute
+
+    :param option: The name for the positional argument shown in usage messages
+    :param kwargs: Please see ``argparse.ArgumentParser.add_argument`` for detailed.
+    """
     if validator is not ...:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, **kwargs)
@@ -508,6 +498,7 @@ def var_argument(option: str,
 
 
 def var_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs='*', action='extend', **kwargs):
+    """create a variable-length positional argument, suitable for capturing multiple values into a list"""
     if validator is not ...:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, action=action, **kwargs)
@@ -553,11 +544,12 @@ def aliased_argument(options: str, *,
 
 
 def aliased_argument(*options: str, aliases: dict[str, T], **kwargs):
+    """create an argument that supports shorthand aliases for specific constant values"""
     return AliasArgument(*options, aliases=aliases, **kwargs)
 
 
 def as_argument(a) -> Argument:
-    """cast argument attribute as an :class:`~argp.core.Argument` for type checking framework/IDE."""
+    """cast argument attribute as an :class:`~argclz.core.Argument` for type checking framework/IDE."""
     if isinstance(a, Argument):
         return a
     raise TypeError
@@ -659,9 +651,9 @@ def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        usage: str = None,
                        description: str = None,
                        reset=False) -> ArgumentParser:
-    """Create ``ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
+    """Create ``ArgumentParser`` for :class:`~argclz.core.AbstractParser` s.
 
-    :param parsers: dict of command to :class:`~argp.core.AbstractParser`.
+    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
     :param usage: parser usage
     :param description: parser description
     :param reset: reset argument attributes. do nothing if *parsers*'s value isn't an instance.
@@ -702,11 +694,11 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
 
 
 def parse_args(instance: T, args: list[str] = None) -> T:
-    """parsing the commandline input *args* and set the argument attributes.
+    """Parse the provided list of command-line arguments and apply the parsed values to the given instance
 
-    :param instance:
-    :param args: commandline inputs
-    :return:
+    :param instance: An instance of a class derived from :class:`AbstractParser`
+    :param args: A list of strings representing command-line arguments. If ``None``, uses ``sys.argv[1:]``
+    :return: The same instance, with attributes populated
     """
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
@@ -721,15 +713,15 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        description: str = None,
                        parse_only=False,
                        system_exit: bool | Type[BaseException] = True) -> AbstractParser | ArgumentParsingResult | None:
-    """Create ``argparse.ArgumentParser`` for :class:`~argp.core.AbstractParser` s.
-    Then parsing the commandline input *args* and setting up correspond :class:`~argp.core.AbstractParser`.
+    """Parse command-line arguments for subcommands, each associated with a different parser class
 
-    :param parsers: dict of command to :class:`~argp.core.AbstractParser`.
-    :param args: commandline inputs
-    :param usage: parser usage
-    :param description: parser description.
-    :param run_main: run :meth:`~argp.core.AbstractParser.run()`
-    :return: used :class:`~argp.core.AbstractParser`
+    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
+    :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
+    :param usage: Optional usage string to override the auto-generated help
+    :param description: Optional description for the main parser
+    :param parse_only: If True, does not run the parser’s ``.run()`` method.
+    :param system_exit: If True (default), calls ``sys.exit`` on parse errors. Set to False to return errors as result objects. You can also pass a custom exception type to raise on failure.
+    :return: The parser instance that handled the command (or an :class:`ArgumentParsingResult` if ``parse_only`` or ``system_exit=False``)
     """
     parser = new_command_parser(parsers, usage, description, reset=True)
     result = parser.parse_args(args)
@@ -805,8 +797,8 @@ def with_defaults(instance: T) -> T:
 def as_dict(instance: T) -> dict[str, Any]:
     """collect all argument attributes into a dictionary with attribute name to its value.
 
-    :param instance:
-    :return:
+    :param instance: An instance of a class derived from :class:`AbstractParser`
+    :return: A dictionary mapping argument attribute names to their current values
     """
     ret = {}
     for arg in foreach_arguments(instance):

@@ -1,4 +1,4 @@
-Welcome to Argp documentation!
+Welcome to Argclz documentation!
 ====================================
 
 
@@ -7,8 +7,8 @@ API Reference
 -----------------
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Packages
 
 
-   api/argp.rst
+   api/argclz.rst

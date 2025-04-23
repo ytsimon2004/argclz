@@ -1,8 +1,8 @@
 import unittest
 
-from argp import *
-from argp.core import parse_args
-from argp.validator import ValidatorFailOnTypeError
+from argclz import *
+from argclz.core import parse_args
+from argclz.validator import ValidatorFailOnTypeError
 
 
 class TestValidator(unittest.TestCase):

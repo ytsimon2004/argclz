@@ -21,6 +21,7 @@ T = TypeVar('T')
 
 
 def literal_value_type(arg: str) -> bool | int | float | str:
+    """Parse a string into its literal Python value"""
     if arg.upper() == 'TRUE':
         return True
     elif arg.upper() == 'FALSE':
@@ -39,6 +40,12 @@ def literal_value_type(arg: str) -> bool | int | float | str:
 
 
 def bool_type(value: str) -> bool:
+    """Convert a string to a boolean.
+
+    :param value: the input string to evaluate
+    :return: False for ('-', '0', 'f', 'false', 'n', 'no', 'x'), True for ('', '+', '1', 't', 'true', 'yes', 'y')
+    :raises ValueError: if the string is not recognized as a boolean
+    """
     value = value.lower()
     if value in ('-', '0', 'f', 'false', 'n', 'no', 'x'):
         return False
@@ -49,6 +56,11 @@ def bool_type(value: str) -> bool:
 
 
 def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
+    """Create a caster that splits a comma-separated string into a tuple of typed values.
+
+    :param value_type: converter functions for each tuple position; use EllipsisType to repeat last
+    :return: a function that converts a comma-separated string into a typed tuple
+    """
     try:
         i = value_type.index(...)
     except ValueError:
@@ -77,17 +89,20 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
 
 
 str_tuple_type = tuple_type(str, ...)
+"""tuple[str, ...]"""
 int_tuple_type = tuple_type(int, ...)
+"""tuple[int, ...]"""
 float_tuple_type = tuple_type(float, ...)
+"""tuple[float, ...]"""
 
 
 def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prepend: list[T] = None):
-    """:attr:`arg.type` caster which convert comma ',' spread string into list.
+    """Caster which converts a delimited string into a list of typed values
 
-    :param split: split character
-    :param value_type: value type converter
-    :param prepend: prepend list
-    :return: type caster.
+    :param value_type: function to convert each element (default: str)
+    :param split: delimiter character (default: ',')
+    :param prepend: list of values to prepend when string starts with '+' + split
+    :return: function that converts a delimited string into a list
     """
 
     def _cast(arg: str) -> list[T]:
@@ -101,6 +116,13 @@ def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prep
 
 
 def union_type(*t: Callable[[str], T]):
+    """
+    Caster that tries multiple converters in order until one succeeds.
+
+    :param t: converter functions to attempt
+    :return: function that returns first successful conversion
+    :raises TypeError: if all converters fail
+    """
     none_type = type(None)
 
     def _type(arg: str):
@@ -116,11 +138,11 @@ def union_type(*t: Callable[[str], T]):
 
 
 def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] = None):
-    """Dict arg value.
+    """Caster that accumulates key-value pairs from 'key:value' or 'key=value' strings.
 
-    :param default: default dict content
-    :param value_type: type of dict value
-    :return: type converter
+    :param value_type: function to convert values (default: str)
+    :param default: initial dict to populate (default: new dict)
+    :return: function that updates and returns the dict
     """
     if default is None:
         default = {}
@@ -148,6 +170,12 @@ def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] = None
 
 
 def slice_type(arg: str) -> slice:
+    """Convert a 'start:end' string into a slice object.
+
+    :param arg: string in 'start:end' format
+    :return: slice(start, end)
+    :raises ValueError: if format is invalid or parts are not integers
+    """
     i = arg.index(':')
     v1 = int(arg[:i])
     v2 = int(arg[i + 1:])
@@ -155,7 +183,10 @@ def slice_type(arg: str) -> slice:
 
 
 def try_int_type(arg: str) -> Union[int, str, None]:
-    """for argparse (i.e., plane_index)"""
+    """Attempt to convert a string to int, returning original or None on failure.
+
+    :param arg: the input string
+    :return: int if parsing succeeds, original string if fails, or None if empty"""
     if len(arg) == 0:
         return None
     try:
@@ -165,6 +196,10 @@ def try_int_type(arg: str) -> Union[int, str, None]:
 
 
 def try_float_type(arg: str) -> Union[float, str, None]:
+    """Attempt to convert a string to float, returning original or None on failure.
+
+    :param arg: the input string
+    :return: float if parsing succeeds, original string if fails, or None if empty"""
     if len(arg) == 0:
         return None
     try:
@@ -174,6 +209,7 @@ def try_float_type(arg: str) -> Union[float, str, None]:
 
 
 class literal_type:
+    """Caster enforcing membership in a set of string literals with optional prefix matching"""
 
     def __init__(self, candidate: type[Literal] | tuple[str, ...] = None, *,
                  complete: bool = False):

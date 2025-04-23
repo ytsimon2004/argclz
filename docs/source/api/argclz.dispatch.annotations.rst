@@ -1,7 +1,7 @@
-argp.dispatch.annotations
-=========================
+argclz.dispatch.annotations
+===========================
 
-.. currentmodule:: argp.dispatch.annotations
+.. currentmodule:: argclz.dispatch.annotations
 
 .. autosummary::
    :toctree: _autosummary
@@ -11,7 +11,7 @@ argp.dispatch.annotations
    validator_for
 
 
-.. automodule:: argp.dispatch.annotations
+.. automodule:: argclz.dispatch.annotations
    :members:
    :exclude-members: dispatch, validator_for
    :undoc-members:

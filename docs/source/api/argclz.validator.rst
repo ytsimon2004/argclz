@@ -1,9 +1,9 @@
-argp.validator
-==============
+argclz.validator
+================
 
 
 
-.. automodule:: argp.validator
+.. automodule:: argclz.validator
    :members:
    :undoc-members:
    :inherited-members:

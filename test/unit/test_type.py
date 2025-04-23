@@ -2,8 +2,8 @@ import unittest
 from pathlib import Path
 from typing import Optional, Literal
 
-from argp import *
-from argp.core import parse_args
+from argclz import *
+from argclz.core import parse_args
 
 
 class TypeAnnotationTest(unittest.TestCase):

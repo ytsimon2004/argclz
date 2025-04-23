@@ -1,7 +1,7 @@
-argp.types
-==========
+argclz.types
+============
 
-.. currentmodule:: argp.types
+.. currentmodule:: argclz.types
 
 .. autosummary::
    :toctree: _autosummary
@@ -22,7 +22,7 @@ argp.types
    literal_type
 
 
-.. automodule:: argp.types
+.. automodule:: argclz.types
    :members:
    :exclude-members: literal_value_type, bool_type, try_int_type, try_float_type, int_tuple_type, str_tuple_type, float_tuple_type, tuple_type, list_type, union_type, dict_type, slice_type, literal_type
    :undoc-members:

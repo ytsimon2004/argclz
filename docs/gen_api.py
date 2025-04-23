@@ -4,7 +4,7 @@ import textwrap
 from pathlib import Path
 
 # === Configuration ===
-SRC = Path('../src/argp').resolve()
+SRC = Path('../src/argclz').resolve()
 DST = Path('source/api')
 DST.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +50,7 @@ CONTENT_DIR = """\
 """
 
 # Track generated .rst files and autosummary targets
-generated_rst_files = ['argp.rst']
+generated_rst_files = ['argclz.rst']
 autosummary_targets = []
 
 # Add source root for import resolution
