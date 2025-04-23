@@ -2,8 +2,13 @@ from typing import Type
 
 from .core import Dispatch
 
+__all__ = ['format_dispatch_commands']
 
-def format_dispatch_commands(d: Type[Dispatch], group: str | None) -> str:
+
+def format_dispatch_commands(d: Type[Dispatch],
+                             group: str | None,
+                             show_para: bool = False,
+                             **kwargs) -> str:
     from rich.console import Console
     from rich.table import Table
     from rich import box

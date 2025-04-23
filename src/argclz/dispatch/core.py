@@ -3,8 +3,6 @@ from collections.abc import Callable
 from typing import NamedTuple, TypeVar, Any
 
 __all__ = [
-    'ARGCLZ_DISPATCH_GROUP',
-    'ARGCLZ_DISPATCH_COMMAND',
     'DispatchCommand',
     'DispatchCommandNotFound',
     'Dispatch',
@@ -13,8 +11,8 @@ __all__ = [
 T = TypeVar('T')
 R = TypeVar('R')
 
-ARGCLZ_DISPATCH_GROUP = '__argp_dispatch_group__'
-ARGCLZ_DISPATCH_COMMAND = '__argp_dispatch_command__'
+ARGCLZ_DISPATCH_GROUP = '__argclz_dispatch_group__'
+ARGCLZ_DISPATCH_COMMAND = '__argclz_dispatch_command__'
 
 
 class DispatchCommand(NamedTuple):
@@ -67,10 +65,11 @@ class DispatchCommandNotFound(RuntimeError):
 
 class Dispatch:
     @classmethod
-    def list_commands(cls, group: str | None = ...) -> list[DispatchCommand]:
-        """list all dispatch-decoratored function info in *host*.
+    def list_commands(cls, group: str | None = ..., *, all: bool = False) -> list[DispatchCommand]:
+        """list all dispatch-decorated function info in *host*.
 
         :param group: dispatch group.
+        :param all: including hidden commands
         :return: list of DispatchCommand
         """
         info: DispatchCommand
@@ -80,7 +79,8 @@ class Dispatch:
             attr_value = getattr(cls, attr)
             if (info := getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)) is not None:
                 if group is ... or group == info.group:
-                    ret.append(info)
+                    if all or not info.hidden:
+                        ret.append(info)
 
         return ret
 
@@ -131,6 +131,6 @@ class Dispatch:
         return info(self, *args, **kwargs)
 
     @classmethod
-    def build_command_usages(cls, group: str | None = None) -> str:
+    def build_command_usages(cls, group: str | None = None, show_para: bool = False, **kwargs) -> str:
         from ._format import format_dispatch_commands
-        return format_dispatch_commands(cls, group)
+        return format_dispatch_commands(cls, group, show_para=show_para, **kwargs)

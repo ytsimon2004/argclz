@@ -21,14 +21,15 @@ def dispatch(command: str,
     All functions decorated in same dispatch group should have save
     function signature (at least for non-default parameters). For example:
 
-    >>> @dispatch('A')
-    ... def function_a(self, a, b, c=None):
-    ...     pass
-    ... @dispatch('B')
-    ... def function_b(self, a, b, d=None):
-    ...     pass
-    ... def run_function(self):
-    ...     invoke_command(self, 'A', a, b)
+    >>> class D(Dispatch):
+    ...     @dispatch('A')
+    ...     def function_a(self, a, b, c=None):
+    ...         pass
+    ...     @dispatch('B')
+    ...     def function_b(self, a, b, d=None):
+    ...         pass
+    ...     def run_function(self):
+    ...         self.invoke_command(self, 'A', a, b)
 
 
     """
