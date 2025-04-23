@@ -18,7 +18,7 @@ class ParserClassTest(unittest.TestCase):
         self.assertListEqual([('-a',)], args)
 
         ret = opt.main(['-a=1'], system_exit=False, parse_only=True)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.a, 1)
 
     def test_overwrite_argument(self):

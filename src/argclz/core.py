@@ -53,7 +53,7 @@ Actions = Literal[
 
 
 class ArgumentParser(argparse.ArgumentParser):
-    exit_status: int = 0
+    exit_status: int = None
     exit_message: str | None = None
 
     def exit(self, status: int = 0, message: str = None):
@@ -61,8 +61,9 @@ class ArgumentParser(argparse.ArgumentParser):
         self.exit_message = message
 
     def error(self, message: str):
-        self.exit_status = 2
-        self.exit_message = message
+        if self.exit_status is None:
+            self.exit_status = 2
+            self.exit_message = message
 
 
 class ArgumentParsingResult(NamedTuple):
@@ -70,7 +71,7 @@ class ArgumentParsingResult(NamedTuple):
     exit_message: str | None
 
     def __bool__(self):
-        return self.exit_status == 0
+        return self.exit_status is None
 
     def __int__(self):
         return self.exit_status
@@ -702,7 +703,7 @@ def parse_args(instance: T, args: list[str] = None) -> T:
     """
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
-    if ap.exit_status != 0:
+    if ap.exit_status is not None:
         raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
     return set_options(instance, ot)
 
@@ -776,6 +777,8 @@ def print_help(instance: T, file: TextIO = sys.stdout):
     new_parser(instance).print_help(file)
     if buf is not None:
         return buf.getvalue()
+    else:
+        return None
 
 
 def with_defaults(instance: T) -> T:

@@ -142,7 +142,7 @@ class AbstractParserTest(unittest.TestCase):
 
         main = Main()
         ret = main.main(['-a=1'], parse_only=True)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(main.a, 1)
 
 

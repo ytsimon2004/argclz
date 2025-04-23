@@ -26,11 +26,11 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'AAA')
 
         ret = opt.main(['B'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'BBB')
 
         with self.assertRaises(DispatchCommandNotFound):
@@ -44,11 +44,11 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'AAA')
 
         ret = opt.main(['a'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'AAA')
 
     def test_dispatch_group(self):
@@ -66,7 +66,7 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'BBB')
 
     def test_dispatch_command_argument(self):
@@ -79,11 +79,11 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertTupleEqual(opt.r, ())
 
         ret = opt.main(['A', '1', '2'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertTupleEqual(opt.r, ('1', '2'))
 
     def test_dispatch_command_argument_casting(self):
@@ -97,7 +97,7 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A', '1'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 1)
 
     def test_dispatch_command_argument_casting_validator(self):
@@ -111,7 +111,7 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A', '1'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 1)
 
         with self.assertRaises(ValueError) as capture:
@@ -130,11 +130,11 @@ class TestDispatch(unittest.TestCase):
 
         opt = Opt()
         ret = opt.main(['A', '1'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 1)
 
         ret = opt.main(['A', 'a'], system_exit=False)
-        self.assertEqual(ret.exit_status, 0)
+        self.assertIsNone(ret.exit_status)
         self.assertEqual(opt.r, 'a')
 
         with self.assertRaises(ValueError) as capture:
