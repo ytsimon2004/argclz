@@ -1,145 +1,379 @@
 """
-Annotation-based argparse
+Basic example
 =========================
 
 This module provide a way to integrate python ``argparse`` module into class attribute
 and annotation type, that allow options have type information, and allow parser combination
 easily.
 
-class Argument and function argument
+core usage
 ------------------------------------
 
-A simple option class that contains several options carried by their attributes.
+argument
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Create an argument attribute
 
->>> class ExampleOptions:
-...     ANIMAL: str = argument('--ANIMAL')
-...     EXP_DATE: str = argument('--EXP_DATE')
-...     OUTPUT_DIR: str = argument()
+refer to :func:`~argp.core.argument()`
 
-In ``ExampleOptions``, ``ANIMAL`` is an attribute with type annotation ``str``. it has
-a class variable :class:`~argp.core.Argument` (:func:`~argp.core.argument()` return) which contains the
-arguments of ``ArgumentParser.add_argument``. For now, we have an optional
-argument ``--ANIMAL`` which accept one argument. ``EXP_DATE`` as is another optional argument.
-And ``OUTPUT_DIR`` are a positonal argument because it doesn't have dashed options.
+.. code-block:: python
 
->>> opt = parse_args(ExampleOptions())
-... print(opt.ANIMAL)
+    from argp import AbstractParser, argument
 
-After class declared, you can use :meth:`~argp.core.parse_args()` to parse cli arguments. This
-function will create an ``ArgumentParser`` and find out all argument attributes.
-Then set the attributes from parsed result.
+    class MyArgs(AbstractParser):
 
-Commandline usage
-~~~~~~~~~~~~~~~~~
+        verbose: bool = argument('--verbose', help='Enable verbose output')
 
-In bash, you can call this option class ::
+        name: str = argument('-n', '--name', required=True, metavar='NAME', help='Name of the user')
 
-    python -m module.path --ANIMAL name --EXP_DATE date output
+        count: int = argument('--count', default=1, help='Number of times to greet')
 
-:func:`~argp.core.print_help()` does the similar things but print the help document to the stdout.
-
->>> print_help(opt)
-
-Or use ``-h`` options ::
-
-    python -m module.path -h
+        def run(self):
+            for _ in range(self.count):
+                if self.verbose:
+                    print(f"Greeting with enthusiasm: Hello, {self.name}!")
+                else:
+                    print(f"Hello, {self.name}!")
 
 
-Annotation type infering
-~~~~~~~~~~~~~~~~~~~~~~~~
+    if __name__ == '__main__':
+        MyArgs().main()  # call run()
 
-In general, you can think :func:`~argp.core.argument` just a delegate funcion that passes the arguments
-to the ``ArgumentParser.add_argument``. However, this function will try to
-infer missing arguments based on the annotation type when creating the ``ArgumentParser``.
-For now, this module is not powerful to handle all possible case. there are support type
-(Please see :meth:`~argp.core.Argument.complete_kwargs()` for detailed):
 
-1. ``bool``: infer parameter ``action`` to ``store_true``, ``default`` to ``False``.
-2. ``Literal[...]`` : infer parameter ``choices``.
-3. ``Optional[T]``: infer parameter ``type`` to ``T`` if it is callable. If it is ``Literal``, apply 2.
-4. ``callable(...)`` with signature ``Callable[[str], T]``: infer parameter ``type`` to ``T``
-5. parameter ``dest`` always use the attribute name.
+**run the script with**
 
-Additionally, :class:`~argp.core.Argument` also provide a parameter ``group`` to reduce the complexity of
-create subgrouping parser.
+.. prompt:: bash $
 
-Option class compose
-~~~~~~~~~~~~~~~~~~~~
+    python my_script.py --name Alice --count 3 --verbose
 
-Option class can be composed by inherition. Child option class can also change the value from parent's
-argument. As well as disable it (by replacing a value)
+**output**
 
->>> class MoreOptions(ExampleOptions):
-...     # additional optional option
-...     verbose: bool = argument('-v', '--verbose')
-...     # change default value
-...     ANIMAL: str = as_argument(ExampleOptions.animal).with_options(default='YW00')
-...     # and disable an option
-...     OUTPUT_DIR: str = 'output' # just replace with a value
+.. code-block:: text
 
-Change options name is more complicate, because you might want to add more name, remove some name,
-or rename some name. :meth:`~argp.core.Argument.with_options()` allow you to do that:
+   Greeting with enthusiasm: Hello, Alice!
+   Greeting with enthusiasm: Hello, Alice!
+   Greeting with enthusiasm: Hello, Alice!
 
->>> class ChangeExample(ExampleOptions):
-...     # replace option name: --animal
-...     ANIMAL: str = as_argument(ExampleOptions.animal).with_options('--animal')
-...     # add more option name: -A, --ANIMAL
-...     ANIMAL: str = as_argument(ExampleOptions.animal).with_options(..., '-A')
-...     # rename option: --animal
-...     ANIMAL: str = as_argument(ExampleOptions.animal).with_options({
-...         '--ANIMAL': '--animal'
-...     })
 
-Utility function for option class
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``ExampleOptions`` doesn't declated neither ``__str__`` nor ``__repr__``, so it is not convenient to debug.
-funciont :func:`~argp.core.as_dict()` provide a way to take argument attribute's value into a dictionary.
+pos_argument
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Create a positional (non-flag) command-line argument attribute
 
->>> as_dict(opt)
-{'ANIMAL': ..., 'EXP_DATE': ..., 'OUTPUT_DIR': ...}
+refer to :func:`~argp.core.pos_argument()`
 
-Option class is not restricted into only one use case. It works like a normal class.
+.. code-block:: python
 
-class AbstractParser
---------------------
+    from argp import AbstractParser, argument
 
-This class provide a main like class that has more control on ``argparse.ArgumentParser``
-creation.
+    class MyArgs(AbstractParser):
 
->>> class ExampleParser(AbstractParser, ExampleOptions):
-...     DESCRIPTION = 'Example parser'
-...     def run(self):
-...         ...
->>> if __name__ == '__main__':
-...     ExampleParser().main()
+        filename: str = pos_argument('FILENAME', help='Input file to process')
 
-Subcommands
------------
+        def run(self):
+          print(f"Processing file: {self.filename}")
 
-This module isn't fully support sub-command feature, but only provide a simple way for specific case:
+**run the script with**
 
->>> parse_command_args(
-...     description='top level parser',
-...     parsers=dict(ep=ExampleParser)
-... )
+.. prompt:: bash $
 
-In bash::
+    python my_script.py data.npy
 
-    python -m module.path ep --ANIMAL name --EXP_DATE date output
+**output**
+
+.. code-block:: text
+
+    Processing file: data.npy
+
+
+
+var_argument
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Create a variable-length positional argument, suitable for capturing multiple values into a list
+
+refer to :func:`~argp.core.var_argument()`
+
+.. code-block:: python
+
+    from argp import AbstractParser, var_argument
+
+    class MyArgs(AbstractParser):
+
+        items: list[str] = var_argument('ITEMS', help='Items to process'
+
+**run the script with**
+
+.. prompt:: bash $
+
+  python script.py apple banana cherry
+
+**output**
+
+.. code-block:: text
+
+  # Resulting value:
+  items = ['apple', 'banana', 'cherry']
+
+
+aliased_argument
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Create an argument that supports shorthand aliases for specific constant values
+
+refer to :func:`~argp.core.aliased_argument()`
+
+.. code-block:: python
+
+    from argp import AbstractParser, aliased_argument
+
+    class MyArgs(AbstractParser):
+
+        level: str = aliased_argument(
+            '--level',
+            aliases={'--low': 'low', '--high': 'high'},
+            choices=['low', 'medium', 'high'],
+            help='Set the difficulty level'
+        )
+
+        def run(self):
+            print(f"Level selected: {self.level}")
+
+**run the script with**
+
+.. prompt:: bash $
+
+    python script.py --low
+
+**output**
+
+.. code-block:: text
+
+    Level selected: low
+
+**you can also run**
+
+.. prompt:: bash $
+
+    python script.py --level medium
+
+**output**
+
+.. code-block:: text
+
+    Level selected: medium
+
+
+
+type parser
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This module provides utility functions and classes that cast command-line string arguments into typed Python values.
+These can be used directly as `type=...` in any argument specification, offering flexible and reusable conversions.
+
+- Example for create a parser that splits a comma-separated string into a typed tuple
+
+.. code-block:: python
+
+    from argp import AbstractParser, float_tuple_type
+
+    class MyArgs(AbstractParser):
+
+        annotation: tuple[float, ...] = argument(
+            '--anno',
+            type=float_tuple_type,
+            help='annotation values'
+        )
+
+        def run(self):
+            print(f"annotation values: {self.annotation}")
+
+
+**run the script with**
+
+.. prompt:: bash $
+
+    python script.py --annotation 0.3,0.5,0.9
+
+**output**
+
+.. code-block:: text
+
+    annotation values: 0.3,0.5,0.9
+
+.. seealso ::
+
+    see more types options :mod:`argp.types`
+
 
 
 Validator usage
------------------------
+------------------------------------
 The validator system provides a fluent, chainable API for building type-specific validation rules.
 It works by defining specialized “builder” classes (e.g., for strings, integers, floats, lists, and tuples)
 that let you specify constraints like numeric ranges, string length ranges, regex checks, or container length/item rules
 
-See detailed in :attr:`~argp.validator`
 
+- Example for customed ``lambda``
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument
+
+    class Opt(AbstractParser):
+        # Accepts only even integers
+        value: int = argument('-v', validator=lambda it: it % 2 == 0)
+
+    opt = Opt()
+    opt.value = 4    # OK
+    opt.value = 5    # Raises ValueError
+
+
+- Example for our buitin validator
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument, validator
+
+    class Opt(AbstractParser):
+        # Accepts only integers in [10, 99]
+        value: int = argument('-v', validator.int.in_range(10, 99))
+
+        # Accepts only exited directory
+        directory: Path = argument('--path', validator.path.is_dir().is_exists())
+
+    opt = Opt()
+    opt.value = 42    # OK
+    opt.value = 7     # Raises ValueError
+
+    opt.directory = '*/not_exist/' # Raises ValueError (not exists)
+    opt.directory = '*/file.csv' # Raises ValueError (not a dir)
+
+
+.. seealso ::
+
+    see more validation options :mod:`argp.validator`
+
+
+Dispatch usage
+------------------------------------
+
+.. seealso ::
+
+    see dispatch usage in :mod:`argp.dispatch`
+
+TODO DOC
+
+
+utility usage
+------------------------------------
+Refer to :mod:`argp.core`
+
+parse_args
+^^^^^^^^^^^^^^^^^^^
+Parse the provided list of command-line arguments and apply the parsed values to the given instance
+
+**Example usage**
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument, parse_args
+
+    class Opt(AbstractParser):
+        name: str = argument('--name', required=True)
+        count: int = argument('--count', type=int, default=1)
+
+
+    opt = Opt()
+    args = ['--name', 'Alice', '--count', '3']  # same as ['--name=Alice', '--count=3']
+    parse_args(opt, args)
+
+    print(opt.name)   # Alice
+    print(opt.count)  # 3
+
+
+
+as_dict
+^^^^^^^^^^^^^^^^^^^
+collect all argument attributes into a dictionary with attribute name to its value
+
+**Example usage**
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument, as_dict
+
+    class Opt(AbstractParser):
+        name: str = argument('--name', default='guest')
+        age: int = argument('--age')
+
+    opt = Opt()
+    opt.name = 'Alice'
+    opt.age = 20
+
+    print(as_dict(opt))
+
+**Output**
+
+.. code-block:: text
+
+    {'name': 'Alice', 'age': 20}
+
+
+with_options
+^^^^^^^^^^^^^^^^^^^
+Option class can be composed by inherition. Child option class can also change the value from parent's
+argument. As well as disable it (by replacing a value)
+
+Use together with :func:`~argp.core.as_argument()`
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument, as_argument
+
+    class Parent(AbstractParser):
+        mode: str = argument('--mode', choices=['train', 'test'], default='train')
+
+    class Child(Parent):
+        # Override mode to change the default
+        mode = as_argument(Parent.mode).with_options(default='test')
+
+
+
+parse_command_args
+^^^^^^^^^^^^^^^^^^^
+Parse command-line arguments for subcommands, each associated with a different parser class
+
+**Example usage**
+
+.. code-block:: python
+
+    from argp import AbstractParser, argument, parse_command_args
+
+    class InitCmd(AbstractParser):
+
+        name: str = argument('--name', required=True)
+
+        def run(self):
+            print(f"Initializing project: {self.name}")
+
+    class BuildCmd(AbstractParser):
+
+        release: bool = argument('--release', action='store_true')
+
+        def run(self):
+          print("Building in release mode" if self.release else "Building in debug mode")
+
+    parse_command_args(
+        {'init': InitCmd, 'build': BuildCmd},
+         args=['init', '--name', 'demo']
+     )
+
+**Output**
+
+.. code-block:: text
+
+  Initializing project: demo
 
 """
 from ._validator import *
+from .clone import *
 from .core import (
     AbstractParser,
     argument,

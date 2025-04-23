@@ -1,6 +1,11 @@
 argp package
 ==================
 
+.. automodule:: argp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. toctree::
     :maxdepth: 1
 
@@ -8,3 +13,4 @@ argp package
     argp.types
     argp.validator
     argp.dispatch
+    argp.clone

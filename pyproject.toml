@@ -31,7 +31,7 @@ dependencies = ['typing_extensions']
 
 opt = ['rich']
 dev = ['argp[opt]', 'pytest', 'pytest-cov']
-doc = ['sphinx', 'pydata-sphinx-theme']
+doc = ['sphinx', 'pydata-sphinx-theme', 'sphinx_prompt']
 
 
 [project.urls]
