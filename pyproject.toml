@@ -36,7 +36,7 @@ doc = ['sphinx', 'pydata-sphinx-theme']
 
 [project.urls]
 Homepage = "https://github.com/ytsimon2004/argp"
-#Documentation = ""
+Documentation = "https://argp.readthedocs.io/en/latest/"
 Repository = "https://github.com/ytsimon2004/argp"
 Issues = "https://github.com/ytsimon2004/argp/issues"
 
