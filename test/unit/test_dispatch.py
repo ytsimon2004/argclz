@@ -280,7 +280,8 @@ class PrintHelpTest(unittest.TestCase):
         class Opt(SimpleDispatch):
             @dispatch('A', 'a')
             def run_a(self):
-                """text for A.
+                """
+                text for A.
 
                 more text.
                 """
@@ -385,6 +386,28 @@ A A *B **C          text for A.""")
 C                   text for C.
 B                   text for B.
 A                   text for A.""")
+
+    def test_build_command_with_long_usages(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A', 'a', usage='A test is a very long usage text that it is over 20 characters')
+            def run_a(self):
+                """
+                it is also a very long command document for dispatch command A that it is over 120 characters,
+                and it does not need to be fit into one line.
+
+                more text.
+                """
+                pass
+
+        self.assertEqual(Opt.build_command_usages(), """\
+A test is a very long usage text that it is over 20 characters
+                    it is also a very long command document for dispatch command A that it is over 120 characters, and
+                    it does not need to be fit into one line.""")
+
+        self.assertEqual(Opt.build_command_usages(doc_indent=10, width=80), """\
+A test is a very long usage text that it is over 20 characters
+          it is also a very long command document for dispatch command A that it
+          is over 120 characters, and it does not need to be fit into one line.""")
 
     def test_print_help(self):
         class Opt(SimpleDispatch):

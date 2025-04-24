@@ -143,23 +143,32 @@ class CommandHelps(NamedTuple):
         return ret + ' ' + ' '.join([it.usage() for it in self.params])
 
     def brief_doc(self) -> str:
-        contents = self.doc.split('\n')
+        contents = textwrap.dedent(self.doc).split('\n')
 
-        if len(ret := contents[0].strip()) == 0:
+        ret = []
+        for content in contents:
+            content = content.strip()
+            if content == '':
+                if len(ret):
+                    break
+                else:
+                    continue
+
+            if content.endswith('.'):
+                ret.append(content)
+                break
+
             try:
-                while len(ret := contents.pop(0).strip()) == 0:
-                    pass
-            except IndexError:
-                ret = ''
+                i = content.index('. ')
+            except ValueError:
+                pass
+            else:
+                ret.append(content[:i + 1])
+                break
 
-        try:
-            i = ret.index('. ')
-        except ValueError:
-            pass
-        else:
-            ret = ret[:i + 1]
+            ret.append(content)
 
-        return ret
+        return ' '.join(ret)
 
 
 class Dispatch:
@@ -230,7 +239,10 @@ class Dispatch:
         return info(self, *args, **kwargs)
 
     @classmethod
-    def build_command_usages(cls, group: str | None = None, show_para: bool = False, **kwargs) -> str:
+    def build_command_usages(cls, group: str | None = None, *,
+                             show_para: bool = False,
+                             width: int = 120,
+                             doc_indent: int = 20) -> str:
         ret = []
 
         commands = cls.list_commands(group)
@@ -242,17 +254,17 @@ class Dispatch:
             header = info.build_command_usage(show_para=show_para)
             content = info.brief_doc()
 
-            if len(header) < 20:
-                content = header + ' ' * (20 - len(header)) + content
-                ret.extend(textwrap.wrap(content, 120,
-                                         subsequent_indent=' ' * 20,
+            if len(header) < doc_indent:
+                content = header + ' ' * (doc_indent - len(header)) + content
+                ret.extend(textwrap.wrap(content, width,
+                                         subsequent_indent=' ' * doc_indent,
                                          break_long_words=True,
                                          break_on_hyphens=True))
             else:
                 ret.append(header)
-                ret.extend(textwrap.wrap(content, 120,
-                                         initial_indent=' ' * 20,
-                                         subsequent_indent=' ' * 20,
+                ret.extend(textwrap.wrap(content, width,
+                                         initial_indent=' ' * doc_indent,
+                                         subsequent_indent=' ' * doc_indent,
                                          break_long_words=True,
                                          break_on_hyphens=True))
 
