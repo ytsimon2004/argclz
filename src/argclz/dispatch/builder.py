@@ -51,7 +51,7 @@ class DispatchCommandBuilder:
               aliases: tuple[str, ...],
               order: float = 5,
               group: str = None,
-              usage: list[str] = None,
+              usage: str = None,
               hidden=False) -> DispatchCommand:
         ret = DispatchCommand(None, group, command, aliases, order, usage, self.func, self.validators, hidden)
         setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)

@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import inspect
+import textwrap
 from collections.abc import Callable
 from typing import NamedTuple, TypeVar, Any
+
+from typing_extensions import Self
 
 __all__ = [
     'DispatchCommand',
@@ -21,7 +26,7 @@ class DispatchCommand(NamedTuple):
     command: str
     aliases: tuple[str, ...]
     order: float
-    usage: list[str]
+    usage: str | None
     func: Callable[..., R]  # target function
     validators: dict[str, Callable[[str], Any]]
     hidden: bool = False
@@ -30,12 +35,30 @@ class DispatchCommand(NamedTuple):
     def commands(self) -> list[str]:
         return [self.command, *self.aliases]
 
+    def parameters(self) -> list[CommandParameter]:
+        s = inspect.signature(self.func)
+        p = inspect.Parameter
+        return [CommandParameter.of(name, para) for i, (name, para) in enumerate(s.parameters.items()) if i > 0]
+
     @property
     def doc(self) -> str | None:
         return self.func.__doc__
 
     def __call__(self, zelf: T, *args, **kwargs) -> R:
-        a = inspect.signature(self.func).bind_partial(zelf, *args, **kwargs)
+        _args = []
+        _kwargs = dict(kwargs)
+
+        for value in args:
+            if isinstance(value, str):
+                match value.partition('='):
+                    case (value, '', ''):
+                        _args.append(value)
+                    case (k, '=', value):
+                        _kwargs[k] = value
+            else:
+                _args.append(value)
+
+        a = inspect.signature(self.func).bind_partial(zelf, *_args, **_kwargs)
 
         for par, validator in self.validators.items():
             try:
@@ -53,6 +76,34 @@ class DispatchCommand(NamedTuple):
         return self.func(*a.args, **a.kwargs)
 
 
+class CommandParameter(NamedTuple):
+    name: str
+    optional: bool
+    kind: inspect._ParameterKind
+
+    @classmethod
+    def of(cls, name: str, para: inspect.Parameter) -> Self:
+        optional = para.default is not inspect.Parameter.empty
+        return CommandParameter(name, optional, para.kind)
+
+    def usage(self):
+        name = self.name.upper()
+        match self.kind:
+            case inspect.Parameter.VAR_KEYWORD:
+                return f'**{name}'
+            case inspect.Parameter.VAR_POSITIONAL:
+                return f'*{name}'
+            case inspect.Parameter.KEYWORD_ONLY:
+                ret = f'{name}='
+            case _:
+                ret = name
+
+        if self.optional:
+            return f'[{ret}]'
+        else:
+            return ret
+
+
 class DispatchCommandNotFound(RuntimeError):
     def __init__(self, command: str, group: str | None = None):
         if group is None:
@@ -61,6 +112,54 @@ class DispatchCommandNotFound(RuntimeError):
             message = f'command {group}:{command} not found'
 
         super().__init__(message)
+
+
+class CommandHelps(NamedTuple):
+    commands: list[str]
+    order: float
+    usage: str | None
+    params: list[CommandParameter]
+    doc: str
+
+    @classmethod
+    def of(cls, command: DispatchCommand) -> Self:
+        return CommandHelps(command.commands, command.order, command.usage, command.parameters(), command.doc or '')
+
+    def build_command_usage(self, show_para: bool = False) -> str:
+        if self.usage is not None:
+            return self.usage
+
+        match self.commands:
+            case [command]:
+                ret = command
+            case [command, *aliases]:
+                ret = command + ' (' + ', '.join(aliases) + ')'
+            case _:
+                raise RuntimeError()
+
+        if not show_para:
+            return ret
+
+        return ret + ' ' + ' '.join([it.usage() for it in self.params])
+
+    def brief_doc(self) -> str:
+        contents = self.doc.split('\n')
+
+        if len(ret := contents[0].strip()) == 0:
+            try:
+                while len(ret := contents.pop(0).strip()) == 0:
+                    pass
+            except IndexError:
+                ret = ''
+
+        try:
+            i = ret.index('. ')
+        except ValueError:
+            pass
+        else:
+            ret = ret[:i + 1]
+
+        return ret
 
 
 class Dispatch:
@@ -132,5 +231,26 @@ class Dispatch:
 
     @classmethod
     def build_command_usages(cls, group: str | None = None, show_para: bool = False, **kwargs) -> str:
-        from ._format import format_dispatch_commands
-        return format_dispatch_commands(cls, group, show_para=show_para, **kwargs)
+        ret = []
+
+        for info in cls.list_commands(group):
+            info = CommandHelps.of(info)
+
+            header = info.build_command_usage(show_para=show_para)
+            content = info.brief_doc()
+
+            if len(header) < 20:
+                content = header + ' ' * (20 - len(header)) + content
+                ret.extend(textwrap.wrap(content, 120,
+                                         subsequent_indent=' ' * 20,
+                                         break_long_words=True,
+                                         break_on_hyphens=True))
+            else:
+                ret.append(header)
+                ret.extend(textwrap.wrap(content, 120,
+                                         initial_indent=' ' * 20,
+                                         subsequent_indent=' ' * 20,
+                                         break_long_words=True,
+                                         break_on_hyphens=True))
+
+        return '\n'.join(ret)

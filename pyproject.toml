@@ -29,7 +29,7 @@ dependencies = ['typing_extensions']
 
 [project.optional-dependencies]
 
-opt = ['rich']
+opt = []
 dev = ['argclz[opt]', 'pytest', 'pytest-cov']
 doc = ['sphinx', 'pydata-sphinx-theme', 'sphinx_prompt']
 

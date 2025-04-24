@@ -14,7 +14,7 @@ def dispatch(command: str,
              *alias: str,
              group: str = None,
              order: float = 5,
-             usage: list[str] = None,
+             usage: str = None,
              hidden=False):
     """A decorator that mark a function a dispatch target function.
 
