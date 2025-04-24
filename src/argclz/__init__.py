@@ -58,7 +58,7 @@ refer to :func:`~argclz.core.argument()`
 
 .. code-block:: text
 
-    usage: example_1.py [-h] [--verbose] -n NAME [--count COUNT]
+    usage: my_script.py [-h] [--verbose] -n NAME [--count COUNT]
 
     options:
       -h, --help            show this help message and exit
@@ -141,7 +141,7 @@ refer to :func:`~argclz.core.var_argument()`
     class MyArgs(AbstractParser):
 
         items: list[str] = var_argument('ITEMS', help='Items to process')
-        #      ^^^^^^^^^ [1] ^^^^^^^^^^ [2]
+        #      ^^^^^^^^^[1]^^^^^^^^^^^^[2]
 
 1. ``list[str]`` tells the parser to expect multiple values and return them as a list of strings
 2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple inputs.
@@ -184,7 +184,7 @@ description
         EPILOG = 'For more information, see our docs.'  # [3]
 
 1. ``USAGE`` overrides the default usage string shown at the top of the help message. You can
-   specify a custom format to explain the expected input layout
+   specify a custom format to explain the expected input layout.
 2. ``DESCRIPTION`` sets the introductory description text shown before the list of arguments.
    It is displayed in the help output after the usage line.
 3. ``EPILOG`` appears at the end of the help message. It’s useful for additional notes, links,
@@ -487,59 +487,175 @@ that let you specify constraints like numeric ranges, string length ranges, rege
 
     see more validation options :mod:`argclz.validator`
 
+Sub-Commands
+------------------------------------
+
+parse_command_args
+^^^^^^^^^^^^^^^^^^^
+Parse command-line arguments for subcommands, each associated with a different parser class
+
+**Example usage**
+
+.. code-block:: python
+
+    # example_1.py
+    class InitCmd(AbstractParser): # [1]
+
+        name: str = argument('--name', required=True)
+
+        def run(self):
+            print(f"Initializing project: {self.name}")
+
+    # example_2.py
+    class BuildCmd(AbstractParser): # [1]
+
+        release: bool = argument('--release', action='store_true')
+
+        def run(self):
+          print("Building in release mode" if self.release else "Building in debug mode")
+
+    # __init__.py
+    from argclz.commands import parse_command_args
+    parse_command_args( # [2]
+        {'init': InitCmd, 'build': BuildCmd},
+         args=['init', '--name', 'demo']
+     )
+
+1. sub-commands classes, which could be put at different python files.
+2. a function-interface entry point, which could be put at `__init__.py` to provide module-wise command-line interface.
+
+- **Run the script with -h**
+
+.. code-block:: text
+
+    TODO
+
+**Output**
+
+.. code-block:: text
+
+  Initializing project: demo
+
+sub_command_group
+^^^^^^^^^^^^^^^^^^^
+TODO
+
+.. code-block:: python
+
+    class Main(AbstractParser):
+        def run(self):
+            print_help(self)
+
+        command_group = sub_command_group()
+
+        @command_group('a')
+        class SubCommandA(AbstractParser):
+            def run(self):
+                print('do A')
+
+        @command_group('b')
+        class SubCommandB(AbstractParser):
+            a: int = argument('-a', help='option for B')
+
+            def run(self):
+                print('do B', self.a)
+
+    Main().main()
+
+- **Run the script with -h**
+
+.. code-block:: text
+
+    TODO
+
 
 Dispatch usage
 ------------------------------------
+An alternative sub-commands.
+
+
 
 .. seealso ::
 
     see dispatch usage in :mod:`argclz.dispatch`
 
-TODO DOC
+.. code-block:: python
+    from argclz.dispatch import Dispatch, dispatch
+
+    class Main(AbstractParser, Dispatch): # [1]
+
+        command:str = pos_argument('CMD') # [2]
+        command_args:list[str] = var_argument('ARGS') # [2]
+
+        EPILOG = lambda : f\""" \\
+    Sub-Commands:
+    {Main.build_command_usages()}
+    \""" # [3]
+
+        def run(self):
+            self.invoke_command(self.command, *self.command_args) # [4]
+
+        @dispatch('A') # [5]
+        def run_a(self):
+            print('A')
+
+        @dispatch('B') # [5]
+        def run_b(self):
+            print('B')
+
+    Main().main()
+
+1. inherit ``Dispatch`` to gain related methods, such as ``invoke_command``.
+2. we use command to decide which dispatch command need to be run.
+3. add dispatch commands into help epilog. Note that it is a lambda form because the content is dynamic generated.
+4. run dispatch commands. User has more control on when to call.
+5. method labeled as dispatch command.
 
 Compose cli option-classes
 ------------------------------------
 
 When building complex CLI tools, it's common to reuse and combine sets of arguments across multiple commands or components.
-With the `argclz` system, you can define reusable *option classes* by subclassing `AbstractParser`. These can be composed together through standard Python class inheritance.
-This enables **modular, maintainable** CLI definitions.
+Within the `argclz` system, you can define reusable *option classes*. These can be composed together through standard Python class inheritance.
+This enables **modular** and **maintainable** CLI definitions.
 
 
 .. code-block:: python
 
-    class IOOptions(AbstractParser):
+    class IOOptions: # [1]
 
         input_path: str = argument('--input', metavar='FILE', help='Input file')
 
         output_path: str = argument('--output', metavar='FILE', help='Output file')
 
 
-    class LoggingOptions(AbstractParser):
+    class LoggingOptions: # [1]
 
         verbose: bool = argument('--verbose', help='Enable verbose logging')
 
         log_level: Literal['info', 'debug', 'warn'] = argument('--log', default='info', help='Log level')
 
-    class MyOptions(IOOptions, LoggingOptions):
-        # [1]
+    class MyOptions(IOOptions, LoggingOptions): # [2]
+        # [3]
         input_path = as_argument(IOOptions.input_path).with_options(
             validator.is_file().is_suffix('.csv'),
             required=True,
             help='(required) Input file'
         )
 
-        # [2]
+        # [4]
         log_level = as_argument(LoggingOptions.log_level).with_options(
             choices=['info', 'debug'],
             hidden=True
         )
 
-        # [3]
+        # [5]
         other_option = argument(...)
 
-1. Add file validation only accept .csv suffix, and ``required=True``
-2. Limit accepted choices for ``log_level`` only ``info`` or ``debug``, hide it from help output.
-3. Define additional options directly
+1. reusable options classes, which might be put at different files.
+2. class ``MyOptions`` inherit arguments from ``IOOptions`` and ``LoggingOptions``.
+3. overwrite ``IOOptions.input_path`` by adding a file validator that only accept .csv suffix, and setting ``required=True``
+4. overwrite ``LoggingOptions.log_level`` by limiting accepted choices for ``log_level`` only ``info`` or ``debug``, and hiding it from help output.
+5. class ``MyOptions`` specific arguments.
 
 
 Utility usage
@@ -608,8 +724,6 @@ Use together with :func:`~argclz.core.as_argument()`
 
 .. code-block:: python
 
-    from argclz import print_help
-
     class Parent(AbstractParser):
         mode: str = argument('--mode', choices=['train', 'test'], default='train')
 
@@ -630,40 +744,6 @@ Use together with :func:`~argclz.core.as_argument()`
     --mode {train,test}
 
 
-parse_command_args
-^^^^^^^^^^^^^^^^^^^
-Parse command-line arguments for subcommands, each associated with a different parser class
-
-**Example usage**
-
-.. code-block:: python
-
-    from argclz import parse_command_args
-
-    class InitCmd(AbstractParser):
-
-        name: str = argument('--name', required=True)
-
-        def run(self):
-            print(f"Initializing project: {self.name}")
-
-    class BuildCmd(AbstractParser):
-
-        release: bool = argument('--release', action='store_true')
-
-        def run(self):
-          print("Building in release mode" if self.release else "Building in debug mode")
-
-    parse_command_args(
-        {'init': InitCmd, 'build': BuildCmd},
-         args=['init', '--name', 'demo']
-     )
-
-**Output**
-
-.. code-block:: text
-
-  Initializing project: demo
 
 
 """
@@ -678,7 +758,6 @@ from .core import (
     aliased_argument,
     as_argument,
     copy_argument,
-    print_help,
-    parse_command_args
+    print_help
 )
 from .types import *

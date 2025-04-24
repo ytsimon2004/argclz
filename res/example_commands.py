@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from argclz import AbstractParser, sub_command_group, argument
-from argclz.core import print_help
+from argclz import AbstractParser, sub_command_group, argument, print_help
 
 
 class Main(AbstractParser):
