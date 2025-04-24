@@ -69,6 +69,7 @@ class ArgumentParser(argparse.ArgumentParser):
 class ArgumentParsingResult(NamedTuple):
     exit_status: int
     exit_message: str | None
+    main: AbstractParser | None
 
     def __bool__(self):
         return self.exit_status is None
@@ -79,14 +80,8 @@ class ArgumentParsingResult(NamedTuple):
     def __str__(self):
         return self.exit_message
 
-    @classmethod
-    def success(cls) -> ArgumentParsingResult:
-        return ArgumentParsingResult(0, None)
-
-    @classmethod
-    def of(cls, parser: ArgumentParser) -> ArgumentParsingResult:
-        return ArgumentParsingResult(parser.exit_status, parser.exit_message)
-
+    def __call__(self):
+        self.main.run()
 
 class AbstractParser(metaclass=abc.ABCMeta):
     USAGE: str | list[str] = None
@@ -134,7 +129,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
         result = parser.parse_args(args)
         set_options(self, result)
 
-        ret = ArgumentParsingResult.of(parser)
+        ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, self)
         if parse_only:
             return ret
 
@@ -591,12 +586,18 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentPa
         if isinstance(usage, list):
             usage = '\n       '.join(usage)
         kwargs.setdefault('usage', usage)
-        kwargs.setdefault('description', instance.DESCRIPTION)
-        kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
+
+        description = instance.DESCRIPTION
+        if callable(description):
+            description = description()
+        kwargs.setdefault('description', description)
+
         epilog = instance.EPILOG
         if callable(epilog):
             epilog = epilog()
         kwargs.setdefault('epilog', epilog)
+
+        kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
     ap = ArgumentParser(**kwargs)
 
@@ -671,7 +672,12 @@ def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     for cmd, pp in parsers.items():
         ppap = new_parser(pp, reset=reset)
         ppap.set_defaults(main=pp)
-        sp.add_parser(cmd, help=pp.DESCRIPTION, parents=[ppap], add_help=False)
+
+        description = pp.DESCRIPTION
+        if callable(description):
+            description = description()
+
+        sp.add_parser(cmd, help=description, parents=[ppap], add_help=False)
 
     return ap
 
@@ -713,7 +719,7 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
                        usage: str = None,
                        description: str = None,
                        parse_only=False,
-                       system_exit: bool | Type[BaseException] = True) -> AbstractParser | ArgumentParsingResult | None:
+                       system_exit: bool | Type[BaseException] = True) -> ArgumentParsingResult:
     """Parse command-line arguments for subcommands, each associated with a different parser class
 
     :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
@@ -727,7 +733,7 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     parser = new_command_parser(parsers, usage, description, reset=True)
     result = parser.parse_args(args)
 
-    ret = ArgumentParsingResult.of(parser)
+    ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, None)
     if not ret:
         if system_exit is True:
             if ret.exit_status != 0:
@@ -748,33 +754,37 @@ def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractPar
     if pp is not None:
         set_options(pp, result)
 
+    ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, pp)
     if parse_only:
-        return pp
+        return ret
 
     if pp is not None:
         pp.run()
 
-    return pp
+    return ret
 
 
 @overload
-def print_help(instance: T, file: TextIO = sys.stdout):
+def print_help(instance, file: TextIO = sys.stdout):
     pass
 
 
 @overload
-def print_help(instance: T, file: Literal[None]) -> str:
+def print_help(instance, file: Literal[None]) -> str:
     pass
 
 
-def print_help(instance: T, file: TextIO = sys.stdout):
+def print_help(instance, file: TextIO = sys.stdout):
     """print help to stdout"""
     buf = None
     if file is None:
         import io
         buf = file = io.StringIO()
 
-    new_parser(instance).print_help(file)
+    if not isinstance(instance, ArgumentParser):
+        instance = new_parser(instance)
+
+    instance.print_help(file)
     if buf is not None:
         return buf.getvalue()
     else:
