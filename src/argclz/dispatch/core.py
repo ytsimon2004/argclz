@@ -233,7 +233,10 @@ class Dispatch:
     def build_command_usages(cls, group: str | None = None, show_para: bool = False, **kwargs) -> str:
         ret = []
 
-        for info in cls.list_commands(group):
+        commands = cls.list_commands(group)
+        commands.sort(key=lambda it: it.order)
+
+        for info in commands:
             info = CommandHelps.of(info)
 
             header = info.build_command_usage(show_para=show_para)

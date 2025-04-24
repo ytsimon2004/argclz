@@ -67,6 +67,57 @@ class TestDispatch(unittest.TestCase):
         commands = [it.command for it in commands]
         self.assertListEqual(commands, [])
 
+    def test_list_hidden_commands(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            def run_a(self):
+                pass
+
+            @dispatch('B', hidden=True)
+            def run_b(self):
+                pass
+
+        commands = Opt.list_commands()
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['A'])
+
+        commands = Opt.list_commands(all=True)
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['A', 'B'])
+
+    def test_dispatch_find_command(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            def run_a(self):
+                pass
+
+        cmd = Opt.find_command('A')
+        self.assertIsNotNone(cmd)
+        self.assertEqual(cmd.command, 'A')
+
+        cmd = Opt.find_command('B')
+        self.assertIsNone(cmd)
+
+    def test_dispatch_command_not_found(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            def run_a(self):
+                pass
+
+            @dispatch('B', group='B')
+            def run_b(self):
+                pass
+
+        opt = Opt()
+
+        with self.assertRaises(DispatchCommandNotFound):
+            opt.invoke_command('B')
+
+        opt.invoke_group_command('B', 'B')
+
+        with self.assertRaises(DispatchCommandNotFound):
+            opt.invoke_group_command('B', 'A')
+
     def test_dispatch_command_alias(self):
         class Opt(SimpleDispatch):
             @dispatch('A', 'a')
@@ -312,6 +363,28 @@ A A [B=]            text for A.""")
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 A A *B **C          text for A.""")
+
+    def test_build_command_on_order(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A', order=7)
+            def run_a(self):
+                """text for A."""
+                pass
+
+            @dispatch('B', order=5)
+            def run_b(self):
+                """text for B."""
+                pass
+
+            @dispatch('C', order=3)
+            def run_c(self):
+                """text for C."""
+                pass
+
+        self.assertEqual(Opt.build_command_usages(show_para=True), """\
+C                   text for C.
+B                   text for B.
+A                   text for A.""")
 
     def test_print_help(self):
         class Opt(SimpleDispatch):
