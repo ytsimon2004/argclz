@@ -50,18 +50,23 @@ Actions = Literal[
 ]
 
 
-class ArgumentParser(argparse.ArgumentParser):
-    exit_status: int = None
-    exit_message: str | None = None
+class ArgumentParserInterrupt(RuntimeError):
+    def __init__(self, status: int, message: str | None):
+        if message is None:
+            super().__init__(f'exit {status}')
+        else:
+            super().__init__(f'exit {status}: {message}')
 
+        self.status = status
+        self.message = message
+
+
+class ArgumentParser(argparse.ArgumentParser):
     def exit(self, status: int = 0, message: str = None):
-        self.exit_status = status
-        self.exit_message = message
+        raise ArgumentParserInterrupt(status, message)
 
     def error(self, message: str):
-        if self.exit_status is None:
-            self.exit_status = 2
-            self.exit_message = message
+        raise ArgumentParserInterrupt(2, message)
 
 
 class ArgumentParsingResult(NamedTuple):
@@ -76,7 +81,7 @@ class ArgumentParsingResult(NamedTuple):
         return self.exit_status
 
     def __str__(self):
-        return self.exit_message
+        return '' if self.exit_message is None else str(self.exit_message)
 
 
 class AbstractParser(metaclass=abc.ABCMeta):
@@ -122,25 +127,20 @@ class AbstractParser(metaclass=abc.ABCMeta):
         :return: parsing result.
         """
         parser = self.new_parser(reset=True)
-        result = parser.parse_args(args)
-        set_options(self, result)
 
-        from .commands import ARGCLZ_SUB_COMMANDS
-        if (sub := getattr(type(self), ARGCLZ_SUB_COMMANDS, None)) is None:
-            ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, self)
+        try:
+            result = parser.parse_args(args)
+        except ArgumentParserInterrupt as e:
+            exit_status = e.status
+            exit_message = e.message
         else:
-            try:
-                pp = sub.__get__(self)
-            except AttributeError:
-                pp = self
-            else:
-                if pp is None:
-                    pp = self
+            exit_status = None
+            exit_message = None
+            set_options(self, result)
 
-                if isinstance(pp, type):
-                    pp = pp()
-
-            ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, pp)
+        from .commands import init_sub_command
+        pp = init_sub_command(self)
+        ret = ArgumentParsingResult(exit_status, exit_message, pp)
 
         if parse_only:
             return ret
@@ -616,9 +616,8 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
 
     groups: dict[str, list[Argument]] = collections.defaultdict(list)
 
-    from .commands import ARGCLZ_SUB_COMMANDS
-    instance_type = instance if isinstance(instance, type) else type(instance)
-    if (sub := getattr(instance_type, ARGCLZ_SUB_COMMANDS, None)) is not None:
+    from .commands import get_sub_command_group
+    if (sub := get_sub_command_group(instance)) is not None:
         sub.add_parser(ap)
 
     # setup non-grouped arguments
@@ -682,8 +681,8 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
         else:
             arg.__set__(instance, value)
 
-    from .commands import ARGCLZ_SUB_COMMANDS
-    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+    from .commands import get_sub_command_group
+    if (sub := get_sub_command_group(instance)) is not None:
         try:
             value = getattr(result, sub.attr)
         except AttributeError:
@@ -703,8 +702,6 @@ def parse_args(instance: T, args: list[str] = None) -> T:
     """
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
-    if ap.exit_status is not None:
-        raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
     return set_options(instance, ot)
 
 
@@ -749,8 +746,8 @@ def with_defaults(instance: T) -> T:
         else:
             arg.__set__(instance, value)
 
-    from .commands import ARGCLZ_SUB_COMMANDS
-    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+    from .commands import get_sub_command_group
+    if (sub := get_sub_command_group(instance)) is not None:
         sub.__set__(instance, None)
 
     return instance
@@ -771,8 +768,8 @@ def as_dict(instance: T) -> dict[str, Any]:
         else:
             ret[arg.attr] = value
 
-    from .commands import ARGCLZ_SUB_COMMANDS
-    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+    from .commands import get_sub_command_group
+    if (sub := get_sub_command_group(instance)) is not None:
         try:
             value = sub.__get__(instance)
         except AttributeError:
@@ -802,8 +799,8 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
             # print('set', arg.attr, value)
             arg.__set__(opt, value)
 
-    from .commands import ARGCLZ_SUB_COMMANDS
-    if (sub := getattr(type(opt), ARGCLZ_SUB_COMMANDS, None)) is not None:
+    from .commands import get_sub_command_group
+    if (sub := get_sub_command_group(opt)) is not None:
         try:
             value = getattr(shadow, opt)
         except AttributeError:

@@ -1,13 +1,15 @@
 import argparse
+import inspect
 import sys
 from typing import Type, TypeVar, overload
 
-from .core import AbstractParser, new_parser, ArgumentParser, ArgumentParsingResult, set_options
+from .core import AbstractParser, new_parser, ArgumentParser, ArgumentParsingResult, set_options, ArgumentParserInterrupt
 
 __all__ = [
     'sub_command_group',
     'new_command_parser',
     'parse_command_args',
+    'get_sub_command_group'
 ]
 
 T = TypeVar('T')
@@ -90,6 +92,37 @@ def sub_command_group(**kwargs):
     return SubCommandGroup(**kwargs)
 
 
+def get_sub_command_group(instance) -> SubCommandGroup | None:
+    """(internal function)"""
+    if not isinstance(instance, type):
+        instance = type(instance)
+
+    return getattr(instance, ARGCLZ_SUB_COMMANDS, None)
+
+
+def init_sub_command(p: AbstractParser) -> AbstractParser:
+    """(internal function)"""
+    if (sub := get_sub_command_group(p)) is None:
+        return p
+
+    try:
+        pp = sub.__get__(p)
+    except AttributeError:
+        return p
+
+    if pp is None:
+        return p
+
+    if not isinstance(pp, type):
+        return pp
+
+    s = inspect.signature(pp.__init__)
+    if len(s.parameters) == 1:
+        return pp()
+    else:
+        return pp(p)
+
+
 def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]],
                        usage: str = None,
                        description: str = None) -> ArgumentParser:
@@ -135,15 +168,24 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     else:
         parser = new_command_parser(parsers, usage, description)
 
-    result = parser.parse_args(args)
-    pp: AbstractParser = getattr(result, 'main', None)
-    if isinstance(pp, type):
-        pp = pp()
+    try:
+        result = parser.parse_args(args)
+    except ArgumentParserInterrupt as e:
+        exit_status = e.status
+        exit_message = e.message
+        pp = None
+    else:
+        exit_status = None
+        exit_message = None
 
-    if pp is not None:
-        set_options(pp, result)
+        pp: AbstractParser = getattr(result, 'main', None)
+        if isinstance(pp, type):
+            pp = pp()
 
-    ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, pp)
+        if pp is not None:
+            set_options(pp, result)
+
+    ret = ArgumentParsingResult(exit_status, exit_message, pp)
     if parse_only:
         return ret
 
