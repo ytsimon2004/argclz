@@ -111,21 +111,73 @@ class CommandParserClassTest(unittest.TestCase):
 
         result = None  # reset
         self.assertIsNone(result)
-        ret = P().main(['a'], parse_only=True)
+        main = P()
+        ret = main.main(['a'], parse_only=True)
+        self.assertEqual(main.sub_command, P.P1)
         self.assertIsInstance(ret, P.P1)
         self.assertIsNone(result)
 
         result = None  # reset
         self.assertIsNone(result)
-        ret = P().main(['b'], parse_only=True)
+        ret = main.main(['b'], parse_only=True)
+        self.assertEqual(main.sub_command, P.P2)
         self.assertIsInstance(ret, P.P2)
         self.assertIsNone(result)
 
         result = None  # reset
         self.assertIsNone(result)
-        ret = P().main([], parse_only=True)
+        ret = main.main([], parse_only=True)
+        self.assertIsNone(main.sub_command)
         self.assertIsInstance(ret, P)
         self.assertIsNone(result)
+
+    def test_sub_command_init_with_parent(self):
+        result = None
+
+        class P(AbstractParser):
+            a: bool = argument('-a')
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                b: bool = argument('-b')
+
+                def __init__(self, parent):
+                    self.parent = parent
+
+                def run(self):
+                    nonlocal result
+                    result = self
+
+        p = P().main(['-a', 'a', '-b'])
+        self.assertIsInstance(p, P.P1)
+        self.assertIsInstance(p.parent, P)
+        self.assertTrue(p.parent.a)
+        self.assertTrue(p.b)
+
+    def test_sub_share_same_name_arg_with_parent(self):
+        result = None
+
+        class P(AbstractParser):
+            a: int = argument('-a')
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                a: int = argument('-a')
+
+                def __init__(self, parent):
+                    self.parent = parent
+
+                def run(self):
+                    nonlocal result
+                    result = self
+
+        p = P().main(['-a1', 'a', '-a2'])
+        self.assertIsInstance(p, P.P1)
+        self.assertIsInstance(p.parent, P)
+        self.assertEqual(p.parent.a, 2)  # overwrite by P1 parser
+        self.assertEqual(p.a, 2)
 
 
 RUNNER = ''
@@ -209,6 +261,7 @@ title:
 
 epilog
 """)
+
 
 if __name__ == '__main__':
     unittest.main()

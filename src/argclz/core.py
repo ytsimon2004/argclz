@@ -118,6 +118,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
         except ArgumentParserInterrupt as e:
             exit_status = e.status
             exit_message = e.message
+            result = None
         else:
             exit_status = None
             exit_message = None
@@ -125,6 +126,8 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
         from .commands import init_sub_command
         pp = init_sub_command(self)
+        if pp is not self and result is not None:
+            set_options(pp, result)
 
         if parse_only:
             return pp
@@ -668,7 +671,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
         try:
             value = getattr(result, sub.attr)
         except AttributeError:
-            pass
+            sub.__set__(instance, None)
         else:
             sub.__set__(instance, value)
 

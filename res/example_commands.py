@@ -21,7 +21,7 @@ class Main(AbstractParser):
         a: int = argument('-a', help='option for A')
 
         def run(self):
-            print('do A')
+            print('do A', self.a)
 
     @command_group('b')
     class SubCommandB(AbstractParser):
@@ -33,7 +33,7 @@ class Main(AbstractParser):
             self.parent = parent
 
         def run(self):
-            print('do B')
+            print('do B', self.parent.verbose, self.a)
 
 
 Main().main()

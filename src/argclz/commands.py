@@ -89,6 +89,33 @@ def sub_command_group(*, title: str = ...,
 
 
 def sub_command_group(**kwargs):
+    """
+    Create a sub-commands group.
+
+    >>> class Example(AbstractParser):
+    ...     command_group = sub_command_group()
+    ...     @command_group('a')
+    ...     class SubCommand(AbstractParser):
+    ...         ...
+
+    The type of ``sub_command_group()`` as an instance-attribute is ``Type[AbstractParser]|None``, and
+    its value is handled by :func:`~argclz.core.set_options()` when paring the command-line arguments.
+
+    **Sub command class**
+
+    When parsing successful (especially when ``parse_only=False`` case), sub-command class
+    (e.g. ``SubCommand`` in above example) will be initialized. The ``__init__`` could have two
+    different signature, there are
+
+    .. code-block:: python
+
+        def __init__(self): ... # no-arg init
+        def __init__(self, parent: AbstractParser): ... # one-arg init
+
+    where the parameter ``parent`` refer to its outer ``AbstractParser`` (e.g. ``Example`` in above example).
+
+
+    """
     return SubCommandGroup(**kwargs)
 
 
