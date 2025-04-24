@@ -471,6 +471,7 @@ Parse command-line arguments for subcommands, each associated with a different p
 """
 from ._validator import *
 from .clone import *
+from .commands import sub_command_group
 from .core import (
     AbstractParser,
     argument,

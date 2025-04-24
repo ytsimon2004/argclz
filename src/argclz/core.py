@@ -5,7 +5,7 @@ import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import Type, TypeVar, Union, Literal, overload, Any, Optional, get_type_hints, TextIO, NamedTuple
+from typing import Type, TypeVar, Literal, overload, Any, Optional, get_type_hints, TextIO, NamedTuple
 
 from typing_extensions import Self
 
@@ -13,9 +13,7 @@ __all__ = [
     # parser
     'AbstractParser',
     'new_parser',
-    'new_command_parser',
     'parse_args',
-    'parse_command_args',
     # argument
     'Argument',
     'argument',
@@ -80,8 +78,6 @@ class ArgumentParsingResult(NamedTuple):
     def __str__(self):
         return self.exit_message
 
-    def __call__(self):
-        self.main.run()
 
 class AbstractParser(metaclass=abc.ABCMeta):
     USAGE: str | list[str] = None
@@ -129,7 +125,23 @@ class AbstractParser(metaclass=abc.ABCMeta):
         result = parser.parse_args(args)
         set_options(self, result)
 
-        ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, self)
+        from .commands import ARGCLZ_SUB_COMMANDS
+        if (sub := getattr(type(self), ARGCLZ_SUB_COMMANDS, None)) is None:
+            ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, self)
+        else:
+            try:
+                pp = sub.__get__(self)
+            except AttributeError:
+                pp = self
+            else:
+                if pp is None:
+                    pp = self
+
+                if isinstance(pp, type):
+                    pp = pp()
+
+            ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, pp)
+
         if parse_only:
             return ret
 
@@ -146,7 +158,8 @@ class AbstractParser(metaclass=abc.ABCMeta):
             else:
                 sys.exit(ret.exit_status)
 
-        self.run()
+        ret.main.run()
+
         return ret
 
     def run(self):
@@ -348,13 +361,13 @@ class Argument(object):
 
     @overload
     def with_options(self,
-                     option: Union[str, dict[str, str]] = None,
+                     option: str | dict[str, str] = None,
                      *options: str,
                      action: Actions = None,
-                     nargs: Union[int, Nargs] = None,
+                     nargs: int | Nargs = None,
                      const: T = None,
                      default: T = None,
-                     type: Union[Type, Callable[[str], T]] = None,
+                     type: Type | Callable[[str], T] = None,
                      validator: Callable[[T], bool] = None,
                      choices: Sequence[str] = None,
                      required: bool = None,
@@ -432,7 +445,7 @@ class Argument(object):
 @overload
 def argument(*options: str,
              action: Actions = ...,
-             nargs: Union[int, Nargs] = ...,
+             nargs: int | Nargs = ...,
              const: T = ...,
              default: T = ...,
              type: Type | Callable[[str], T] = ...,
@@ -551,7 +564,7 @@ def as_argument(a) -> Argument:
     raise TypeError
 
 
-def foreach_arguments(instance: Union[T, type[T]]) -> Iterable[Argument]:
+def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
     """iterating all argument attributes in instance.
 
     This method will initialize Argument.
@@ -573,7 +586,7 @@ def foreach_arguments(instance: Union[T, type[T]]) -> Iterable[Argument]:
                     yield arg
 
 
-def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentParser:
+def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     """Create ``ArgumentParser`` for instance.
 
     :param instance:
@@ -602,6 +615,11 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentPa
     ap = ArgumentParser(**kwargs)
 
     groups: dict[str, list[Argument]] = collections.defaultdict(list)
+
+    from .commands import ARGCLZ_SUB_COMMANDS
+    instance_type = instance if isinstance(instance, type) else type(instance)
+    if (sub := getattr(instance_type, ARGCLZ_SUB_COMMANDS, None)) is not None:
+        sub.add_parser(ap)
 
     # setup non-grouped arguments
     mu_ex_groups: dict[str, argparse._ActionsContainer] = {}
@@ -649,39 +667,6 @@ def new_parser(instance: Union[T, type[T]], reset=False, **kwargs) -> ArgumentPa
     return ap
 
 
-def new_command_parser(parsers: dict[str, Union[AbstractParser, type[AbstractParser]]],
-                       usage: str = None,
-                       description: str = None,
-                       reset=False) -> ArgumentParser:
-    """Create ``ArgumentParser`` for :class:`~argclz.core.AbstractParser` s.
-
-    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
-    :param usage: parser usage
-    :param description: parser description
-    :param reset: reset argument attributes. do nothing if *parsers*'s value isn't an instance.
-    :return:
-    """
-    ap = ArgumentParser(
-        usage=usage,
-        description=description,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-
-    sp = ap.add_subparsers()
-
-    for cmd, pp in parsers.items():
-        ppap = new_parser(pp, reset=reset)
-        ppap.set_defaults(main=pp)
-
-        description = pp.DESCRIPTION
-        if callable(description):
-            description = description()
-
-        sp.add_parser(cmd, help=description, parents=[ppap], add_help=False)
-
-    return ap
-
-
 def set_options(instance: T, result: argparse.Namespace) -> T:
     """set argument attributes from ``argparse.Namespace`` .
 
@@ -696,6 +681,15 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
             pass
         else:
             arg.__set__(instance, value)
+
+    from .commands import ARGCLZ_SUB_COMMANDS
+    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+        try:
+            value = getattr(result, sub.attr)
+        except AttributeError:
+            pass
+        else:
+            sub.__set__(instance, value)
 
     return instance
 
@@ -712,56 +706,6 @@ def parse_args(instance: T, args: list[str] = None) -> T:
     if ap.exit_status is not None:
         raise RuntimeError(f'exit ({ap.exit_status}): {ap.exit_message}')
     return set_options(instance, ot)
-
-
-def parse_command_args(parsers: dict[str, Union[AbstractParser, type[AbstractParser]]],
-                       args: list[str] = None,
-                       usage: str = None,
-                       description: str = None,
-                       parse_only=False,
-                       system_exit: bool | Type[BaseException] = True) -> ArgumentParsingResult:
-    """Parse command-line arguments for subcommands, each associated with a different parser class
-
-    :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
-    :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
-    :param usage: Optional usage string to override the auto-generated help
-    :param description: Optional description for the main parser
-    :param parse_only: If True, does not run the parser’s ``.run()`` method.
-    :param system_exit: If True (default), calls ``sys.exit`` on parse errors. Set to False to return errors as result objects. You can also pass a custom exception type to raise on failure.
-    :return: The parser instance that handled the command (or an :class:`ArgumentParsingResult` if ``parse_only`` or ``system_exit=False``)
-    """
-    parser = new_command_parser(parsers, usage, description, reset=True)
-    result = parser.parse_args(args)
-
-    ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, None)
-    if not ret:
-        if system_exit is True:
-            if ret.exit_status != 0:
-                parser.print_usage(sys.stderr)
-                print(ret.exit_message, file=sys.stderr)
-            sys.exit(ret.exit_status)
-        elif system_exit is False:
-            return ret
-        elif issubclass(system_exit, BaseException):
-            raise system_exit(ret.exit_status)
-        else:
-            sys.exit(ret.exit_status)
-
-    pp: AbstractParser = getattr(result, 'main', None)
-    if isinstance(pp, type):
-        pp = pp()
-
-    if pp is not None:
-        set_options(pp, result)
-
-    ret = ArgumentParsingResult(parser.exit_status, parser.exit_message, pp)
-    if parse_only:
-        return ret
-
-    if pp is not None:
-        pp.run()
-
-    return ret
 
 
 @overload
@@ -804,6 +748,11 @@ def with_defaults(instance: T) -> T:
             arg.__delete__(instance)
         else:
             arg.__set__(instance, value)
+
+    from .commands import ARGCLZ_SUB_COMMANDS
+    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+        sub.__set__(instance, None)
+
     return instance
 
 
@@ -821,6 +770,16 @@ def as_dict(instance: T) -> dict[str, Any]:
             pass
         else:
             ret[arg.attr] = value
+
+    from .commands import ARGCLZ_SUB_COMMANDS
+    if (sub := getattr(type(instance), ARGCLZ_SUB_COMMANDS, None)) is not None:
+        try:
+            value = sub.__get__(instance)
+        except AttributeError:
+            pass
+        else:
+            ret[sub.attr] = value
+
     return ret
 
 
@@ -842,6 +801,16 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
         else:
             # print('set', arg.attr, value)
             arg.__set__(opt, value)
+
+    from .commands import ARGCLZ_SUB_COMMANDS
+    if (sub := getattr(type(opt), ARGCLZ_SUB_COMMANDS, None)) is not None:
+        try:
+            value = getattr(shadow, opt)
+        except AttributeError:
+            pass
+        else:
+            sub.__set__(opt, value)
+
     return opt
 
 

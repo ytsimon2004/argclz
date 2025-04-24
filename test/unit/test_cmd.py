@@ -1,7 +1,8 @@
 import unittest
 
 from argclz import *
-from argclz.core import parse_command_args, print_help, new_command_parser
+from argclz.commands import parse_command_args, new_command_parser
+from argclz.core import print_help
 
 
 class CommandParserTest(unittest.TestCase):
@@ -12,7 +13,7 @@ class CommandParserTest(unittest.TestCase):
         class P2(AbstractParser):
             a: str = argument('-a', default='default')
 
-        parsers = dict(a=P1, b=P2)
+        parsers = new_command_parser(dict(a=P1, b=P2))
         opt = parse_command_args(parsers, ['a'], parse_only=True)
         self.assertIsNotNone(opt)
         self.assertIsInstance(opt.main, P1)
@@ -25,7 +26,7 @@ class CommandParserTest(unittest.TestCase):
         self.assertIsNotNone(opt)
         self.assertIsNone(opt.main)
 
-    def test_command_parser_main(self):
+    def test_command_parse_option(self):
         class P1(AbstractParser):
             a: str = argument('-a', default='default P1')
 
@@ -38,20 +39,100 @@ class CommandParserTest(unittest.TestCase):
             def run(self):
                 pass
 
-        parsers = dict(a=P1, b=P2)
-        opt = parse_command_args(parsers, ['a'])
+        parsers = new_command_parser(dict(a=P1, b=P2))
+        opt = parse_command_args(parsers, ['a'], parse_only=True)
         self.assertIsNotNone(opt)
         self.assertIsInstance(opt.main, P1)
         self.assertEqual('default P1', opt.main.a)
 
-        opt = parse_command_args(parsers, ['b'])
+        opt = parse_command_args(parsers, ['b'], parse_only=True)
         self.assertIsNotNone(opt)
         self.assertIsInstance(opt.main, P2)
         self.assertEqual('default P2', opt.main.a)
 
-        opt = parse_command_args(parsers, [])
+        opt = parse_command_args(parsers, [], parse_only=True)
         self.assertIsNotNone(opt)
         self.assertIsNone(opt.main)
+
+    def test_command_run(self):
+        result = None
+
+        class P1(AbstractParser):
+            a: str = argument('-a', default='default P1')
+
+            def run(self):
+                nonlocal result
+                result = self
+
+        class P2(AbstractParser):
+            a: str = argument('-a', default='default P2')
+
+            def run(self):
+                nonlocal result
+                result = self
+
+        parsers = new_command_parser(dict(a=P1, b=P2))
+        self.assertIsNone(result)
+        opt = parse_command_args(parsers, ['a'])
+        self.assertIsInstance(opt.main, P1)
+        self.assertIsInstance(result, P1)
+        self.assertEqual(opt.main.a, 'default P1')
+
+        result = None  # reset
+        self.assertIsNone(result)
+        opt = parse_command_args(parsers, ['b'])
+        self.assertIsInstance(opt.main, P2)
+        self.assertIsInstance(result, P2)
+        self.assertEqual(opt.main.a, 'default P2')
+
+        result = None  # reset
+        self.assertIsNone(result)
+        opt = parse_command_args(parsers, [])
+        self.assertIsNone(result)
+        self.assertIsNotNone(opt)
+        self.assertIsNone(opt.main)
+
+
+class CommandParserClassTest(unittest.TestCase):
+    def test_command_class(self):
+        result = None
+
+        class P(AbstractParser):
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                a: str = argument('-a', default='default P1')
+
+                def run(self):
+                    nonlocal result
+                    result = self
+
+            @sub_command('b')
+            class P2(AbstractParser):
+                a: str = argument('-a', default='default P2')
+
+                def run(self):
+                    nonlocal result
+                    result = self
+
+        result = None  # reset
+        self.assertIsNone(result)
+        ret = P().main(['a'], parse_only=True)
+        self.assertIsNotNone(ret)
+        self.assertIsInstance(ret.main, P.P1)
+
+        result = None  # reset
+        self.assertIsNone(result)
+        ret = P().main(['b'], parse_only=True)
+        self.assertIsNotNone(ret)
+        self.assertIsInstance(ret.main, P.P2)
+
+        result = None  # reset
+        self.assertIsNone(result)
+        ret = P().main([], parse_only=True)
+        self.assertIsNone(result)
+        self.assertIsInstance(ret.main, P)
 
 
 RUNNER = ''
@@ -92,13 +173,48 @@ usage: {RUNNER} [-h] {{a,b}} ...
 
 DESCRIPTION
 
-positional arguments:
+options:
+  -h, --help  show this help message and exit
+
+commands:
   {{a,b}}
     a         P1 description
     b         P2 description
+""")
+
+    def test_class_print_help(self):
+        class P(AbstractParser):
+            DESCRIPTION = 'description'
+            EPILOG = 'epilog'
+
+            sub_command = sub_command_group(title='title', description='commands description')
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                DESCRIPTION = 'sub command a'
+                a: str = argument('-a', default='default P1')
+
+            @sub_command('b')
+            class P2(AbstractParser):
+                DESCRIPTION = 'sub command b'
+                a: str = argument('-a', default='default P2')
+
+        self.assertEqual(print_help(P, None), f"""\
+usage: {RUNNER} [-h] {{a,b}} ...
+
+description
 
 options:
   -h, --help  show this help message and exit
+
+title:
+  commands description
+
+  {{a,b}}
+    a         sub command a
+    b         sub command b
+
+epilog
 """)
 
 if __name__ == '__main__':
