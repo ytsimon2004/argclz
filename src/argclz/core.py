@@ -5,7 +5,7 @@ import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import Type, TypeVar, Literal, overload, Any, Optional, get_type_hints, TextIO, NamedTuple
+from typing import Type, TypeVar, Literal, overload, Any, Optional, get_type_hints, TextIO
 
 from typing_extensions import Self
 
@@ -69,21 +69,6 @@ class ArgumentParser(argparse.ArgumentParser):
         raise ArgumentParserInterrupt(2, message)
 
 
-class ArgumentParsingResult(NamedTuple):
-    exit_status: int
-    exit_message: str | None
-    main: AbstractParser | None
-
-    def __bool__(self):
-        return self.exit_status is None
-
-    def __int__(self):
-        return self.exit_status
-
-    def __str__(self):
-        return '' if self.exit_message is None else str(self.exit_message)
-
-
 class AbstractParser(metaclass=abc.ABCMeta):
     USAGE: str | list[str] = None
     """parser usage."""
@@ -117,7 +102,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
-             system_exit: bool | Type[BaseException] = True) -> ArgumentParsingResult:
+             system_exit: Type[BaseException] = SystemExit):
         """parsing the commandline input *args* and set the argument attributes,
         then call :meth:`.run()`.
 
@@ -140,27 +125,24 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
         from .commands import init_sub_command
         pp = init_sub_command(self)
-        ret = ArgumentParsingResult(exit_status, exit_message, pp)
 
         if parse_only:
-            return ret
+            return pp
 
-        if not ret:
-            if system_exit is True:
-                if ret.exit_status != 0:
+        if exit_status is not None:
+            if system_exit is SystemExit:
+                if exit_status != 0:
                     parser.print_usage(sys.stderr)
-                    print(ret.exit_message, file=sys.stderr)
-                sys.exit(ret.exit_status)
-            elif system_exit is False:
-                return ret
+                    print(exit_message, file=sys.stderr)
+                sys.exit(exit_status)
             elif issubclass(system_exit, BaseException):
-                raise system_exit(ret.exit_status)
+                raise system_exit(exit_status)
             else:
-                sys.exit(ret.exit_status)
+                sys.exit(exit_status)
 
-        ret.main.run()
+        pp.run()
 
-        return ret
+        return pp
 
     def run(self):
         """called when all argument attributes are set"""

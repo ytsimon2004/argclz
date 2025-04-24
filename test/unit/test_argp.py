@@ -120,13 +120,11 @@ class AbstractParserTest(unittest.TestCase):
             a: str = argument('-a', default='default')
 
         with self.assertRaises(SystemExit):
-            Main().main(['-b'], system_exit=True)
+            Main().main(['-b'])
 
         with self.assertRaises(RuntimeError):
             Main().main(['-b'], system_exit=RuntimeError)
 
-        ret = Main().main(['-b'], system_exit=False)
-        self.assertNotEqual(ret.exit_status, 0)
 
     def test_parse_only(self):
         class Main(AbstractParser):
@@ -142,8 +140,8 @@ class AbstractParserTest(unittest.TestCase):
 
         main = Main()
         ret = main.main(['-a=1'], parse_only=True)
-        self.assertIsNone(ret.exit_status)
-        self.assertEqual(main.a, 1)
+        self.assertIs(ret, main)
+        self.assertEqual(ret.a, 1)
 
 
 class TestArguments(unittest.TestCase):

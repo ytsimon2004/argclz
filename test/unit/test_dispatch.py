@@ -26,16 +26,16 @@ class TestDispatch(unittest.TestCase):
                 self.r = 'BBB'
 
         opt = Opt()
-        ret = opt.main(['A'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'AAA')
 
-        ret = opt.main(['B'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['B'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'BBB')
 
         with self.assertRaises(DispatchCommandNotFound):
-            opt.main(['C'], system_exit=False)
+            opt.main(['C'])
 
     def test_list_commands(self):
         class Opt(SimpleDispatch):
@@ -125,12 +125,12 @@ class TestDispatch(unittest.TestCase):
                 self.r = 'AAA'
 
         opt = Opt()
-        ret = opt.main(['A'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'AAA')
 
-        ret = opt.main(['a'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['a'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'AAA')
 
     def test_dispatch_group(self):
@@ -147,8 +147,8 @@ class TestDispatch(unittest.TestCase):
                 self.r = 'BBB'
 
         opt = Opt()
-        ret = opt.main(['A'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'BBB')
 
     def test_dispatch_command_argument(self):
@@ -160,12 +160,12 @@ class TestDispatch(unittest.TestCase):
                 self.r = a
 
         opt = Opt()
-        ret = opt.main(['A'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ())
 
-        ret = opt.main(['A', '1', '2'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1', '2'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('1', '2'))
 
     def test_dispatch_command_keyword_arguments(self):
@@ -177,20 +177,20 @@ class TestDispatch(unittest.TestCase):
                 self.r = (a, b, c)
 
         opt = Opt()
-        ret = opt.main(['A', '1', '2'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1', '2'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('1', '2', 'none'))
 
-        ret = opt.main(['A', '1', '2', '3'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1', '2', '3'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('1', '2', '3'))
 
-        ret = opt.main(['A', 'b=1', 'a=2'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', 'b=1', 'a=2'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('2', '1', 'none'))
 
-        ret = opt.main(['A', 'c=1', 'b=2', 'a=3'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', 'c=1', 'b=2', 'a=3'])
+        self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('3', '2', '1'))
 
     def test_dispatch_command_argument_casting(self):
@@ -203,8 +203,8 @@ class TestDispatch(unittest.TestCase):
                 self.r = a
 
         opt = Opt()
-        ret = opt.main(['A', '1'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 1)
 
     def test_dispatch_command_argument_casting_validator(self):
@@ -217,12 +217,12 @@ class TestDispatch(unittest.TestCase):
                 self.r = a
 
         opt = Opt()
-        ret = opt.main(['A', '1'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 1)
 
         with self.assertRaises(ValueError) as capture:
-            opt.main(['A', '0'], system_exit=False)
+            opt.main(['A', '0'])
         print(capture.exception)
 
     def test_dispatch_command_argument_casting_and_validator(self):
@@ -236,12 +236,12 @@ class TestDispatch(unittest.TestCase):
                 self.r = a
 
         opt = Opt()
-        ret = opt.main(['A', '1'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', '1'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 1)
 
-        ret = opt.main(['A', 'a'], system_exit=False)
-        self.assertIsNone(ret.exit_status)
+        ret = opt.main(['A', 'a'])
+        self.assertIs(ret, opt)
         self.assertEqual(opt.r, 'a')
 
         with self.assertRaises(ValueError) as capture:

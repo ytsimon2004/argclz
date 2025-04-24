@@ -15,16 +15,13 @@ class CommandParserTest(unittest.TestCase):
 
         parsers = new_command_parser(dict(a=P1, b=P2))
         opt = parse_command_args(parsers, ['a'], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsInstance(opt.main, P1)
+        self.assertIsInstance(opt, P1)
 
         opt = parse_command_args(parsers, ['b'], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsInstance(opt.main, P2)
+        self.assertIsInstance(opt, P2)
 
         opt = parse_command_args(parsers, [], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsNone(opt.main)
+        self.assertIsNone(opt)
 
     def test_command_parse_option(self):
         class P1(AbstractParser):
@@ -41,18 +38,15 @@ class CommandParserTest(unittest.TestCase):
 
         parsers = new_command_parser(dict(a=P1, b=P2))
         opt = parse_command_args(parsers, ['a'], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsInstance(opt.main, P1)
-        self.assertEqual('default P1', opt.main.a)
+        self.assertIsInstance(opt, P1)
+        self.assertEqual('default P1', opt.a)
 
         opt = parse_command_args(parsers, ['b'], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsInstance(opt.main, P2)
-        self.assertEqual('default P2', opt.main.a)
+        self.assertIsInstance(opt, P2)
+        self.assertEqual('default P2', opt.a)
 
         opt = parse_command_args(parsers, [], parse_only=True)
-        self.assertIsNotNone(opt)
-        self.assertIsNone(opt.main)
+        self.assertIsNone(opt)
 
     def test_command_run(self):
         result = None
@@ -74,23 +68,22 @@ class CommandParserTest(unittest.TestCase):
         parsers = new_command_parser(dict(a=P1, b=P2))
         self.assertIsNone(result)
         opt = parse_command_args(parsers, ['a'])
-        self.assertIsInstance(opt.main, P1)
+        self.assertIsInstance(opt, P1)
         self.assertIsInstance(result, P1)
-        self.assertEqual(opt.main.a, 'default P1')
+        self.assertEqual(opt.a, 'default P1')
 
         result = None  # reset
         self.assertIsNone(result)
         opt = parse_command_args(parsers, ['b'])
-        self.assertIsInstance(opt.main, P2)
+        self.assertIsInstance(opt, P2)
         self.assertIsInstance(result, P2)
-        self.assertEqual(opt.main.a, 'default P2')
+        self.assertEqual(opt.a, 'default P2')
 
         result = None  # reset
         self.assertIsNone(result)
         opt = parse_command_args(parsers, [])
         self.assertIsNone(result)
-        self.assertIsNotNone(opt)
-        self.assertIsNone(opt.main)
+        self.assertIsNone(opt)
 
 
 class CommandParserClassTest(unittest.TestCase):
@@ -119,20 +112,20 @@ class CommandParserClassTest(unittest.TestCase):
         result = None  # reset
         self.assertIsNone(result)
         ret = P().main(['a'], parse_only=True)
-        self.assertIsNotNone(ret)
-        self.assertIsInstance(ret.main, P.P1)
+        self.assertIsInstance(ret, P.P1)
+        self.assertIsNone(result)
 
         result = None  # reset
         self.assertIsNone(result)
         ret = P().main(['b'], parse_only=True)
-        self.assertIsNotNone(ret)
-        self.assertIsInstance(ret.main, P.P2)
+        self.assertIsInstance(ret, P.P2)
+        self.assertIsNone(result)
 
         result = None  # reset
         self.assertIsNone(result)
         ret = P().main([], parse_only=True)
+        self.assertIsInstance(ret, P)
         self.assertIsNone(result)
-        self.assertIsInstance(ret.main, P)
 
 
 RUNNER = ''

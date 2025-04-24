@@ -3,7 +3,7 @@ import inspect
 import sys
 from typing import Type, TypeVar, overload
 
-from .core import AbstractParser, new_parser, ArgumentParser, ArgumentParsingResult, set_options, ArgumentParserInterrupt
+from .core import AbstractParser, new_parser, ArgumentParser, set_options, ArgumentParserInterrupt
 
 __all__ = [
     'sub_command_group',
@@ -152,7 +152,7 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
                        usage: str = None,
                        description: str = None,
                        parse_only=False,
-                       system_exit: bool | Type[BaseException] = True) -> ArgumentParsingResult:
+                       system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
     """
     A convenient way to run an ArgumentParser with sub-commands.
 
@@ -160,7 +160,7 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
     :param usage: Optional usage string to override the auto-generated help
     :param description: Optional description for the main parser
-    :param system_exit: If True (default), calls ``sys.exit`` on parse errors. Set to False to return errors as result objects. You can also pass a custom exception type to raise on failure.
+    :param system_exit: exit when commandline parsed fail.
     :return: The parser instance that handled the command (or an :class:`ArgumentParsingResult` if ``parse_only`` or ``system_exit=False``)
     """
     if isinstance(parsers, ArgumentParser):
@@ -185,24 +185,21 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
         if pp is not None:
             set_options(pp, result)
 
-    ret = ArgumentParsingResult(exit_status, exit_message, pp)
     if parse_only:
-        return ret
+        return pp
 
-    if not ret:
-        if system_exit is True:
-            if ret.exit_status != 0:
+    if exit_status is not None:
+        if system_exit is SystemExit:
+            if exit_status != 0:
                 parser.print_usage(sys.stderr)
-                print(ret.exit_message, file=sys.stderr)
-            sys.exit(ret.exit_status)
-        elif system_exit is False:
-            return ret
+                print(exit_message, file=sys.stderr)
+            sys.exit(exit_status)
         elif issubclass(system_exit, BaseException):
-            raise system_exit(ret.exit_status)
+            raise system_exit(exit_status)
         else:
-            sys.exit(ret.exit_status)
+            sys.exit(exit_status)
 
     if pp is not None:
         pp.run()
 
-    return ret
+    return pp
