@@ -7,8 +7,6 @@ argclz.dispatch.core
    :toctree: _autosummary
    :nosignatures:
 
-   ARGCLZ_DISPATCH_GROUP
-   ARGCLZ_DISPATCH_COMMAND
    DispatchCommand
    DispatchCommandNotFound
    Dispatch
@@ -16,7 +14,7 @@ argclz.dispatch.core
 
 .. automodule:: argclz.dispatch.core
    :members:
-   :exclude-members: ARGCLZ_DISPATCH_GROUP, ARGCLZ_DISPATCH_COMMAND, DispatchCommand, DispatchCommandNotFound, Dispatch
+   :exclude-members: DispatchCommand, DispatchCommandNotFound, Dispatch
    :undoc-members:
    :inherited-members:
    :show-inheritance:
