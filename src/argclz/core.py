@@ -691,16 +691,16 @@ def parse_args(instance: T, args: list[str] = None) -> T:
 
 
 @overload
-def print_help(instance, file: TextIO = sys.stdout):
+def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
     pass
 
 
 @overload
-def print_help(instance, file: Literal[None]) -> str:
+def print_help(instance, file: Literal[None], prog: str = None) -> str:
     pass
 
 
-def print_help(instance, file: TextIO = sys.stdout):
+def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
     """print help to stdout"""
     buf = None
     if file is None:
@@ -708,7 +708,7 @@ def print_help(instance, file: TextIO = sys.stdout):
         buf = file = io.StringIO()
 
     if not isinstance(instance, ArgumentParser):
-        instance = new_parser(instance)
+        instance = new_parser(instance, prog=prog)
 
     instance.print_help(file)
     if buf is not None:

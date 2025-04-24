@@ -261,20 +261,9 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(capture.exception.args[0], 'run_a already frozen')
 
 
-RUNNER = ''
 
 
 class PrintHelpTest(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        global RUNNER
-
-        class Opt(AbstractParser):
-            pass
-
-        h = print_help(Opt, None)
-        RUNNER = h.split('\n')[0].split(' ')[1]
 
     def test_build_command_usages(self):
         class Opt(SimpleDispatch):
@@ -431,8 +420,8 @@ Commands:
                 """
                 pass
 
-        self.assertEqual(print_help(Opt, None), f"""\
-usage: {RUNNER} [-h] cmd [args ...]
+        self.assertEqual(print_help(Opt, None, prog='run.py'), """\
+usage: run.py [-h] cmd [args ...]
 
 positional arguments:
   cmd

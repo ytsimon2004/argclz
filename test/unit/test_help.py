@@ -3,27 +3,17 @@ import unittest
 from argclz import *
 from argclz.core import print_help
 
-RUNNER = ''
-
 
 class PrintHelpTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        global RUNNER
 
-        class Opt(AbstractParser):
-            pass
-
-        h = print_help(Opt, None)
-        RUNNER = h.split('\n')[0].split(' ')[1]
 
     def test_print_help_required_argument(self):
         class Opt(AbstractParser):
             a: bool = argument('-a', help='text', required=True)
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] -a
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] -a
 
 options:
   -h, --help  show this help message and exit
@@ -34,9 +24,9 @@ options:
         class Opt(AbstractParser):
             pass
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h]
 
 options:
   -h, --help  show this help message and exit
@@ -46,9 +36,9 @@ options:
         class Opt(AbstractParser):
             a: bool = argument('-a', help='text')
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] [-a]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a]
 
 options:
   -h, --help  show this help message and exit
@@ -62,9 +52,9 @@ options:
                 '-c': 'C',
             }, help='text')
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] [-a A | -b | -c]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A | -b | -c]
 
 options:
   -h, --help  show this help message and exit
@@ -79,9 +69,9 @@ options:
             b: str = argument('-b', group='group A', help='text for B')
             c: str = argument('-c', group='group C', help='text for C')
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] [-a A] [-b B] [-c C]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C]
 
 options:
   -h, --help  show this help message and exit
@@ -100,9 +90,9 @@ group C:
             b: str = argument('-b', ex_group='group A', help='text for B')
             c: str = argument('-c', group='group C', help='text for C')
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] [-a A | -b B] [-c C]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A | -b B] [-c C]
 
 options:
   -h, --help  show this help message and exit
@@ -119,9 +109,9 @@ group C:
             b: str = argument('-b', group='group A', ex_group='group A', help='text for B')
             c: str = argument('-c', group='group C', help='text for C')
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h] [-a A | -b B] [-c C]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A | -b B] [-c C]
 
 options:
   -h, --help  show this help message and exit
@@ -139,7 +129,7 @@ group C:
             USAGE = 'test.py [-h] [options]'
             a: bool = argument('-a', help='text')
 
-        h = print_help(Opt, None)
+        h = print_help(Opt, None, prog='run.py')
         self.assertEqual(h, """\
 usage: test.py [-h] [options]
 
@@ -156,7 +146,7 @@ options:
             ]
             a: bool = argument('-a', help='text')
 
-        h = print_help(Opt, None)
+        h = print_help(Opt, None, prog='run.py')
         self.assertEqual(h, """\
 usage: test.py [-h]
        test.py [-a]
@@ -170,9 +160,9 @@ options:
         class Opt(AbstractParser):
             DESCRIPTION = 'text'
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h]
 
 text
 
@@ -184,9 +174,9 @@ options:
         class Opt(AbstractParser):
             EPILOG = 'text'
 
-        h = print_help(Opt, None)
-        self.assertEqual(h, f"""\
-usage: {RUNNER} [-h]
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h]
 
 options:
   -h, --help  show this help message and exit
