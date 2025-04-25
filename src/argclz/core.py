@@ -656,9 +656,7 @@ def as_argument(a) -> Argument:
 def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
     """iterating all argument attributes in instance.
 
-    This method will initialize Argument.
-
-    :param instance:
+    :param instance: any instance that contains ``argument``.
     :return:
     """
     if isinstance(instance, type):
@@ -678,9 +676,9 @@ def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
 def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     """Create ``ArgumentParser`` for instance.
 
-    :param instance:
+    :param instance: any instance that contains ``argument``.
     :param reset: reset argument attributes. do nothing if *instance* isn't an instance.
-    :param kwargs: keywords for creating :class:`argparse.ArgumentParser`.
+    :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
     :return:
     """
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
@@ -756,9 +754,9 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
 
 
 def set_options(instance: T, result: argparse.Namespace) -> T:
-    """set argument attributes from ``argparse.Namespace`` .
+    """set argument to ``instance``'s attributes from ``argparse.Namespace`` .
 
-    :param instance:
+    :param instance: any instance that contains ``argument``.
     :param result:
     :return: *instance* itself.
     """
@@ -783,11 +781,11 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
 
 
 def parse_args(instance: T, args: list[str] = None) -> T:
-    """Parse the provided list of command-line arguments and apply the parsed values to the given instance
+    """Parse the command-list arguments and apply the parsed values to the given instance
 
-    :param instance: An instance of a class derived from :class:`AbstractParser`
-    :param args: A list of strings representing command-line arguments. If ``None``, uses ``sys.argv[1:]``
-    :return: The same instance, with attributes populated
+    :param instance: any instance that contains ``argument``.
+    :param args: A list of strings representing command-line arguments. If ``None``, uses ``sys.argv``
+    :return: ``instance`` itself, with attributes populated
     """
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
@@ -805,7 +803,14 @@ def print_help(instance, file: Literal[None], prog: str = None) -> str:
 
 
 def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
-    """print help to stdout"""
+    """
+    print help document.
+
+    :param instance: any instance that contains ``argument``.
+    :param file: output stream.
+    :param prog: program name.
+    :return: help document string if ``file`` is ``None``. Otherwise, nothing return.
+    """
     buf = None
     if file is None:
         import io
@@ -824,8 +829,8 @@ def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
 def with_defaults(instance: T) -> T:
     """Initialize all argument attributes by assign the default value if provided.
 
-    :param instance:
-    :return: *instance* itself
+    :param instance: any instance that contains ``argument``.
+    :return: *instance* itself, with attributes initialized with proper default.
     """
     for arg in foreach_arguments(instance):
         try:
@@ -845,8 +850,8 @@ def with_defaults(instance: T) -> T:
 def as_dict(instance: T) -> dict[str, Any]:
     """collect all argument attributes into a dictionary with attribute name to its value.
 
-    :param instance: An instance of a class derived from :class:`AbstractParser`
-    :return: A dictionary mapping argument attribute names to their current values
+    :param instance: any instance that contains ``argument``.
+    :return: A dictionary mapping argument attribute names to their values
     """
     ret = {}
     for arg in foreach_arguments(instance):
@@ -872,10 +877,10 @@ def as_dict(instance: T) -> dict[str, Any]:
 def copy_argument(opt: T, ref, **kwargs) -> T:
     """copy argument from ref to opt
 
-    :param opt
-    :param ref:
-    :param kwargs:
-    :return:
+    :param opt: any instance that contains ``argument``.
+    :param ref: any instance that contains ``argument``.
+    :param kwargs: overwrite argument value mapping.
+    :return: ``opt`` itself.
     """
     shadow = ShadowOption(ref, **kwargs)
 
@@ -901,7 +906,10 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
 
 
 class ShadowOption:
-    """Shadow options, used to pass wrapped :class:`AbstractOptions`
+    """
+    (internal) Do not use class directly.
+
+    Shadow options, used to pass wrapped :class:`AbstractOptions`
     """
 
     def __init__(self, ref, **kwargs):
