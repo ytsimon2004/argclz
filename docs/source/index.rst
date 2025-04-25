@@ -1,8 +1,9 @@
 Welcome to Argclz documentation!
 ====================================
 
-Argclz is a structured command-line interface builder for Python, powered by `argparse`
-and class-based syntax with type annotations, validation, and inheritance support.
+Argclz integrates Python’s ``argparse`` with class-based configuration, allowing
+you to declare command-line arguments as class attributes with type annotations. This approach
+automatically infers type conversion, supports validators, and makes it easy to compose and reuse parsers.
 
 
 API Reference
@@ -21,9 +22,17 @@ API Reference
 Getting Started
 ---------------
 
-.. automodule:: argclz
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples
 
+   core_usage
+   organized_arguments
+   advanced_usage
+   type_parser
+   validator
+   subcommands
+   dispatch
+   compose_cli
+   utilities
 

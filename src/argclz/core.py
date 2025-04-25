@@ -51,7 +51,13 @@ Actions = Literal[
 
 
 class ArgumentParserInterrupt(RuntimeError):
+    """(internal) Error raised when any error occurs during command-line parsing."""
+
     def __init__(self, status: int, message: str | None):
+        """
+        :param status: error code
+        :param message: error message
+        """
         if message is None:
             super().__init__(f'exit {status}')
         else:
@@ -62,6 +68,8 @@ class ArgumentParserInterrupt(RuntimeError):
 
 
 class ArgumentParser(argparse.ArgumentParser):
+    """(internal) override ``argparse.ArgumentParser``."""
+
     def exit(self, status: int = 0, message: str = None):
         raise ArgumentParserInterrupt(status, message)
 
@@ -70,11 +78,13 @@ class ArgumentParser(argparse.ArgumentParser):
 
 
 class AbstractParser(metaclass=abc.ABCMeta):
+    """Commandline parser."""
+
     USAGE: str | list[str] = None
     """parser usage."""
 
     DESCRIPTION: str = None
-    """parser description."""
+    """parser description. Could be override as a method if its content is dynamic-generated."""
 
     EPILOG: str = None
     """parser epilog. Could be override as a method if its content is dynamic-generated."""
@@ -86,30 +96,22 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     @classmethod
     def new_parser(cls, **kwargs) -> ArgumentParser:
-        """create an ``argparse.ArgumentParser``.
+        """create an :class:`~argclz.core.ArgumentParser`.
 
-        class variable: ``USAGE``, ``DESCRIPTION`` and ``EPILOG`` are used when creation.
-
-        >>> class A(AbstractParser):
-        ...     @classmethod
-        ...     def new_parser(cls, **kwargs) -> argparse.ArgumentParser:
-        ...         return super().new_parser(**kwargs)
-
-        :param kwargs: keyword parameters to ArgumentParser
+        :param kwargs: keyword parameters to ``argparse.ArgumentParser``
         :return: an ArgumentParser.
         """
         return new_parser(cls, **kwargs)
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
-             system_exit: Type[BaseException] = SystemExit):
-        """parsing the commandline input *args* and set the argument attributes,
-        then call :meth:`.run()`.
+             system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
+        """parsing the commandline input *args* and call :meth:`~argclz.core.ArgumentParser.run()`.
 
-        :param args: command-line arguments
-        :param parse_only: parse command-line arguments only, do not invoke ``run()``
-        :param system_exit: exit when commandline parsed fail.
-        :return: parsing result.
+        :param args: command-line arguments. If omitted, use ``sys.args``.
+        :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
+        :param system_exit: error raised when commandline parsed fail.
+        :return: parser itself. If it has sub command, return sub parser when used.
         """
         parser = self.new_parser(reset=True)
 
@@ -148,14 +150,14 @@ class AbstractParser(metaclass=abc.ABCMeta):
         return pp
 
     def run(self):
-        """called when all argument attributes are set"""
+        """called after :meth:`~argclz.core.ArgumentParser.main()`"""
         pass
 
     def __str__(self):
         return type(self).__name__
 
     def __repr__(self):
-        """key value pair content"""
+        """print key value pair content"""
         self_type = type(self)
         ret = []
         for a_name in dir(self_type):
@@ -175,15 +177,11 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
 
 class Argument(object):
-    """Descriptor (https://docs.python.org/3/glossary.html#term-descriptor).
+    """
+    (internal) Do not use class directly.
+
+    Commandline argument descriptor (https://docs.python.org/3/glossary.html#term-descriptor).
     Carried the arguments pass to ``argparse.ArgumentParser.add_argument``.
-
-    **Creation**
-
-    Use :func:`~argclz.core.argument()`.
-
-    >>> class Example:
-    ...     a: str = argument('-a')
 
     """
 
@@ -196,8 +194,10 @@ class Argument(object):
         """
 
         :param options: options
+        :param validator: argument validator.
         :param group: argument group.
         :param ex_group: mutually exclusive group.
+        :param hidden: hide this argument from help document
         :param kwargs:
         """
         from .validator import Validator
@@ -448,7 +448,49 @@ def argument(*options: str,
 def argument(*options: str, **kwargs):
     """create an argument attribute
 
-    :param kwargs: Please see ``argparse.ArgumentParser.add_argument`` for detailed.
+    **Usage**
+
+    >>> class Example:
+    ...     a: str = argument('-a')
+
+    **Type (caster)**
+
+    The parameter ``type`` usually can be infered via the annotation of target attribute,
+    like the `a: str` in above example.
+
+    There are some special rules to treat common type:
+
+    TODO
+
+    If the default type infered does not fit your application, you can give it directly.
+
+    **Validator**
+
+    Although parameter ``type`` can handle some validation works, it is ignored when user
+    assign value to the attribute directly. The parameter ``validator`` is used to perform the assignment
+    validation work and raise a ``ValueError`` (normal case) if any improper assignments.
+
+    The parameter ``validator`` has been treated specially when use :attr:`~argclz.validator`, which it
+    can put at lastest position of ``options``
+
+    >>> from argclz import argument, validator
+    >>> class Example:
+    ...     a: str = argument('-a', validator.str.match(r'\d+'))
+
+    :param options: options strings
+    :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
+    :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
+    :param const: Please see ``argparse.ArgumentParser.add_argument(const)`` for detailed.
+    :param default: default value of argument. Please see ``argparse.ArgumentParser.add_argument(default)`` for detailed.
+    :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
+    :param validator: value validator with signature ``(T) -> bool``.
+    :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
+    :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
+    :param hidden: hide this argument from help document.
+    :param help: help document for this argument.
+    :param group: group name of this argument.
+    :param ex_group: the mutually exclusive group name of this argument.
+    :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
     """
     return Argument(*options, **kwargs)
 
@@ -468,10 +510,25 @@ def pos_argument(option: str,
 
 
 def pos_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs=None, **kwargs):
-    """create a positional (non-flag) command-line argument attribute
+    """create a positional (non-flag) command-line argument attribute.
+
+    **Usage**
+
+    >>> class Example:
+    ...     a: str = pos_argument('A')
+
+    shorten for ``argument(metavar=option, nargs=nargs, validator=validator, **kwargs)``
 
     :param option: The name for the positional argument shown in usage messages
-    :param kwargs: Please see ``argparse.ArgumentParser.add_argument`` for detailed.
+    :param validator: value validator with signature ``(T) -> bool``.
+    :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
+    :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
+    :param const: Please see ``argparse.ArgumentParser.add_argument(const)`` for detailed.
+    :param default: default value of argument. Please see ``argparse.ArgumentParser.add_argument(default)`` for detailed.
+    :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
+    :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
+    :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
+    :param help: help document for this argument.
     """
     if validator is not ...:
         kwargs['validator'] = validator
@@ -483,22 +540,38 @@ def var_argument(option: str,
                  validator: Callable[[T], bool] = ..., *,
                  nargs: Nargs = ...,
                  action: Actions = ...,
-                 const=...,
-                 default=...,
                  type: Type | Callable[[str], T] = ...,
-                 choices: Sequence[str] = ...,
                  help: str = ...) -> list[T]:
     pass
 
 
 def var_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs='*', action='extend', **kwargs):
-    """create a variable-length positional argument, suitable for capturing multiple values into a list"""
+    """
+    create a variable-length positional argument, suitable for capturing multiple values into a list.
+
+    **Usage**
+
+    >>> class Example:
+    ...     a: list[str] = var_argument('A')
+
+    shorten for ``argument(metavar=option, nargs='*', action='extend', validator=validator, **kwargs)`` by default.
+
+    :param option: The name for the vary-length positional argument shown in usage messages
+    :param validator:  value validator with signature ``(T) -> bool``.
+    :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
+    :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
+    :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
+    :param help: help document for this argument.
+    """
     if validator is not ...:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, action=action, **kwargs)
 
 
 class AliasArgument(Argument):
+    """
+    (internal) Do not use class directly.
+    """
     def __init__(self, *options,
                  aliases: dict[str, Any],
                  **kwargs):
@@ -538,7 +611,38 @@ def aliased_argument(options: str, *,
 
 
 def aliased_argument(*options: str, aliases: dict[str, T], **kwargs):
-    """create an argument that supports shorthand aliases for specific constant values"""
+    """
+    create an argument that supports shorthand aliases for specific constant values.
+
+    **Usage**
+
+    >>> class Example:
+    ...     level: str = aliased_argument(
+    ...         '--level',
+    ...         aliases={
+    ...             '--low': 'low',
+    ...             '--mid': 'middle',
+    ...             '--high': 'high',
+    ...         },
+    ...         choices=('low', 'middle', 'high')
+    ...     )
+
+    :param options: options strings
+    :param aliases: a dictionary maps options to value.
+    :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
+    :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
+    :param const: Please see ``argparse.ArgumentParser.add_argument(const)`` for detailed.
+    :param default: default value of argument. Please see ``argparse.ArgumentParser.add_argument(default)`` for detailed.
+    :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
+    :param validator: value validator with signature ``(T) -> bool``.
+    :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
+    :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
+    :param hidden: hide this argument from help document.
+    :param help: help document for this argument.
+    :param group: group name of this argument.
+    :param ex_group: the mutually exclusive group name of this argument.
+    :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
+    """
     return AliasArgument(*options, aliases=aliases, **kwargs)
 
 
