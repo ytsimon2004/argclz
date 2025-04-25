@@ -1,7 +1,7 @@
 # argclz
 
 [![Documentation Status](https://readthedocs.org/projects/argp/badge/?version=latest)](https://argp.readthedocs.io/en/latest/)
-[![codecov](https://codecov.io/gh/ytsimon2004/argp/branch/dev/graph/badge.svg)](https://codecov.io/gh/ytsimon2004/argp)
+[![codecov](https://codecov.io/gh/ytsimon2004/argclz/branch/main/graph/badge.svg?token=HfO5frntJe)](https://codecov.io/gh/ytsimon2004/argclz)
 
 Class-based command-line argument parsing for Python that combines the power of `argparse` with class definitions and
 type annotations.
@@ -44,6 +44,24 @@ class MyArgs(AbstractParser):
 
 if __name__ == '__main__':
     MyArgs().main()
+```
+
+Show help:
+
+```bash
+python my_script.py -h
+```
+
+Expected output:
+
+```text
+usage: my_script.py [-h] [--verbose] -n NAME [--count COUNT]
+
+options:
+  -h, --help            show this help message and exit
+  --verbose             Enable verbose output
+  -n NAME, --name NAME  Name of the user
+  --count COUNT         Number of times to greet
 ```
 
 Run with:
