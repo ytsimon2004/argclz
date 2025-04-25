@@ -1,6 +1,6 @@
 import inspect
 import sys
-from typing import get_origin, get_args, Literal, Callable, TypeVar, Generic
+from typing import Callable, TypeVar, Generic
 
 from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand
 from ..validator import Validator
@@ -55,62 +55,6 @@ class DispatchCommandBuilder:
               hidden=False) -> DispatchCommand:
         ret = DispatchCommand(None, group, command, aliases, order, usage, self.func, self.validators, hidden)
         setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)
-        return ret
-
-    def build_usage(self) -> list[str]:
-        """
-
-        * non-annotated argument (`arg`): `ARG`
-        * literal argument (`Literal['A', 'B']`) : `A|B` for
-        * var arguments (`*args`) : `ARGS...`
-        * ignore keyword arguments
-        * *keyword* str argument (`arg`="text"): `arg=TEXT`
-        * *keyword* int, float argument (`arg`=1): `arg=1`
-        * *keyword* argument (`arg`): `arg=`
-        * has default argument: suffix with '?'
-
-        :return:
-        """
-        ret = []
-
-        for n, p in self.signature.parameters.items():
-            if n == 'self':
-                continue
-            elif p.kind in (P.KEYWORD_ONLY, P.VAR_KEYWORD):
-                break
-
-            if (t := p.annotation) is P.empty:
-                m = n.upper()
-            elif get_origin(t) == Literal:
-                m = '|'.join(get_args(t))
-            elif p.kind == P.VAR_POSITIONAL:
-                m = f'{n.upper()}...'
-            else:
-                if t == str:
-                    if p.default is P.empty:
-                        m = 'TEXT'
-                    else:
-                        m = str(p.default)
-                elif t == bool:
-                    if p.default is P.empty:
-                        m = 'BOOL'
-                    else:
-                        m = 'true' if p.default else 'false'
-                elif t in (int, float):
-                    if p.default is P.empty:
-                        m = 'VALUE'
-                    else:
-                        m = str(p.default)
-                else:
-                    m = n.upper()
-
-            if p.default is not P.empty:
-                m = f'{n}?={m}'
-            else:
-                m = f'{n}={m}'
-
-            ret.append(m)
-
         return ret
 
 

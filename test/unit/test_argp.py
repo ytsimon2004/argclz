@@ -125,6 +125,8 @@ class AbstractParserTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             Main().main(['-b'], system_exit=RuntimeError)
 
+        with self.assertRaises(RuntimeError):
+            parse_args(Main(), ['-b'])
 
     def test_parse_only(self):
         class Main(AbstractParser):
@@ -232,6 +234,90 @@ class CopyArgsTest(unittest.TestCase):
         data = pl.DataFrame([{'a': '2'}])
         opt = Opt(data)
         self.assertEqual(opt.a, '2')
+
+
+class WithOptionsTest(unittest.TestCase):
+    def test_no_args(self):
+        class Parent:
+            a: str = argument('-a')
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options()
+
+        p = as_argument(Parent.a)
+        c = as_argument(Child.a)
+        self.assertEqual(p.options, c.options)
+        self.assertEqual(p.kwargs, c.kwargs)
+
+    def test_replace_options(self):
+        class Parent:
+            a: str = argument('-a')
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options('-b')
+
+        p = as_argument(Parent.a)
+        c = as_argument(Child.a)
+        self.assertEqual(p.options, ('-a',))
+        self.assertEqual(c.options, ('-b',))
+        self.assertEqual(p.kwargs, c.kwargs)
+
+    def test_add_options(self):
+        class Parent:
+            a: str = argument('-a')
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options(..., '-b')
+
+        p = as_argument(Parent.a)
+        c = as_argument(Child.a)
+        self.assertEqual(p.options, ('-a',))
+        self.assertEqual(c.options, ('-a', '-b'))
+        self.assertEqual(p.kwargs, c.kwargs)
+
+    def test_rename_options(self):
+        class Parent:
+            a: str = argument('-a', '--long')
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options({'-a': '-b'})
+
+        p = as_argument(Parent.a)
+        c = as_argument(Child.a)
+        self.assertEqual(p.options, ('-a', '--long'))
+        self.assertEqual(c.options, ('-b', '--long'))
+        self.assertEqual(p.kwargs, c.kwargs)
+
+    def test_remove_options(self):
+        class Parent:
+            a: str = argument('-a', '--long')
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options({'-a': ...})
+
+        p = as_argument(Parent.a)
+        c = as_argument(Child.a)
+        self.assertEqual(p.options, ('-a', '--long'))
+        self.assertEqual(c.options, ('--long',))
+        self.assertEqual(p.kwargs, c.kwargs)
+
+    def test_error_on_change_pos_to_opt(self):
+        class Parent:
+            a: str = pos_argument('A')
+
+        with self.assertRaises(RuntimeError):
+            class Child(Parent):
+                a: str = as_argument(Parent.a).with_options('-a')
+
+    def test_remove_keyword(self):
+        class Parent:
+            a: int = argument('-a', type=int)
+
+        class Child(Parent):
+            a: str = as_argument(Parent.a).with_options(type=...)
+
+        self.assertEqual(parse_args(Parent(), ['-a=1']).a, 1)
+        self.assertEqual(parse_args(Child(), ['-a=1']).a, '1')
 
 
 if __name__ == '__main__':

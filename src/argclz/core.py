@@ -220,7 +220,8 @@ class Argument(object):
         self.validator = validator
         self.options = options
         self.hidden = hidden
-        self.kwargs = kwargs
+        self._kwargs = kwargs  # original kwargs
+        self.kwargs = dict(kwargs)
 
     @property
     def default(self):
@@ -367,11 +368,12 @@ class Argument(object):
 
         option flags update rule:
 
-        1. ``()`` : do not update options
+        1. ``()``, ``(...)`` : do not update options
         2. ``('-a', '-b')`` : replace options
-        3. ``(..., '-c')`` : append options
+        3. ``(..., '-c')`` : additional options
         4. ``({'-a': '-A'})`` : rename options
-        5. ``({'-a': '-A'}, ...)`` : rename options, keep options if not in the dict.
+        5. ``({'-a': ...})`` : remove options
+        6. ``({'-a': '-A', '-b': ...}, '-c')`` : rename '-a', remove '-b', add '-c'
 
         general form:
 
@@ -381,7 +383,7 @@ class Argument(object):
         :param kwargs: change keyword parameters, use `...` to unset parameter
         :return:
         """
-        kw = dict(self.kwargs)
+        kw = dict(self._kwargs)  # use original kwargs
         kw['group'] = self.group
         kw['ex_group'] = self.ex_group
         kw['validator'] = self.validator
@@ -401,13 +403,9 @@ class Argument(object):
                 case (e, *o) if e is ...:
                     return cls(*self.options, *o, **kw)
                 case (dict(d), ):
-                    return cls(*self._map_options(d, False), **kw)
-                case (dict(d), e) if e is ...:
-                    return cls(*self._map_options(d, True), **kw)
-                case (dict(d), e, *o) if e is ...:
-                    return cls(*self._map_options(d, True), *o, **kw)
+                    return cls(*self._map_options(d), **kw)
                 case (dict(d), *o):
-                    return cls(*self._map_options(d, False), *o, **kw)
+                    return cls(*self._map_options(d), *o, **kw)
                 case _:
                     return cls(*options, **kw)
         else:
@@ -416,15 +414,17 @@ class Argument(object):
 
             return cls(**kw)
 
-    def _map_options(self, mapping: dict[str, str], keep: bool) -> list[str]:
-        new_opt = []
+    def _map_options(self, mapping: dict[str, str]) -> list[str]:
+        ret = []
         for old_opt in self.options:
             try:
-                new_opt.append(mapping[old_opt])
+                new_opt = mapping[old_opt]
             except KeyError:
-                if keep:
-                    new_opt.append(old_opt)
-        return new_opt
+                ret.append(old_opt)
+            else:
+                if new_opt is not ...:
+                    ret.append(new_opt)
+        return ret
 
 
 @overload
