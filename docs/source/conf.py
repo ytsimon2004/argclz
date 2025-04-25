@@ -15,11 +15,11 @@ author = 'yu-ting wei'
 
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.autosummary',
-              'sphinx_prompt']
+              'sphinx_prompt',
+              'sphinx_copybutton']
 
 templates_path = ['_templates']
 exclude_patterns = []
-
 
 # -- Options for autodoc ------------------------------------------------
 autodoc_member_order = 'bysource'
@@ -27,9 +27,16 @@ autodoc_class_signature = 'separated'
 autodoc_typehints = 'description'
 autodoc_typehints_format = 'short'
 
-
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
+html_theme_options = {
+    "show_toc_level": 4
+}
+
+# -- Copy Button --------------------------------
+copybutton_prompt_text = r'^(>>> |\.\.\. |\$ )'
+copybutton_prompt_is_regexp = True
+copybutton_remove_prompts = True

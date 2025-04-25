@@ -29,9 +29,8 @@ dependencies = ['typing_extensions']
 
 [project.optional-dependencies]
 
-opt = []
-dev = ['argclz[opt]', 'pytest', 'pytest-cov']
-doc = ['sphinx', 'pydata-sphinx-theme', 'sphinx_prompt']
+dev = ['pytest', 'pytest-cov']
+doc = ['sphinx', 'pydata-sphinx-theme', 'sphinx_prompt', 'sphinx_copybutton']
 
 
 [project.urls]
