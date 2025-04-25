@@ -23,16 +23,8 @@ Getting Started
 ---------------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Examples
 
-   core_usage
-   organized_arguments
-   advanced_usage
-   type_parser
-   validator
-   subcommands
-   dispatch
-   compose_cli
-   utilities
+   get_start/index
 
