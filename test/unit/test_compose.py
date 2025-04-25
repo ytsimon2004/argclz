@@ -1,4 +1,5 @@
 import unittest
+from typing import Literal
 
 from argclz import *
 from argclz.core import foreach_arguments
@@ -31,13 +32,13 @@ class ParserClassTest(unittest.TestCase):
             )
 
         opt = Parent()
-        opt.main(['-a=1'], system_exit=False, parse_only=True)
+        opt.main(['-a=1'], parse_only=True)
         self.assertEqual(opt.a, 1)
 
         opt = Child()
         args = [it.options for it in foreach_arguments(opt)]
         self.assertListEqual([('-a',)], args)
-        opt.main(['-a=1'], system_exit=False, parse_only=True)
+        opt.main(['-a=1'], parse_only=True)
         self.assertEqual(opt.a, -1)
 
     def test_reuse_argument(self):
@@ -47,6 +48,10 @@ class ParserClassTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             class Child(Parent):
                 b: int = as_argument(Parent.a)
+
+        with self.assertRaises(RuntimeError):
+            class Child(Parent):
+                b: int = Parent.a
 
     def test_remove_argument(self):
         class Parent(AbstractParser):
@@ -64,7 +69,7 @@ class ParserClassTest(unittest.TestCase):
         args = [it.options for it in foreach_arguments(opt)]
         self.assertListEqual([('-a',)], args)
 
-        ret = opt.main(['-b=1'], system_exit=False, parse_only=True)
+        ret = opt.main(['-b=1'], parse_only=True)
         self.assertNotEqual(ret, 0)
 
     def test_compose_parser(self):
@@ -94,6 +99,24 @@ class ParserClassTest(unittest.TestCase):
         opt = Child()
         args = [it.options for it in foreach_arguments(opt)]
         self.assertSetEqual({('-a',), ('-b',)}, set(args))
+
+    def test_redeclare_argument(self):
+        class Parent(AbstractParser):
+            a: str = argument('-a')
+
+        class Child(Parent):
+            a: Literal['1', '2'] = as_argument(Parent.a).with_options()
+
+        opt = Parent().main(['-a=1'])
+        self.assertEqual(opt.a, '1')
+        opt = Parent().main(['-a=3'])
+        self.assertEqual(opt.a, '3')
+
+        opt = Child().main(['-a=1'])
+        self.assertEqual(opt.a, '1')
+
+        with self.assertRaises(SystemExit):
+            Child().main(['-a=3'])
 
 
 if __name__ == '__main__':
