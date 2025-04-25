@@ -12,6 +12,9 @@ P = inspect.Parameter
 
 
 class DispatchCommandBuilder:
+    """
+    (internal) Do not use class directly.
+    """
     def __init__(self, func):
         self.func = func
         self.signature = inspect.signature(func, eval_str=True)
@@ -59,6 +62,9 @@ class DispatchCommandBuilder:
 
 
 class TypeCasterWithValidator(Generic[T]):
+    """
+    (internal) Do not use class directly.
+    """
     def __init__(self, caster: Callable[[str], T] | None,
                  validator: Callable[[T], bool]):
         self.caster = caster

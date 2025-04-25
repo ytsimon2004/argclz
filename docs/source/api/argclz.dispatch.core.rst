@@ -5,6 +5,7 @@ argclz.dispatch.core
 
 .. autosummary::
    :toctree: _autosummary
+   :template: class.rst
    :nosignatures:
 
    DispatchCommand
