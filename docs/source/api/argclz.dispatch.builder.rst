@@ -3,16 +3,11 @@ argclz.dispatch.builder
 
 .. currentmodule:: argclz.dispatch.builder
 
+.. rubric:: Classes
+
 .. autosummary::
    :toctree: _autosummary
+   :template: class.rst
    :nosignatures:
 
    DispatchCommandBuilder
-
-
-.. automodule:: argclz.dispatch.builder
-   :members:
-   :exclude-members: DispatchCommandBuilder
-   :undoc-members:
-   :inherited-members:
-   :show-inheritance:

@@ -3,7 +3,12 @@
 .. currentmodule:: {{ module }}
 
 .. autoclass:: {{ objname }}
+   :members:
+   :undoc-members:
    :exclude-members: __init__, __new__
+   {% if module == "argclz.validator" and "Validator" in name -%}
+   :special-members: __call__
+   {%- endif %}
 
    {% block methods %}
    .. automethod:: __init__
@@ -29,23 +34,6 @@
    {%- endif %}
    {% endblock %}
 
-   {%- if attributes %}
-   .. rubric:: {{ _('Attributes') }}
+   .. rubric:: {{ _('Details') }}
 
-   {%- for item in attributes %}
-   .. autoattribute:: {{ name }}.{{ item }}
-   {%- endfor %}
-   {%- endif %}
 
-   {%- if methods %}
-   .. rubric:: {{ _('Methods') }}
-
-   {%- for item in methods %}
-   {%- if item != "__init__" %}
-   .. automethod:: {{ name }}.{{ item }}
-   {%- endif %}
-   {%- endfor %}
-   {%- if module == "argclz.validator" and "Validator" in name %}
-   .. automethod:: {{ name }}.__call__
-   {%- endif %}
-   {%- endif %}

@@ -3,16 +3,12 @@ argclz.clone
 
 .. currentmodule:: argclz.clone
 
+.. rubric:: Classes
+
 .. autosummary::
    :toctree: _autosummary
+   :template: class.rst
    :nosignatures:
 
    Cloneable
 
-
-.. automodule:: argclz.clone
-   :members:
-   :exclude-members: Cloneable
-   :undoc-members:
-   :inherited-members:
-   :show-inheritance:

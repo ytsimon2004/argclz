@@ -3,6 +3,8 @@ argclz.dispatch.core
 
 .. currentmodule:: argclz.dispatch.core
 
+.. rubric:: Classes
+
 .. autosummary::
    :toctree: _autosummary
    :template: class.rst
@@ -11,11 +13,3 @@ argclz.dispatch.core
    DispatchCommand
    DispatchCommandNotFound
    Dispatch
-
-
-.. automodule:: argclz.dispatch.core
-   :members:
-   :exclude-members: DispatchCommand, DispatchCommandNotFound, Dispatch
-   :undoc-members:
-   :inherited-members:
-   :show-inheritance:
