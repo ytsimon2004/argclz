@@ -152,7 +152,8 @@ def init_sub_command(p: AbstractParser) -> AbstractParser:
 
 def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]],
                        usage: str = None,
-                       description: str = None) -> ArgumentParser:
+                       description: str = None,
+                       **kwargs) -> ArgumentParser:
     """A convenient way to create an ArgumentParser with sub-commands.
 
     :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
@@ -163,7 +164,8 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
     ap = ArgumentParser(
         usage=usage,
         description=description,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        **kwargs
     )
 
     group = SubCommandGroup(title='commands')

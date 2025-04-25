@@ -180,21 +180,9 @@ class CommandParserClassTest(unittest.TestCase):
         self.assertEqual(p.a, 2)
 
 
-RUNNER = ''
 
 
 class PrintHelpTest(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        global RUNNER
-
-        class Opt(AbstractParser):
-            pass
-
-        h = print_help(Opt, None)
-        RUNNER = h.split('\n')[0].split(' ')[1]
-
     def test_print_help(self):
         class P1(AbstractParser):
             DESCRIPTION = 'P1 description'
@@ -212,9 +200,9 @@ class PrintHelpTest(unittest.TestCase):
             def run(self):
                 pass
 
-        parser = new_command_parser(dict(a=P1, b=P2), description='DESCRIPTION')
-        self.assertEqual(print_help(parser, None), f"""\
-usage: {RUNNER} [-h] {{a,b}} ...
+        parser = new_command_parser(dict(a=P1, b=P2), prog='run.py', description='DESCRIPTION')
+        self.assertEqual(print_help(parser, None), """\
+usage: run.py [-h] {a,b} ...
 
 DESCRIPTION
 
@@ -222,7 +210,7 @@ options:
   -h, --help  show this help message and exit
 
 commands:
-  {{a,b}}
+  {a,b}
     a         P1 description
     b         P2 description
 """)
@@ -244,8 +232,8 @@ commands:
                 DESCRIPTION = 'sub command b'
                 a: str = argument('-a', default='default P2')
 
-        self.assertEqual(print_help(P, None), f"""\
-usage: {RUNNER} [-h] {{a,b}} ...
+        self.assertEqual(print_help(P, None, prog='run.py'), """\
+usage: run.py [-h] {a,b} ...
 
 description
 
@@ -255,7 +243,7 @@ options:
 title:
   commands description
 
-  {{a,b}}
+  {a,b}
     a         sub command a
     b         sub command b
 
