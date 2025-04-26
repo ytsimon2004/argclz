@@ -6,6 +6,8 @@ parse_args
 ------------------
 Parse the provided list of command-line arguments and apply the parsed values to the given instance
 
+refer to :func:`~argclz.core.parse_args()`
+
 - **Example usage**
 
 .. code-block:: python
@@ -29,6 +31,8 @@ Parse the provided list of command-line arguments and apply the parsed values to
 as_dict
 ------------------
 collect all argument attributes into a dictionary with attribute name to its value
+
+refer to :func:`~argclz.core.as_dict()`
 
 - **Example usage**
 
@@ -58,6 +62,8 @@ with_options
 Option class can be composed by inherition. Child option class can also change the value from parent's
 argument. As well as disable it (by replacing a value)
 
+refer to :func:`~argclz.core.with_options()`
+
 Use together with :func:`~argclz.core.as_argument()`
 
 - **Example usage**
@@ -83,4 +89,27 @@ Use together with :func:`~argclz.core.as_argument()`
     -h, --help           show this help message and exit
     --mode {train,test}
 
+with_defaults
+------------------
+Initialize argument attributes with a proper default.
+
+refer to :func:`~argclz.core.with_defaults()`
+
+Option class can be any class contains :func:`~argclz.core.argument()` or other argument kinds.
+The difference between a class inherit from :func:`~argclz.core.AbstractParser` and a class does not is that
+the former will initialize its argument attributes when creating via :func:`~argclz.core.with_defaults()`.
+
+
+.. code-block:: python
+
+    from argclz.core import with_defaults
+
+    class Option:
+        a: bool = argument('-a') #1
+
+    print(Option().a) # [2] raise AttributeError
+    print(with_defaults(Option()).a) # False
+
+1. A normal class with a bool attribute ``a``, which has a proper default value ``False`` in common sense.
+2. An ``AttributeError`` was raised, because attribute is not initialized yet.
 

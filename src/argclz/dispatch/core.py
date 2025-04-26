@@ -60,7 +60,6 @@ class DispatchCommand(NamedTuple):
     def parameters(self) -> list[CommandParameter]:
         """information of command's parameters"""
         s = inspect.signature(self.func)
-        p = inspect.Parameter
         return [CommandParameter.of(name, para) for i, (name, para) in enumerate(s.parameters.items()) if i > 0]
 
     @property
@@ -321,6 +320,19 @@ class CommandHelps(NamedTuple):
 
 
 class Dispatch:
+    """
+    A :func:`~argclz.dispatch.annotations.dispatch` functions container that
+    it is able to find and run the target function by corresponding name (``command`` here).
+
+    **Example**
+
+    >>> from argclz.dispatch import Dispatch, dispatch
+    ...     class Main(Dispatch):
+    ...         @dispatch('A')
+    ...         def run_a(self): ...
+    ... Main().invoke_command('A')
+    """
+
     @classmethod
     def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | None = ..., *,
                       all: bool = False) -> list[DispatchCommand]:
@@ -400,6 +412,16 @@ class Dispatch:
                              show_para: bool = False,
                              width: int = 120,
                              doc_indent: int = 20) -> str:
+        """
+        Build a help document for :func:`~argclz.dispatch.annotations.dispatch` functions
+        in this class.
+
+        :param group: for functions in the group.
+        :param show_para: show parameters.
+        :param width: text-wrap width.
+        :param doc_indent: description indent.
+        :return: help document.
+        """
         ret = []
 
         commands = cls.list_commands(group)

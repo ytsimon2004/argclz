@@ -11,13 +11,16 @@ T = TypeVar('T')
 
 
 class ValidatorFailError(ValueError):
+    """
+    A special ValueError used in this module.
+    """
     pass
 
 
 class ValidatorFailOnTypeError(ValidatorFailError):
     """
     A special ValidatorFailError that is raised when type validation failure.
-    It is used for Validator#any() to exclude some error message.
+    It is used for :meth:`~argclz.validator.ValidatorBuilder.any()` to exclude some error message.
     """
     pass
 
@@ -33,6 +36,7 @@ class Validator:
         return True
 
     def freeze(self) -> Self:
+        """(internal use) return a copy of itself."""
         return self
 
 
@@ -76,9 +80,11 @@ class LambdaValidator(Validator, Generic[T]):
                 raise ValidatorFailError(message(value))
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
+        """``validator & validator``"""
         return AndValidatorBuilder(self, validator)
 
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
+        """``validator | validator``"""
         return OrValidatorBuilder(self, validator)
 
     def freeze(self) -> Self:
@@ -230,9 +236,11 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         return self
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
+        """``validator & validator``"""
         return AndValidatorBuilder(self, validator)
 
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
+        """``validator | validator``"""
         return OrValidatorBuilder(self, validator)
 
 
