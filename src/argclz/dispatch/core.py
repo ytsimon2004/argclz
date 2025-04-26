@@ -3,48 +3,92 @@ from __future__ import annotations
 import inspect
 import textwrap
 from collections.abc import Callable
-from typing import NamedTuple, TypeVar, Any
+from typing import NamedTuple, TypeVar, Any, Type, ParamSpec
 
 from typing_extensions import Self
 
 __all__ = [
     'DispatchCommand',
     'DispatchCommandNotFound',
+    'dispatch_graph',
     'Dispatch',
 ]
 
 T = TypeVar('T')
+P = ParamSpec('P')
 R = TypeVar('R')
 
-ARGCLZ_DISPATCH_GROUP = '__argclz_dispatch_group__'
 ARGCLZ_DISPATCH_COMMAND = '__argclz_dispatch_command__'
 
 
 class DispatchCommand(NamedTuple):
-    host: type[T] | None
+    """
+    The information of :func:`~argclz.dispatch.annotations.dispatch` function.
+    Use :func:`~argclz.dispatch.annotations.dispatch` instead.
+    Do not create this class directly.
+    """
+
     group: str | None
+    """dispatch group"""
+
     command: str
+    """primary command"""
+
     aliases: tuple[str, ...]
+    """secondary command"""
+
     order: float
+    """order of this command shown in the help document"""
+
     usage: str | None
-    func: Callable[..., R]  # target function
+    """usage line of this command """
+
+    func: Callable[P, R]
+    """target function"""
+
     validators: dict[str, Callable[[str], Any]]
+    """parameter validators"""
+
     hidden: bool = False
+    """Is it hidden?"""
 
     @property
     def commands(self) -> list[str]:
+        """all acceptable commands"""
         return [self.command, *self.aliases]
 
     def parameters(self) -> list[CommandParameter]:
+        """information of command's parameters"""
         s = inspect.signature(self.func)
         p = inspect.Parameter
         return [CommandParameter.of(name, para) for i, (name, para) in enumerate(s.parameters.items()) if i > 0]
 
     @property
     def doc(self) -> str | None:
+        """document of the command."""
         return self.func.__doc__
 
-    def __call__(self, zelf: T, *args, **kwargs) -> R:
+    def __call__(self, zelf: T, *args: P.args, **kwargs: P.kwargs) -> R:
+        """
+        invoke commands.
+
+        **parameter pre-processing**
+
+        If any argument in *args* is a str that matches `'name=value'` patterns,
+        it will be parsed into a keyword argument. It allows use `key=value` pattern
+        in commandline without knowing the position of the parameter.
+
+        **parameter post-processing**
+
+        If any argument has a validator (by :func:`~argclz.dispatch.annotations.validator_for`),
+        the argument will be casted to desired type (if it is a str) and be validated.
+        An `ValueError` will be raised when validation fail.
+
+        :param zelf: instance of the target function
+        :param args: positional arguments of the target function
+        :param kwargs: keyword arguments of the target function
+        :return: target function's return
+        """
         _args = []
         _kwargs = dict(kwargs)
 
@@ -74,6 +118,111 @@ class DispatchCommand(NamedTuple):
             a.arguments[par] = new_value
 
         return self.func(*a.args, **a.kwargs)
+
+
+class DispatchGroup(NamedTuple):
+    """dispatch group."""
+
+    group: str
+    """group name"""
+
+    def __call__(self, command: str,
+                 *alias: str,
+                 order: float = 5,
+                 usage: str = None,
+                 hidden=False):
+        """
+        A decorator that mark a function as a dispatch target function.
+
+        All functions decorated in same dispatch group should have save
+        function signature (at least for non-default parameters). For example:
+
+        **Example**
+
+        >>> class D(Dispatch):
+        ...     command_group = dispatch_graph('A')
+        ...     @command_group('A')
+        ...     def function_a(self, a, b, c=None):
+        ...         pass
+
+        :param command: primary command name
+        :param alias: secondary command names
+        :param order: order of this command shown in the :meth:`~argclz.dispatch.core.Dispatch.build_command_usages()`
+        :param usage: usage line of this command shown in the :meth:`~argclz.dispatch.core.Dispatch.build_command_usages()`
+        :param hidden: hide this command from :meth:`~argclz.dispatch.core.Dispatch.list_commands()`
+        """
+        from .annotations import dispatch
+        return dispatch(command, *alias, group=self.group, order=order, usage=usage, hidden=hidden)
+
+    def __set_name__(self, owner, name):
+        if not issubclass(owner, Dispatch):
+            raise TypeError('owner not Dispatch')
+
+    def __get__(self, instance: Dispatch, owner: Type[Dispatch]) -> BoundDispatchGroup:
+        if instance is None:
+            return BoundDispatchGroup(owner, self.group)
+        else:
+            return BoundDispatchGroup(instance, self.group)
+
+
+class BoundDispatchGroup(NamedTuple):
+    zelf: Dispatch | Type[Dispatch]
+    group: str
+
+    def list_commands(self, *,
+                      all: bool = False) -> list[DispatchCommand]:
+        """list all :func:`~argclz.dispatch.annotations.dispatch` info in this group.
+
+        :param all: including hidden commands
+        :return: list of DispatchCommand
+        """
+        return self.zelf.list_commands(self.group, all=all)
+
+    def find_command(self, command: str) -> DispatchCommand | None:
+        """find :func:`~argclz.dispatch.annotations.dispatch` function according to *command* in this group.
+
+        :param command:  command or one of command's aliases
+        :return: found DispatchCommand
+        """
+        return self.zelf.find_command(command, group=self.group)
+
+    def invoke_command(self, command: str, *args, **kwargs) -> Any:
+        """invoke a :func:`~argclz.dispatch.annotations.dispatch` function in this group.
+
+        :param command:  command or one of command's aliases
+         :param args: positional arguments of the target function
+        :param kwargs: keyword arguments of the target function
+        :return: function's return
+        :raise DispatchCommandNotFound:
+        """
+        if isinstance(self.zelf, type):
+            raise TypeError()
+
+        if (info := self.find_command(command)) is None:
+            raise DispatchCommandNotFound(command, self.group)
+        return info(self.zelf, *args, **kwargs)
+
+
+def dispatch_graph(group: str) -> DispatchGroup:
+    """
+    Create a dispatch group.
+
+    **Example**
+
+        >>> class D(Dispatch):
+        ...     command_group = dispatch_graph('A')
+        ...     @command_group('A')
+        ...     def function_a(self, a, b, c=None):
+        ...         pass
+
+    dispatch_graph can be assign inside a :class:`Dispatch` (like example above) or
+    at the global level.
+
+    :param group: group name.
+    :return:
+    :raise TypeError: If it is assigned in a non- :class:`Dispatch` class.
+    """
+    return DispatchGroup(group)
 
 
 class CommandParameter(NamedTuple):
@@ -173,13 +322,17 @@ class CommandHelps(NamedTuple):
 
 class Dispatch:
     @classmethod
-    def list_commands(cls, group: str | None = ..., *, all: bool = False) -> list[DispatchCommand]:
-        """list all dispatch-decorated function info in *host*.
+    def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | None = ..., *,
+                      all: bool = False) -> list[DispatchCommand]:
+        """list all :func:`~argclz.dispatch.annotations.dispatch` functions.
 
         :param group: dispatch group.
         :param all: including hidden commands
         :return: list of DispatchCommand
         """
+        if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
+            group = group.group
+
         info: DispatchCommand
 
         ret = []
@@ -193,13 +346,17 @@ class Dispatch:
         return ret
 
     @classmethod
-    def find_command(cls, command: str, group: str | None = ...) -> DispatchCommand | None:
-        """find dispatch-decoratored function in *host* according to *command*.
+    def find_command(cls, command: str,
+                     group: str | DispatchGroup | BoundDispatchGroup | None = ...) -> DispatchCommand | None:
+        """find :func:`~argclz.dispatch.annotations.dispatch` function according to *command*.
 
-        :param command: command or command alias
+        :param command: command or one of command's aliases
         :param group: dispatch group
-        :return: found DispatchCommand
+        :return: found :class:`DispatchCommand`
         """
+        if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
+            group = group.group
+
         info: DispatchCommand
 
         for attr in dir(cls):
@@ -212,26 +369,26 @@ class Dispatch:
         return None
 
     def invoke_command(self, command: str, *args, **kwargs) -> Any:
-        """invoke a dispatch-decoratored function in default group.
+        """invoke a :func:`~argclz.dispatch.annotations.dispatch` function in the default group.
 
-        :param command: command or command alias
-        :param args: dispatch-decoratored function positional arguments
-        :param kwargs: dispatch-decoratored function keyword arguments
-        :return: function return
+        :param command: command or one of command's aliases
+        :param args: positional arguments of the target function
+        :param kwargs: keyword arguments of the target function
+        :return: target function's return
         :raise DispatchCommandNotFound:
         """
         if (info := self.find_command(command, None)) is None:
             raise DispatchCommandNotFound(command)
         return info(self, *args, **kwargs)
 
-    def invoke_group_command(self, group: str, command: str, *args, **kwargs) -> Any:
-        """invoke a dispatch-decoratored function in certain group.
+    def invoke_group_command(self, group: str | DispatchGroup | BoundDispatchGroup, command: str, *args, **kwargs) -> Any:
+        """invoke a :func:`~argclz.dispatch.annotations.dispatch` function in a certain group.
 
         :param group: dispatch group
-        :param command: command or command alias
-        :param args: dispatch-decoratored function positional arguments
-        :param kwargs: dispatch-decoratored function keyword arguments
-        :return: function return
+        :param command: command or one of command's aliases
+        :param args: positional arguments of the target function
+        :param kwargs: keyword arguments of the target function
+        :return: target function's return
         :raise DispatchCommandNotFound:
         """
         if (info := self.find_command(command, group)) is None:

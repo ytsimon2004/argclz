@@ -5,9 +5,15 @@
 .. autoclass:: {{ objname }}
    :members:
    :undoc-members:
-   :exclude-members: __init__, __new__
+   :exclude-members: __init__, __new__, count, index
    {% if module == "argclz.validator" and "Validator" in name -%}
    :special-members: __call__
+   {%- endif %}
+   {%- if module == "argclz.dispatch.core" and name == "DispatchCommand" -%}
+   :special-members: __call__
+   {%- endif %}
+   {%- if module == "argclz.dispatch.core" and name == "DispatchGroup" -%}
+   :special-members: __call__, __get__
    {%- endif %}
 
    {% block methods %}
@@ -18,8 +24,20 @@
 
    .. autosummary::
    {%- for item in methods %}
+   {%- if item not in ['index', 'count'] %}
       ~{{ name }}.{{ item }}
+   {%- endif %}
    {%- endfor %}
+   {%- endif %}
+   {%- if module == "argclz.validator" and "Validator" in name %}
+      ~{{ name }}.__call__
+   {%- endif %}
+   {%- if module == "argclz.dispatch.core" and name == "DispatchCommand" %}
+      ~{{ name }}.__call__
+   {%- endif %}
+   {%- if module == "argclz.dispatch.core" and name == "DispatchGroup" %}
+      ~{{ name }}.__call__
+      ~{{ name }}.__get__
    {%- endif %}
    {% endblock %}
 

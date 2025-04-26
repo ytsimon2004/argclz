@@ -56,7 +56,7 @@ class DispatchCommandBuilder:
               group: str = None,
               usage: str = None,
               hidden=False) -> DispatchCommand:
-        ret = DispatchCommand(None, group, command, aliases, order, usage, self.func, self.validators, hidden)
+        ret = DispatchCommand(group, command, aliases, order, usage, self.func, self.validators, hidden)
         setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)
         return ret
 
@@ -73,7 +73,7 @@ class TypeCasterWithValidator(Generic[T]):
     def __call__(self, value: str) -> T:
         raw_value = value
 
-        if self.caster is not None:
+        if self.caster is not None and isinstance(value, str):
             try:
                 value = self.caster(value)
             except BaseException as e:
