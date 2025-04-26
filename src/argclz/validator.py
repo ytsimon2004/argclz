@@ -1,378 +1,3 @@
-"""
-Validator Usage Guide
-=====================
-
-Overview
---------
-This guide demonstrates how to use the validator builders provided by our library. Each section
-provides short examples followed by a reference table of the builder’s methods.
-
-.. contents::
-   :local:
-   :depth: 2
-
-
-String Validation
--------------------
-use :attr:`ValidatorBuilder.str`
-
-
-Examples
-^^^^^^^^^^
-**Minimum String Length**::
-
-    from argclz import validator
-
-    class Opt:
-        # Must be at least 2 characters long
-        a: str = argument('-a', validator.str.length_in_range(2, None))
-
-    opt = Opt()
-    opt.a = 'Hi'    # OK
-    opt.a = ''      # Raises ValueError
-
-**Regex Matching**::
-
-    class Opt:
-        # Must match a letter followed by a digit, e.g. 'a1', 'b9'
-        a: str = argument('-a', validator.str.match(r'[a-z][0-9]'))
-
-    opt = Opt()
-    opt.a = 'a1'    # OK
-    opt.a = 'A1'    # Raises ValueError
-
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~StrValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`length_in_range(a, b) <StrValidatorBuilder.length_in_range>`
-     - Enforces a string length in [a, b]. Either bound may be ``None``.
-   * - :meth:`match(pattern) <StrValidatorBuilder.match>`
-     - Checks if the string matches a given regex pattern.
-   * - :meth:`starts_with(prefix) <StrValidatorBuilder.starts_with>`
-     - Checks if the string starts with ``prefix``.
-   * - :meth:`ends_with(suffix) <StrValidatorBuilder.ends_with>`
-     - Checks if the string ends with ``suffix``.
-   * - :meth:`contains(substring) <StrValidatorBuilder.contains>`
-     - Checks if the string contains the given substring.
-   * - :meth:`is_in(options) <StrValidatorBuilder.is_in>`
-     - Checks if the string is in the provided collection of allowed options.
-
-
-Integer Validation
--------------------
-use :attr:`ValidatorBuilder.int`
-
-Examples
-^^^^^^^^^^
-
-**Integer Range**::
-
-    class Opt:
-        # Must be >= 2
-        a: int = argument('-a', validator.int.in_range(2, None))
-
-    opt = Opt()
-    opt.a = 5   # OK
-    opt.a = 0   # Raises ValueError
-
-**Positivity**::
-
-    class Opt:
-        # Must be strictly positive
-        a: int = argument('-a', validator.int.positive(include_zero=False))
-
-    opt = Opt()
-    opt.a = 10  # OK
-    opt.a = 0   # Raises ValueError
-
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~IntValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`in_range(a, b) <IntValidatorBuilder.in_range>`
-     - Checks if integer is in [a, b]. Either bound may be ``None``.
-   * - :meth:`positive(include_zero=True) <IntValidatorBuilder.positive>`
-     - Checks if integer is >= 0 (if ``include_zero=True``) or > 0 otherwise.
-   * - :meth:`negative(include_zero=True) <IntValidatorBuilder.negative>`
-     - Checks if integer is <= 0 (if ``include_zero=True``) or < 0 otherwise.
-
-
-Float Validation
--------------------
-use :attr:`ValidatorBuilder.float`
-
-Examples
-^^^^^^^^^^^
-**Range + NaN Handling**::
-
-    class Opt:
-        # Must be < 100, NaN not allowed
-        a: float = argument('-a',
-            validator.float.in_range(None, 100).allow_nan(False)
-        )
-
-    opt = Opt()
-    opt.a = 3.14        # OK
-    opt.a = 123.45      # Raises ValueError (out of range)
-    opt.a = float('nan')# Raises ValueError (NaN not allowed)
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~FloatValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`in_range(a, b) <FloatValidatorBuilder.in_range>`
-     - Checks if float is in the open interval ``(a, b)``.
-   * - :meth:`in_range_closed(a, b) <FloatValidatorBuilder.in_range_closed>`
-     - Checks if float is in the closed interval ``[a, b]``.
-   * - :meth:`allow_nan(allow=True) <FloatValidatorBuilder.allow_nan>`
-     - Allows or disallows NaN values.
-   * - :meth:`positive(include_zero=True) <FloatValidatorBuilder.positive>`
-     - Checks if float is >= 0 (if ``include_zero=True``) or > 0 otherwise.
-   * - :meth:`negative(include_zero=True) <FloatValidatorBuilder.negative>`
-     - Checks if float is <= 0 (if ``include_zero=True``) or < 0 otherwise.
-
-
-List Validation
-----------------
-use :attr:`ValidatorBuilder.list`
-
-Examples
-^^^^^^^^^^^
-**List of Integers**::
-
-    class Opt:
-        # Must be a list of integers
-        a: list[int] = argument('-a', validator.list(int))
-
-    opt = Opt()
-    opt.a = [1, 2, 3]    # OK
-    opt.a = ['a', 2]     # Raises ValueError
-
-**Item Validation**::
-
-    class Opt:
-        # Each item must be non-negative
-        a: list[int] = argument('-a',
-            validator.list(int).on_item(validator.int.positive(True))
-        )
-
-    opt = Opt()
-    opt.a = [0, 2, 5]    # OK
-    opt.a = [1, -1]      # Raises ValueError
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~ListValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`length_in_range(a, b) <ListValidatorBuilder.length_in_range>`
-     - Enforces list length in [a, b].
-   * - :meth:`allow_empty(allow=True) <ListValidatorBuilder.allow_empty>`
-     - Allows or disallows an empty list.
-   * - :meth:`on_item(validator) <ListValidatorBuilder.on_item>`
-     - Applies a validator to each list item.
-
-
-Tuple Validation
------------------
-use :attr:`ValidatorBuilder.tuple`
-
-Examples
-^^^^^^^^^^
-**Fixed-Length Tuple**::
-
-    class Opt:
-        # Must be (str, int, float)
-        a: tuple[str, int, float] = argument(
-            '-a', validator.tuple(str, int, float)
-        )
-
-    opt = Opt()
-    opt.a = ('abc', 42, 3.14)   # OK
-    opt.a = ('abc', 42)        # Raises ValueError (too few elements)
-
-**Variable-Length**::
-
-    class Opt:
-        # Must be (str, int, ...) i.e. at least 'str + int', optionally more ints
-        a: tuple[str, int, ...] = argument(
-            '-a', validator.tuple(str, int, ...)
-        )
-
-    opt = Opt()
-    opt.a = ('x', 10)            # OK
-    opt.a = ('x', 10, 20, 30)    # OK
-    opt.a = ('x',)               # Raises ValueError (missing int)
-
-**Item-Validation**::
-
-    class Opt:
-        # Must be (str, int, float).
-        # The string must have a length <= 5,
-        # and the int must be >= 0 and <= 100.
-        a: tuple[str, int, float] = argument(
-            '-a',
-            validator.tuple(str, int, float)
-                .on_item(0, validator.str.length_in_range(None, 5))
-                .on_item(1, validator.int.in_range(0, 100))
-        )
-
-    opt = Opt()
-
-    # Passes all checks: str length=3, int in range [0..100], float is fine
-    opt.a = ('hey', 42, 3.14)
-
-    # Fails because the string is too long:
-    opt.a = ('excessive', 42, 1.2)
-    # Raises ValueError: str length over 5: "excessive"
-
-    # Fails because integer is out of range:
-    opt.a = ('hi', 999, 2.5)
-    # Raises ValueError: value out of range [0, 100]: 999
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~TupleValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`on_item(indexes, validator) <TupleValidatorBuilder.on_item>`
-     - Apply a validator to specific tuple positions, or ``None`` for all.
-   * - *(constructor)*
-     - Pass one int (e.g. 3) to enforce a fixed-length tuple with no type checks, or a tuple of types
-       like ``(str, int, float)``. The last type can be ``...`` for variable length.
-
-
-Path Validation
------------------
-use :attr:`ValidatorBuilder.path`
-
-Examples
-^^^^^^^^^^^^^^^^^^^^
-**Path suffix**::
-
-    class Opt:
-        a: Path = argument('-a', validator.path.is_suffix(['.csv', '.npy']))
-
-    opt = Opt()
-    opt.a = Path('.../*.csv')    # OK
-    opt.a = Path('.../*.txt')    # Raises ValueError
-
-
-Method Reference
-^^^^^^^^^^^^^^^^^^^^
-refer to :class:`~PathValidatorBuilder`
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method**
-     - **Description**
-   * - :meth:`is_suffix(suffix) <PathValidatorBuilder.is_suffix>`
-     - Check path suffix or in a list of suffixes
-   * - :meth:`is_exists() <PathValidatorBuilder.is_exists>`
-     - Check if path exists
-   * - :meth:`is_file() <PathValidatorBuilder.is_file>`
-     - Check if path is a file
-   * - :meth:`is_dir() <PathValidatorBuilder.is_dir>`
-     - Check if path is a directory
-
-
-
-
-Logical Combinators
-===================
-
-Examples
---------
-**OR Combination**::
-
-    class Opt:
-        # Must be int in [0,10] OR str length in [0,10]
-        a: int | str = argument(
-            '-a',
-            validator.any(
-                validator.int.in_range(0, 10),
-                validator.str.length_in_range(0, 10)
-            )
-        )
-
-    opt = Opt()
-    opt.a = 5            # OK (int in [0..10])
-    opt.a = 'abc'        # OK (length=3)
-    opt.a = 50           # Raises ValueError
-
-**AND Combination**::
-
-    class Opt:
-        # Must be non-negative AND non-positive => zero
-        a: int = argument('-a', validator.all(
-            validator.int.positive(include_zero=True),
-            validator.int.negative(include_zero=True)
-        ))
-
-    opt = Opt()
-    opt.a = 0   # OK
-    opt.a = 1   # Raises ValueError
-    opt.a = -1  # Raises ValueError
-
-Method Reference
-----------------
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - **Method/Class**
-     - **Description**
-   * - :meth:`validator.any(...) <ValidatorBuilder.any>` or ``|``
-     - Combine validators with logical OR; passing at least one is enough.
-   * - :meth:`validator.all(...) <ValidatorBuilder.all>` or ``&``
-     - Combine validators with logical AND; must pass them all.
-   * - ``OrValidatorBuilder``
-     - The class implementing OR logic.
-   * - ``AndValidatorBuilder``
-     - The class implementing AND logic.
-
-
-Error Handling
---------------
-If any validation fails:
-- A :class:`ValidatorFailError` (or subclass) is raised, often rethrown as ``ValueError``
-in higher-level frameworks.
-
-
-"""
 from __future__ import annotations
 
 import re
@@ -514,6 +139,7 @@ class ValidatorBuilder:
 
     @property
     def path(self):
+        """a path validator"""
         return PathValidatorBuilder()
 
     @classmethod
@@ -611,6 +237,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
 
 
 class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
+    """a str validator"""
     def __init__(self):
         super().__init__(str)
 
@@ -656,6 +283,7 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
 
 
 class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
+    """a int validator"""
     def __init__(self):
         super().__init__(int)
 
@@ -691,6 +319,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
 
 
 class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
+    """a float validator"""
     def __init__(self):
         super().__init__((int, float))
         self.__allow_nan = False
@@ -759,6 +388,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
 
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
+    """a list validator"""
     def __init__(self, element_type: type[T] = None):
         super().__init__()
         self._element_type = element_type
@@ -815,6 +445,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
 
 class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
+    """a tuple validator"""
     def __init__(self, element_type: tuple[int] | tuple[type[T], ...]):
         super().__init__()
 
@@ -891,7 +522,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
 
 class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
-
+    """a path validator"""
     def __init__(self):
         super().__init__(Path)
 

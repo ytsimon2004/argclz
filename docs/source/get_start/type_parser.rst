@@ -36,4 +36,4 @@ These can be used directly as `type=...` in any argument specification, offering
 
 .. seealso ::
 
-    see more types options :mod:`argclz.types`
+    see more types options :doc:`argclz.types <../api/argclz.types>`
