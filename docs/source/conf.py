@@ -42,7 +42,7 @@ autosummary_generate = True
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
 html_theme_options = {
-    "max_navbar_depth": 4,
+    "navigation_depth": 2,
     "show_toc_level": 4
 }
 

@@ -33,7 +33,7 @@ Parse command-line arguments for subcommands, each associated with a different p
      )
 
 1. sub-commands classes, which could be put at different python files.
-2. a function-interface entry point, which could be put at `__main__.py` to provide module-wise command-line interface.
+2. a function-interface entry point, which could be put at ``__main__.py`` to provide module-wise command-line interface.
 
 - **Run the script with -h**
 
@@ -53,7 +53,7 @@ Parse command-line arguments for subcommands, each associated with a different p
 
 .. prompt:: bash $
 
-    python script.py init --name demo
+    python -m my_module init --name demo
 
 - **Output**
 
@@ -64,7 +64,9 @@ Parse command-line arguments for subcommands, each associated with a different p
 
 sub_command_group
 ---------------------
-TODO
+The :func:`~argclz.commands.sub_command_group()` helper lets you declare nested subcommands directly on a single :class:`~argclz.core.AbstractParser` class.
+Under the hood it creates a top‐level positional choice of subcommand names, then delegates parsing to the matching inner class.
+
 
 .. code-block:: python
 
@@ -92,4 +94,21 @@ TODO
 
 .. code-block:: text
 
-    TODO
+    usage: my_script.py [-h] {a,b} ...
+
+    positional arguments:
+      {a,b}
+        a
+        b
+
+- **Run the script**
+
+.. prompt:: bash $
+
+    python my_script.py b -a 100
+
+- **Output**
+
+.. code-block:: text
+
+    do B 100

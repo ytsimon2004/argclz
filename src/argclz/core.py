@@ -460,7 +460,10 @@ def argument(*options: str, **kwargs):
 
     There are some special rules to treat common type:
 
-    TODO
+    - **Literal types**: ``Literal[...]`` annotations create a caster that restricts values to the specified literals.
+    - **Boolean flags**: annotating with ``bool`` automatically sets up a `store_true` or `store_false` action, making the option a flag.
+    - **Container types**: ``list[T]`` annotations infer a repeated option with `append` (or `extend`) action, converting each input to type ``T``.
+    - **Tuple types**: tuple annotations (e.g. ``tuple[int, ...]``) use a comma-separated parser to split and convert values into a tuple of ``T``.
 
     If the default type infered does not fit your application, you can give it directly.
 
