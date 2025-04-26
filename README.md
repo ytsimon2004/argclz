@@ -1,5 +1,6 @@
 # argclz
 
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/argclz)](https://pypi.org/project/argclz/)
 [![Documentation Status](https://readthedocs.org/projects/argp/badge/?version=latest)](https://argp.readthedocs.io/en/latest/)
 [![codecov](https://codecov.io/gh/ytsimon2004/argclz/branch/main/graph/badge.svg?token=HfO5frntJe)](https://codecov.io/gh/ytsimon2004/argclz)
 
