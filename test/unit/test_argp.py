@@ -208,6 +208,15 @@ class CopyArgsTest(unittest.TestCase):
         ano = Opt(opt)
         self.assertEqual(ano.a, '2')
 
+    def test_cloneable_on_dict(self):
+        class Opt(Cloneable):
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        opt = Opt({'a': 'A', 'b': 'B'})
+        self.assertEqual(opt.a, 'A')
+        self.assertEqual(opt.b, 'B')
+
     @patch('builtins.__import__', block_polars_import)
     def test_cloneable_without_polars(self):
         try:
