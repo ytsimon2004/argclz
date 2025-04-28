@@ -12,12 +12,12 @@ __all__ = ['Cloneable']
 
 class Cloneable:
     def __init__(self, ref: ArgumentParser | Cloneable | dict[str, Any] | pl.DataFrame | None = None, /, **kwargs):
-        if ref is not None:
+        if ref is not None or len(kwargs):
             _copy_argument(self, ref, kwargs)
 
 
 def _copy_argument(self: Cloneable, ref: Cloneable | dict[str, Any] | pl.DataFrame, kwargs: dict):
-    if isinstance(ref, Cloneable):
+    if ref is None or isinstance(ref, Cloneable):
         copy_argument(self, ref, **kwargs)
         return
 

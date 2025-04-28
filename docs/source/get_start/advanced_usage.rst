@@ -97,7 +97,8 @@ pass options between classes
 When working with structured data or shared configurations, you may want to **copy values**
 into an argument parser class without redefining or parsing them again.
 ``Clonable`` provides an ``__init__`` that accept an ``AbstractParser``, ``Clonable`` or ``dict``,
-then read and set all matched arguments or keys.
+then read and set all matched arguments or keys. It also allows to use keyword argument to overwrite
+the referred data during initialization.
 
 refer to :class:`~argclz.clone.Cloneable` and underlying :func:`~argclz.core.copy_argument`
 

@@ -113,6 +113,16 @@ class AsDictTest(unittest.TestCase):
         opt = with_defaults(Opt())
         self.assertDictEqual(as_dict(opt), {'a': 'default'})
 
+    def test_as_dict_on_list(self):
+        class Opt(Cloneable):
+            a: str = argument('-a', default='default')
+
+        opt = [Opt(a=1), Opt(a=2), Opt(a=3)]
+        self.assertListEqual(
+            [{'a': 1}, {'a': 2}, {'a': 3}],
+            as_dict(opt)
+        )
+
 
 class AbstractParserTest(unittest.TestCase):
     def test_exit_on_error(self):
@@ -214,6 +224,15 @@ class CopyArgsTest(unittest.TestCase):
             b: str = argument('-b')
 
         opt = Opt({'a': 'A', 'b': 'B'})
+        self.assertEqual(opt.a, 'A')
+        self.assertEqual(opt.b, 'B')
+
+    def test_cloneable_by_keywords(self):
+        class Opt(Cloneable):
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        opt = Opt(a='A', b='B')
         self.assertEqual(opt.a, 'A')
         self.assertEqual(opt.b, 'B')
 
