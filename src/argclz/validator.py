@@ -11,13 +11,16 @@ T = TypeVar('T')
 
 
 class ValidatorFailError(ValueError):
+    """
+    A special ValueError used in this module.
+    """
     pass
 
 
 class ValidatorFailOnTypeError(ValidatorFailError):
     """
     A special ValidatorFailError that is raised when type validation failure.
-    It is used for Validator#any() to exclude some error message.
+    It is used for :meth:`~argclz.validator.ValidatorBuilder.any()` to exclude some error message.
     """
     pass
 
@@ -33,7 +36,10 @@ class Validator:
         return True
 
     def freeze(self) -> Self:
+        """(internal use) return a copy of itself."""
         return self
+
+    # TODO add feature? auto-casting, for example: (str|Path)->Path
 
 
 class LambdaValidator(Validator, Generic[T]):
@@ -76,10 +82,12 @@ class LambdaValidator(Validator, Generic[T]):
                 raise ValidatorFailError(message(value))
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
-        return AndValidatorBuilder(self, validator)
+        """``validator & validator``"""
+        return AndValidatorBuilder(self) & validator
 
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
-        return OrValidatorBuilder(self, validator)
+        """``validator | validator``"""
+        return OrValidatorBuilder(self) | validator
 
     def freeze(self) -> Self:
         if isinstance(validator := self._validator, Validator):
@@ -230,14 +238,17 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         return self
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
-        return AndValidatorBuilder(self, validator)
+        """``validator & validator``"""
+        return AndValidatorBuilder(self) & validator
 
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
-        return OrValidatorBuilder(self, validator)
+        """``validator | validator``"""
+        return OrValidatorBuilder(self) | validator
 
 
 class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
     """a str validator"""
+
     def __init__(self):
         super().__init__(str)
 
@@ -271,12 +282,15 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
         self._add(lambda it: it.endswith(suffix), f'str does not end with {suffix}: "%s"')
         return self
 
-    def contains(self, text: str) -> StrValidatorBuilder:
+    def contains(self, *texts: str) -> StrValidatorBuilder:
         """Check if string values contain a substring"""
-        self._add(lambda it: text in it, f'str does not contain {text}: "%s"')
+        if len(texts) == 0:
+            raise ValueError('empty text list')
+
+        self._add(lambda it: any([text in it for text in texts]), f'str does not contain one of {texts}: "%s"')
         return self
 
-    def is_in(self, options: Collection[str]) -> StrValidatorBuilder:
+    def one_of(self, options: Collection[str]) -> StrValidatorBuilder:
         """Check if string is one of the allow options"""
         self._add(lambda it: it in options, f'str not in allowed set {options}: "%s"')
         return self
@@ -284,6 +298,7 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
 
 class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
     """a int validator"""
+
     def __init__(self):
         super().__init__(int)
 
@@ -320,6 +335,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
 
 class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
     """a float validator"""
+
     def __init__(self):
         super().__init__((int, float))
         self.__allow_nan = False
@@ -331,13 +347,16 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
     def in_range(self, a: float | None, b: float | None, /) -> Self:
         """Enforce an open-interval numeric range (a < value < b)"""
+        a = None if a is None else float(a) if isinstance(a, (int, float)) else a
+        b = None if b is None else float(b) if isinstance(b, (int, float)) else b
+
         match (a, b):
-            case (a, None):
-                self._add(lambda it: float(a) < it, f'value less than {a}: %f')
-            case (None, b):
-                self._add(lambda it: it < float(b), f'value over {b}: %f')
-            case (a, b):
-                self._add(lambda it: float(a) < it < float(b), f'value out of range ({a}, {b}): %f')
+            case (float(a), None):
+                self._add(lambda it: a < it, f'value less than {a}: %f')
+            case (None, float(b)):
+                self._add(lambda it: it < b, f'value over {b}: %f')
+            case (float(a), float(b)):
+                self._add(lambda it: a < it < b, f'value out of range ({a}, {b}): %f')
             case _:
                 raise TypeError()
 
@@ -345,13 +364,16 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
     def in_range_closed(self, a: float | None, b: float | None, /) -> Self:
         """ Enforce a closed-interval numeric range (a <= value <= b)"""
+        a = None if a is None else float(a) if isinstance(a, (int, float)) else a
+        b = None if b is None else float(b) if isinstance(b, (int, float)) else b
+
         match (a, b):
-            case (a, None):
-                self._add(lambda it: float(a) <= it, f'value less than {a}: %f')
-            case (None, b):
-                self._add(lambda it: it <= float(b), f'value over {b}: %f')
-            case (a, b):
-                self._add(lambda it: float(a) <= it <= float(b), f'value out of range [{a}, {b}]: %f')
+            case (float(a), None):
+                self._add(lambda it: a <= it, f'value less than {a}: %f')
+            case (None, float(b)):
+                self._add(lambda it: it <= b, f'value over {b}: %f')
+            case (float(a), float(b)):
+                self._add(lambda it: a <= it <= b, f'value out of range [{a}, {b}]: %f')
             case _:
                 raise TypeError()
         return self
@@ -389,6 +411,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
     """a list validator"""
+
     def __init__(self, element_type: type[T] = None):
         super().__init__()
         self._element_type = element_type
@@ -417,9 +440,10 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
         return self
 
-    def allow_empty(self, allow: bool = True):
+    def allow_empty(self, allow: bool = True) -> Self:
         """Allow or disallow empty lists"""
         self._allow_empty = allow
+        return self
 
     def on_item(self, validator: Callable[[Any], bool]) -> Self:
         """Apply an additional validator to each item in the list
@@ -446,12 +470,19 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
 class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
     """a tuple validator"""
+
     def __init__(self, element_type: tuple[int] | tuple[type[T], ...]):
         super().__init__()
 
         match element_type:
+            case ():
+                # XXX does validate for empty tuple meaningful?
+                #  No, so it will be interpreted as ...
+                element_type = (...,)
             case (int(length), ):
                 element_type = (None,) * length
+            case (int(length), e) if e is ...:
+                element_type = (None,) * length + (...,)
 
         self._element_type = element_type
 
@@ -464,30 +495,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
         :param item: A single index, a list of indices, or None for all indices
         :param validator: The validation callable to apply
         """
-        if item is None:
-            pass
-        elif isinstance(item, int):
-            if item < 0:
-                raise ValueError('should always use positive index')
-        else:
-            for index in item:
-                if index < 0:
-                    raise ValueError('should always use positive index')
-
-        # check range
-        if item is not None and len(self._element_type) > 0:
-            if isinstance(item, int):
-                et = self._element_type[item]
-                if et is ...:
-                    raise IndexError()
-            else:
-                for index in item:
-                    et = self._element_type[index]
-                    if et is ...:
-                        raise IndexError()
-
         self._add(TupleItemValidatorBuilder(item, validator))
-
         return self
 
     def __call__(self, value: Any) -> bool:
@@ -505,10 +513,10 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
                         raise ValidatorFailError(f'wrong element type at {i} : {e}')
 
                 if at_least_length > 0:
-                    last_element_type = element_type[at_least_length - 1]
-                    for i, e in zip(range(at_least_length, len(value)), value[at_least_length:]):
-                        if not element_isinstance(e, last_element_type):
-                            raise ValidatorFailError(f'wrong element type at {i} : {e}')
+                    if (last_element_type := element_type[at_least_length - 1]) is not None:
+                        for i, e in zip(range(at_least_length, len(value)), value[at_least_length:]):
+                            if not element_isinstance(e, last_element_type):
+                                raise ValidatorFailError(f'wrong element type at {i} : {e}')
 
             else:
                 if len(value) != len(element_type):
@@ -523,6 +531,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
 class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
     """a path validator"""
+
     def __init__(self):
         super().__init__(Path)
 
@@ -530,7 +539,7 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
         """Check path suffix or in a list of suffixes"""
         if isinstance(suffix, str):
             self._add(lambda it: it.suffix == suffix, f'suffix != {suffix}: %s')
-        elif isinstance(suffix, list | tuple):
+        elif isinstance(suffix, (list, tuple)):
             self._add(lambda it: it.suffix in suffix, f'suffix not in {suffix}: %s')
         else:
             raise TypeError('')

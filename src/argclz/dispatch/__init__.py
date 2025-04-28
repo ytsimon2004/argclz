@@ -1,2 +1,2 @@
 from .annotations import *
-from .core import Dispatch, DispatchCommandNotFound
+from .core import Dispatch, DispatchCommandNotFound, dispatch_graph

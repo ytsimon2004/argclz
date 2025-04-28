@@ -49,8 +49,8 @@ that let you specify constraints like numeric ranges, string length ranges, rege
 
 String Validation
 -------------------
-use :attr:`argclz.validator.ValidatorBuilder.str`
 
+use :doc:`validator.str <../api/_autosummary/argclz.validator.StrValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^
@@ -107,7 +107,7 @@ refer to :class:`~argclz.validator.StrValidatorBuilder`
 
 Integer Validation
 -------------------
-use :attr:`argclz.validator.ValidatorBuilder.int`
+use :doc:`validator.int <../api/_autosummary/argclz.validator.IntValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^
@@ -157,7 +157,7 @@ refer to :class:`~argclz.validator.IntValidatorBuilder`
 
 Float Validation
 -------------------
-use :attr:`argclz.validator.ValidatorBuilder.float`
+use :doc:`validator.float <../api/_autosummary/argclz.validator.FloatValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^^
@@ -200,7 +200,7 @@ refer to :class:`argclz.validator.FloatValidatorBuilder`
 
 List Validation
 ----------------
-use :attr:`argclz.validator.ValidatorBuilder.list`
+use :doc:`validator.list <../api/_autosummary/argclz.validator.ListValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^^
@@ -250,7 +250,7 @@ refer to :class:`argclz.validator.ListValidatorBuilder`
 
 Tuple Validation
 -----------------
-use :attr:`argclz.validator.ValidatorBuilder.tuple`
+use :doc:`validator.tuple <../api/_autosummary/argclz.validator.TupleValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^
@@ -330,7 +330,7 @@ refer to :class:`~argclz.validator.TupleValidatorBuilder`
 
 Path Validation
 -----------------
-use :attr:`argclz.validator.ValidatorBuilder.path`
+use :doc:`validator.path <../api/_autosummary/argclz.validator.PathValidatorBuilder>`
 
 Examples
 ^^^^^^^^^^^^^^^^^^^^
@@ -429,6 +429,7 @@ Method Reference
 Error Handling
 --------------
 If any validation fails:
-- A :class:`~argclz.validator.ValidatorFailError` (or subclass) is raised, often rethrown as ``ValueError``
-in higher-level frameworks.
+
+- A :class:`~argclz.validator.ValidatorFailError` (or subclass) is raised. It can be captured as a ``ValueError``
+  in higher-level frameworks.
 

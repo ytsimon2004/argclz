@@ -92,12 +92,15 @@ refer to :func:`~argclz.core.aliased_argument()`
 
 
 pass options between classes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------
 
 When working with structured data or shared configurations, you may want to **copy values**
 into an argument parser class without redefining or parsing them again.
+``Clonable`` provides an ``__init__`` that accept an ``AbstractParser``, ``Clonable`` or ``dict``,
+then read and set all matched arguments or keys. It also allows to use keyword argument to overwrite
+the referred data during initialization.
 
-refer to :class:`~argclz.clone.Cloneable`
+refer to :class:`~argclz.clone.Cloneable` and underlying :func:`~argclz.core.copy_argument`
 
 .. code-block:: python
 
@@ -112,3 +115,27 @@ refer to :class:`~argclz.clone.Cloneable`
     dst = Config(src)
     assert dst.path == '/data/file'
     assert dst.debug is True
+
+If ``polars`` is installed, then ``Clonable`` allows to read values from a single row dataframe.
+
+.. code-block:: python
+
+    import polars as pl
+    from argclz import Cloneable, argument
+
+    class Config(Clonable):
+        type: str = argument('--type')
+        path: str = argument('--path')
+
+    src = pl.DataFrame([{'type':'file', 'path':'123.txt'}])
+    dst = Clonable(src)
+    assert dst.type == 'file'
+    assert dst.path == '123.txt'
+
+For a multi-row dataframe, you can use ``Config`` likes:
+
+.. code-block:: python
+
+    for data in df.item_rows(named=True):
+        config = Config(data)
+        ...

@@ -575,6 +575,7 @@ class AliasArgument(Argument):
     """
     (internal) Do not use class directly.
     """
+
     def __init__(self, *options,
                  aliases: dict[str, Any],
                  **kwargs):
@@ -850,12 +851,30 @@ def with_defaults(instance: T) -> T:
     return instance
 
 
+@overload
+def as_dict(instance: list[T]) -> list[dict[str, Any]]:
+    pass
+
+
+@overload
 def as_dict(instance: T) -> dict[str, Any]:
-    """collect all argument attributes into a dictionary with attribute name to its value.
+    pass
+
+
+def as_dict(instance):
+    """
+    Collect all argument attributes into a dictionary with attribute name to its value.
+    It *instance* is a list, it works like ``list(map(as_dict, instance))``.
 
     :param instance: any instance that contains ``argument``.
     :return: A dictionary mapping argument attribute names to their values
     """
+    if isinstance(instance, list):
+        if len(instance) == 0:
+            return []
+
+        return list(map(as_dict, instance))
+
     ret = {}
     for arg in foreach_arguments(instance):
         try:

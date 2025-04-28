@@ -5,6 +5,8 @@ parse_command_args
 ---------------------
 Parse command-line arguments for subcommands, each associated with a different parser class
 
+refer to :func:`~argclz.commands.parse_command_args()`
+
 **Example usage**
 
 .. code-block:: python

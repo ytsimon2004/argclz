@@ -261,6 +261,105 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(capture.exception.args[0], 'run_a already frozen')
 
 
+class TestDispatchGroup(unittest.TestCase):
+    def test_dispatch_group(self):
+        class Opt(SimpleDispatch):
+            g = dispatch_graph('A')
+
+            @dispatch('A')
+            def run_a(self):
+                self.r = 'AAA'
+
+            @g('A')
+            def run_a_in_g(self):
+                self.r = 'GGG'
+
+            def run(self):
+                self.g.invoke_command(self.c, *self.a)
+
+        ret = Opt().main(['A'])
+        self.assertEqual(ret.r, 'GGG')
+
+    def test_list_commands(self):
+        class Opt(SimpleDispatch):
+            g = dispatch_graph('A')
+
+            @dispatch('A')
+            def run_a(self):
+                pass
+
+            @g('B')
+            def run_b_in_g(self):
+                pass
+
+            @g('C')
+            def run_c_in_g(self):
+                pass
+
+        commands = Opt.g.list_commands()
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['B', 'C'])
+
+    def test_use_group(self):
+        class Opt(SimpleDispatch):
+            g = dispatch_graph('A')
+            r: str = None
+
+            @g('A')
+            def run_a(self):
+                self.r = 'A'
+
+        opt = Opt()
+        commands = opt.list_commands(Opt.g)
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['A'])
+
+        commands = opt.list_commands(opt.g)
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['A'])
+
+        command = opt.find_command('A', Opt.g)
+        self.assertEqual(command.command, 'A')
+        command = opt.find_command('A', opt.g)
+        self.assertEqual(command.command, 'A')
+
+        opt.r = None
+        self.assertIsNone(opt.r)
+        opt.invoke_group_command(Opt.g, 'A')
+        self.assertEqual(opt.r, 'A')
+
+        opt.r = None
+        self.assertIsNone(opt.r)
+        opt.invoke_group_command(opt.g, 'A')
+        self.assertEqual(opt.r, 'A')
+
+    def test_use_group_outside_class(self):
+        g = dispatch_graph('A')
+
+        class Opt(SimpleDispatch):
+            r: str = None
+
+            @g('A')
+            def run_a(self):
+                self.r = 'A'
+
+        opt = Opt()
+        commands = opt.list_commands(g)
+        commands = [it.command for it in commands]
+        self.assertListEqual(commands, ['A'])
+
+        command = opt.find_command('A', g)
+        self.assertEqual(command.command, 'A')
+
+        opt.r = None
+        self.assertIsNone(opt.r)
+        opt.invoke_group_command(g, 'A')
+        self.assertEqual(opt.r, 'A')
+
+    def test_use_in_non_Dispatch(self):
+        with self.assertRaises(RuntimeError):
+            class Opt:
+                g = dispatch_graph('A')
 
 
 class PrintHelpTest(unittest.TestCase):

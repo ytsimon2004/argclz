@@ -10,7 +10,7 @@ __all__ = [
 
 T = TypeVar('T')
 Method = TypeVar('Method', bound=MethodType)
-Decorator = Callable[[Method], Method]  # decorator
+Decorator = TypeVar('Decorator', bound=Callable[[Method], Method])  # decorator
 
 
 def dispatch(command: str,
@@ -20,7 +20,7 @@ def dispatch(command: str,
              usage: str = None,
              hidden=False) -> Decorator:
     """
-    A decorator that mark a function a dispatch target function.
+    A decorator that mark a function as a dispatch target function.
 
     All functions decorated in same dispatch group should have save
     function signature (at least for non-default parameters). For example:

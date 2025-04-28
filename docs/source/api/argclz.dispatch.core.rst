@@ -11,5 +11,16 @@ argclz.dispatch.core
    :nosignatures:
 
    DispatchCommand
+   CommandParameter
    DispatchCommandNotFound
    Dispatch
+   DispatchGroup
+   BoundDispatchGroup
+
+.. rubric:: Functions
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   dispatch_graph
