@@ -357,7 +357,8 @@ class TestDispatchGroup(unittest.TestCase):
         self.assertEqual(opt.r, 'A')
 
     def test_use_in_non_Dispatch(self):
-        with self.assertRaises(RuntimeError):
+        # python version: >= 3.12 (TypeError), otherwise RuntimeError
+        with self.assertRaises((RuntimeError, TypeError)):
             class Opt:
                 g = dispatch_group('A')
 
