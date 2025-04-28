@@ -53,8 +53,8 @@ This is useful when two or more options conflict and cannot be used together.
 
     class MyArgs(AbstractParser):
 
-        output_json: bool = argument('--json', ex_group='output', action='store_true', help='Output as JSON')
-        output_yaml: bool = argument('--yaml', ex_group='output', action='store_true', help='Output as YAML')
+        output_json: bool = argument('--json', ex_group='output', help='Output as JSON')
+        output_yaml: bool = argument('--yaml', ex_group='output', help='Output as YAML')
 
 
 - **run the script with mutually exclusive options**

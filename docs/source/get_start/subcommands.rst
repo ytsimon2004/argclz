@@ -22,7 +22,7 @@ refer to :func:`~argclz.commands.parse_command_args()`
     # example_2.py
     class BuildCmd(AbstractParser): # [1]
         DESCRIPTION = 'run build'
-        release: bool = argument('--release', action='store_true')
+        release: bool = argument('--release')
 
         def run(self):
           print("Building in release mode" if self.release else "Building in debug mode")

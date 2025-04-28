@@ -23,4 +23,4 @@ argclz.dispatch.core
    :toctree: _autosummary
    :nosignatures:
 
-   dispatch_graph
+   dispatch_group

@@ -108,7 +108,7 @@ refer to :class:`~argclz.clone.Cloneable` and underlying :func:`~argclz.core.cop
 
     class Config(Cloneable):
         path: str = argument('--path')
-        debug: bool = argument('--debug', action='store_true')
+        debug: bool = argument('--debug')
 
     # Copy from another instance
     src = Config(path='/data/file', debug=True)

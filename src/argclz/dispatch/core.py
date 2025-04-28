@@ -10,7 +10,7 @@ from typing_extensions import Self
 __all__ = [
     'DispatchCommand',
     'DispatchCommandNotFound',
-    'dispatch_graph',
+    'dispatch_group',
     'Dispatch',
 ]
 
@@ -139,7 +139,7 @@ class DispatchGroup(NamedTuple):
         **Example**
 
         >>> class D(Dispatch):
-        ...     command_group = dispatch_graph('A')
+        ...     command_group = dispatch_group('A')
         ...     @command_group('A')
         ...     def function_a(self, a, b, c=None):
         ...         pass
@@ -202,19 +202,19 @@ class BoundDispatchGroup(NamedTuple):
         return info(self.zelf, *args, **kwargs)
 
 
-def dispatch_graph(group: str) -> DispatchGroup:
+def dispatch_group(group: str) -> DispatchGroup:
     """
     Create a dispatch group.
 
     **Example**
 
         >>> class D(Dispatch):
-        ...     command_group = dispatch_graph('A')
+        ...     command_group = dispatch_group('A')
         ...     @command_group('A')
         ...     def function_a(self, a, b, c=None):
         ...         pass
 
-    dispatch_graph can be assign inside a :class:`Dispatch` (like example above) or
+    dispatch_group can be assign inside a :class:`Dispatch` (like example above) or
     at the global level.
 
     :param group: group name.

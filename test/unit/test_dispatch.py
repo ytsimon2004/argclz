@@ -264,7 +264,7 @@ class TestDispatch(unittest.TestCase):
 class TestDispatchGroup(unittest.TestCase):
     def test_dispatch_group(self):
         class Opt(SimpleDispatch):
-            g = dispatch_graph('A')
+            g = dispatch_group('A')
 
             @dispatch('A')
             def run_a(self):
@@ -282,7 +282,7 @@ class TestDispatchGroup(unittest.TestCase):
 
     def test_list_commands(self):
         class Opt(SimpleDispatch):
-            g = dispatch_graph('A')
+            g = dispatch_group('A')
 
             @dispatch('A')
             def run_a(self):
@@ -302,7 +302,7 @@ class TestDispatchGroup(unittest.TestCase):
 
     def test_use_group(self):
         class Opt(SimpleDispatch):
-            g = dispatch_graph('A')
+            g = dispatch_group('A')
             r: str = None
 
             @g('A')
@@ -334,7 +334,7 @@ class TestDispatchGroup(unittest.TestCase):
         self.assertEqual(opt.r, 'A')
 
     def test_use_group_outside_class(self):
-        g = dispatch_graph('A')
+        g = dispatch_group('A')
 
         class Opt(SimpleDispatch):
             r: str = None
@@ -359,7 +359,7 @@ class TestDispatchGroup(unittest.TestCase):
     def test_use_in_non_Dispatch(self):
         with self.assertRaises(RuntimeError):
             class Opt:
-                g = dispatch_graph('A')
+                g = dispatch_group('A')
 
 
 class PrintHelpTest(unittest.TestCase):
