@@ -357,7 +357,7 @@ class TestDispatchGroup(unittest.TestCase):
         self.assertEqual(opt.r, 'A')
 
     def test_use_in_non_Dispatch(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(RuntimeError):
             class Opt:
                 g = dispatch_graph('A')
 

@@ -1,8 +1,9 @@
 import unittest
+from pathlib import Path
+from typing import Any
 
 from argclz import *
 from argclz.core import parse_args
-from argclz.validator import ValidatorFailOnTypeError
 
 
 class TestValidator(unittest.TestCase):
@@ -64,7 +65,6 @@ class TestValidator(unittest.TestCase):
             Opt().a = ''
 
 
-
 class TestValidateBuilder(unittest.TestCase):
 
     def test_type_error(self):
@@ -72,7 +72,15 @@ class TestValidateBuilder(unittest.TestCase):
             a: str = argument('-a', validator.str)
 
         opt = Opt()
-        with self.assertRaises(ValidatorFailOnTypeError):
+        with self.assertRaises(ValueError):
+            opt.a = 1
+
+    def test_validator_wrap_lambda(self):
+        class Opt:
+            a: str = argument('-a', validator(lambda it: isinstance(it, str)))
+
+        opt = Opt()
+        with self.assertRaises(ValueError):
             opt.a = 1
 
     def test_str_in_range(self):
@@ -95,6 +103,11 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.c = '12345678'
 
+    def test_str_in_range_type_error(self):
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: str = argument('-a', validator.str.length_in_range('a', None))
+
     def test_str_match(self):
         class Opt:
             a: str = argument('-a', validator.str.match(r'[a-z][0-9]'))
@@ -115,9 +128,26 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = 'Y!@#X'
 
-    def test_str_is_in(self):
+    def test_str_contains(self):
         class Opt:
-            a: str = argument('-a', validator.str.is_in(['opt1', 'opt2']))
+            a: str = argument('-a', validator.str.contains('00'))
+            b: str = argument('-a', validator.str.contains('00', '11'))
+
+        opt = Opt()
+        opt.a = 'x001'
+
+        with self.assertRaises(ValueError):
+            opt.a = 'x110'
+
+        opt.b = 'x001'
+        opt.b = 'x011'
+
+        with self.assertRaises(ValueError):
+            opt.b = 'x101'
+
+    def test_str_one_of(self):
+        class Opt:
+            a: str = argument('-a', validator.str.one_of(['opt1', 'opt2']))
 
         opt = Opt()
         opt.a = 'opt1'
@@ -144,6 +174,78 @@ class TestValidateBuilder(unittest.TestCase):
             opt.c = 0
         with self.assertRaises(ValueError):
             opt.c = 10
+
+    def test_int_in_range_type_error(self):
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: int = argument('-a', validator.int.in_range('2', None))
+
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: int = argument('-a', validator.int.in_range(2.1, None))
+
+    def test_float_in_range(self):
+        class Opt:
+            a: float = argument('-a', validator.float.in_range(2.5, None))
+            b: float = argument('-b', validator.float.in_range(None, 2.5))
+            c: float = argument('-c', validator.float.in_range(2.1, 3.9))
+
+        opt = Opt()
+        opt.a = 3
+        opt.b = 2
+        opt.c = 2.5
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+        with self.assertRaises(ValueError):
+            opt.b = 10
+        with self.assertRaises(ValueError):
+            opt.c = 0
+        with self.assertRaises(ValueError):
+            opt.c = 10
+        with self.assertRaises(ValueError):
+            opt.a = 2.5
+        with self.assertRaises(ValueError):
+            opt.b = 2.5
+        with self.assertRaises(ValueError):
+            opt.c = 2.1
+
+    def test_float_in_range_closed(self):
+        class Opt:
+            a: float = argument('-a', validator.float.in_range_closed(2.5, None))
+            b: float = argument('-b', validator.float.in_range_closed(None, 2.5))
+            c: float = argument('-c', validator.float.in_range_closed(2.1, 3.9))
+
+        opt = Opt()
+        opt.a = 3
+        opt.b = 2
+        opt.c = 2.5
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+        with self.assertRaises(ValueError):
+            opt.b = 10
+        with self.assertRaises(ValueError):
+            opt.c = 0
+        with self.assertRaises(ValueError):
+            opt.c = 10
+
+        opt.a = 2.5
+        opt.b = 2.5
+        opt.c = 2.1
+
+    def test_float_in_range_type_error(self):
+        class Opt:
+            a: float = argument('-a', validator.float.in_range(2.0, None))
+            b: float = argument('-a', validator.float.in_range(2, None))
+
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: float = argument('-a', validator.float.in_range('2', None))
+
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: float = argument('-a', validator.float.in_range_closed('2', None))
 
     def test_float_positive(self):
         class Opt:
@@ -186,6 +288,45 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             opt.a = -10
+
+    def test_list_in_range(self):
+        class Opt:
+            a: list[str] = argument('-a', validator.list().length_in_range(2, None))
+            b: list[str] = argument('-a', validator.list().length_in_range(None, 2))
+            c: list[str] = argument('-a', validator.list().length_in_range(2, 4))
+
+        opt = Opt()
+        opt.a = ['1', '2', '3']
+        opt.b = []
+        opt.b = ['1']
+        opt.c = ['1', '2']
+
+        with self.assertRaises(ValueError):
+            opt.a = []
+        with self.assertRaises(ValueError):
+            opt.c = []
+
+    def test_list_in_range_type_error(self):
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: list[str] = argument('-a', validator.list().length_in_range(2.0, None))
+        with self.assertRaises(TypeError):
+            class Opt:
+                a: list[str] = argument('-a', validator.list().length_in_range('2', None))
+
+    def test_list_allow_empty(self):
+        class Opt:
+            a: list[str] = argument('-a', validator.list().allow_empty(True))
+            b: list[str] = argument('-b', validator.list().allow_empty(False))
+
+        opt = Opt()
+        opt.a = ['a']
+        opt.b = ['a']
+
+        opt.a = []
+
+        with self.assertRaises(ValueError):
+            opt.b = []
 
     def test_list_element_type(self):
         class Opt:
@@ -245,6 +386,53 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'at index 1, not a non-negative value : -1')
 
+    def test_tuple_length(self):
+        class Opt:
+            a: tuple[str, str] = argument('-a', validator.tuple(2))
+
+        opt = Opt()
+        opt.a = ('a', 'b')
+
+        with self.assertRaises(ValueError):
+            opt.a = ()
+
+        with self.assertRaises(ValueError):
+            opt.a = ['a', 'b']
+
+        with self.assertRaises(ValueError):
+            opt.a = ('a',)
+
+        with self.assertRaises(ValueError):
+            opt.a = ('a', 'b', 'c')
+
+    def test_tuple_at_least_length(self):
+        class Opt:
+            a: tuple[str, ...] = argument('-a', validator.tuple(2, ...))
+
+        opt = Opt()
+        opt.a = ('a', 'b')
+        opt.a = ('a', 'b', 'c')
+        opt.a = ('a', 'b', 'c', 'd')
+
+        with self.assertRaises(ValueError):
+            opt.a = ()
+
+        with self.assertRaises(ValueError):
+            opt.a = ['a', 'b']
+
+        with self.assertRaises(ValueError):
+            opt.a = ('a',)
+
+    def test_tuple_at_least_length_from_zero(self):
+        class Opt:
+            a: tuple[str, ...] = argument('-a', validator.tuple(0, ...))
+
+        opt = Opt()
+        opt.a = ()
+        opt.a = ('a',)
+        opt.a = ('a', 'b')
+        opt.a = ('a', 'b', 'c')
+
     def test_tuple_element_type(self):
         class Opt:
             a: tuple[str, int, float] = argument(
@@ -287,6 +475,8 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             opt.a = (0, 0)
+        with self.assertRaises(ValueError):
+            opt.a = ('0', 1, '2')
 
     def test_tuple_element_validating(self):
         class Opt:
@@ -309,6 +499,43 @@ class TestValidateBuilder(unittest.TestCase):
             opt.a = ('12', 100, 0.0)
         self.assertEqual(capture.exception.args[0],
                          'at index 1, value out of range [0, 10]: 100')
+
+    def test_tuple_element_validating_on_last(self):
+        class Opt:
+            a: tuple[Any, ...] = argument('-a', validator.tuple(...).on_item(-1, validator.int))
+
+        opt = Opt()
+        opt.a = (0,)
+        opt.a = ('0', 1)
+        opt.a = ('0', '1', 2)
+
+        with self.assertRaises(ValueError):
+            opt.a = ()
+        with self.assertRaises(ValueError):
+            opt.a = ('a')
+        with self.assertRaises(ValueError):
+            opt.a = (0, 'b')
+
+    def test_path_is_suffix(self):
+        class Opt:
+            a: Path = argument('-a', validator.path.is_suffix(['.txt', '.csv']))
+
+        opt = Opt()
+        opt.a = Path('123.txt')
+        opt.a = Path('123.csv')
+        opt.a = Path('.123.csv')
+        opt.a = Path('a_folder/123.csv')
+        opt.a = Path('a_folder/321.csv.txt')
+        opt.a = Path('a_folder/321.backup.txt')
+
+        with self.assertRaises(ValueError):
+            opt.a = Path('a_folder/.txt')
+
+        with self.assertRaises(ValueError):
+            opt.a = Path('a_folder/')
+
+        with self.assertRaises(ValueError):
+            opt.a = Path('a_folder/123.txt.backup')
 
     def test_optional(self):
         class Opt:
@@ -371,6 +598,28 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'str length out of range [0, 10]: "1111111111111"')
 
+    def test_any_then_or(self):
+        class Opt:
+            a: int | str = argument('-a', (
+                    validator.int.in_range(0, 10) | validator.float.in_range(0, 10) | validator.str.length_in_range(0, 10)
+            ))
+
+        opt = Opt()
+        opt.a = 3
+        opt.a = 3.0
+        opt.a = '123'
+
+    def test_or_then_any(self):
+        class Opt:
+            a: int | str = argument('-a', (
+                    validator.int.in_range(0, 10) | (validator.float.in_range(0, 10) | validator.str.length_in_range(0, 10))
+            ))
+
+        opt = Opt()
+        opt.a = 3
+        opt.a = 3.0
+        opt.a = '123'
+
     def test_all(self):
         class Opt:
             a: int = argument('-a', validator.all(
@@ -413,6 +662,42 @@ class TestValidateBuilder(unittest.TestCase):
 
         self.assertEqual(capture.exception.args[0],
                          'not a non-negative value : -1')
+
+    def test_all_then_and(self):
+        class Opt:
+            a: str = argument('-a', (
+                    validator.str.length_in_range(2, None) & validator.str.length_in_range(None, 5) & validator.str.contains('A')
+            ))
+
+        opt = Opt()
+        opt.a = '00A00'
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+
+        with self.assertRaises(ValueError):
+            opt.a = '0'
+
+        with self.assertRaises(ValueError):
+            opt.a = '01234'
+
+    def test_and_then_all(self):
+        class Opt:
+            a: str = argument('-a', (
+                    validator.str.length_in_range(2, None) & (validator.str.length_in_range(None, 5) & validator.str.contains('A'))
+            ))
+
+        opt = Opt()
+        opt.a = '00A00'
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+
+        with self.assertRaises(ValueError):
+            opt.a = '0'
+
+        with self.assertRaises(ValueError):
+            opt.a = '01234'
 
     def test_tuple_union_length(self):
         class Opt:
