@@ -62,7 +62,7 @@ with_options
 Option class can be composed by inherition. Child option class can also change the value from parent's
 argument. As well as disable it (by replacing a value)
 
-refer to :func:`~argclz.core.with_options()`
+refer to :doc:`argument.with_option <../api/_autosummary/argclz.core.Argument.with_option>`
 
 Use together with :func:`~argclz.core.as_argument()`
 
