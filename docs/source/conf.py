@@ -71,6 +71,6 @@ html_theme_options = {
 }
 
 # -- Copy Button --------------------------------
-copybutton_prompt_text = r'^(>>> |\.\.\. |\$ )'
+copybutton_prompt_text = r'^\$ '
 copybutton_prompt_is_regexp = True
 copybutton_remove_prompts = True

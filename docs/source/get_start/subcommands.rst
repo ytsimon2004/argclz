@@ -53,9 +53,9 @@ refer to :func:`~argclz.commands.parse_command_args()`
 
 - **Run the script**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python -m my_module init --name demo
+   $ python -m my_module init --name demo
 
 - **Output**
 
@@ -105,9 +105,9 @@ Under the hood it creates a top‐level positional choice of subcommand names, t
 
 - **Run the script**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python my_script.py b -a 100
+    $ python my_script.py b -a 100
 
 - **Output**
 

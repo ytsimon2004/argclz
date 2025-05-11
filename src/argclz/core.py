@@ -150,7 +150,8 @@ class AbstractParser(metaclass=abc.ABCMeta):
         return pp
 
     def run(self):
-        """called after :meth:`~argclz.core.ArgumentParser.main()`"""
+        """called after :meth:`~argclz.core.ArgumentParser.main()`.
+        Used for runs the main execution logic of the object"""
         pass
 
     def __str__(self):

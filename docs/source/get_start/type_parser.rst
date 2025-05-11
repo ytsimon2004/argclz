@@ -24,9 +24,9 @@ These can be used directly as `type=...` in any argument specification, offering
 
 - **run the script with**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python script.py --anno 0.3,0.5,0.9
+    $ python script.py --anno 0.3,0.5,0.9
 
 - **output**
 

@@ -59,9 +59,9 @@ refer to :func:`~argclz.core.argument()`
 
 **run the script with**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python my_script.py --name Alice --count 3 --verbose
+   $ python my_script.py --name Alice --count 3 --verbose
 
 **output**
 
@@ -107,9 +107,9 @@ shown in help messages and documentation, not the actual variable name.
 
 - **run the script with**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python my_script.py data.npy
+    $ python my_script.py data.npy
 
 - **output**
 
@@ -152,9 +152,9 @@ refer to :func:`~argclz.core.var_argument()`
 
 - **run the script with**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-  python script.py apple banana cherry
+  $ python script.py apple banana cherry
 
 - **output**
 

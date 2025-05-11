@@ -59,9 +59,9 @@ This is useful when two or more options conflict and cannot be used together.
 
 - **run the script with mutually exclusive options**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python my_script.py --json test.json --yaml test.yaml
+    $ python my_script.py --json test.json --yaml test.yaml
 
 
 .. code-block:: text

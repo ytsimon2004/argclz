@@ -31,9 +31,9 @@ This is useful for developer-only flags, debugging tools, or deprecated options.
 
 - **But the script still accepts the argument:**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python my_script.py --debug
+    $ python my_script.py --debug
 
 .. code-block:: text
 
@@ -68,9 +68,9 @@ refer to :func:`~argclz.core.aliased_argument()`
 
 - **run the script with**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python script.py --low
+    $ python script.py --low
 
 - **output**
 
@@ -80,9 +80,9 @@ refer to :func:`~argclz.core.aliased_argument()`
 
 - **you can also run**
 
-.. prompt:: bash $
+.. code-block:: bash
 
-    python script.py --level medium
+    $ python script.py --level medium
 
 - **output**
 
