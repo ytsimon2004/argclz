@@ -338,17 +338,7 @@ class Argument(object):
         :return:
         """
         try:
-            if 'help' in self.kwargs and self.kwargs['help'] is not argparse.SUPPRESS:
-                help_text = self.kwargs['help'] or ""
-                if 'default' in self.kwargs and '(default:' not in help_text:
-                    default = self.kwargs['default']
-                    if isinstance(default, str):
-                        default = f'"{default}"'
-                    help_text += f' (default: {default})'
-                    self.kwargs['help'] = help_text
-
             return ap.add_argument(*self.options, **self.kwargs, dest=self.attr)
-
         except TypeError as e:
             if isinstance(instance, type):
                 name = instance.__name__

@@ -66,6 +66,7 @@ def complete_arg_kwargs(self: Argument):
 
     _complete_arg_kwargs_help_with_default(self)
 
+
 def _complete_arg_kwargs_for_bool(self: Argument):
     assert self.attr_type == bool
 
