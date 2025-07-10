@@ -183,6 +183,70 @@ options:
 text
 """)
 
+    def test_print_default_bool_value(self):
+        class Opt(AbstractParser):
+            a: bool = argument('-a', help='A')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a]
+
+options:
+  -h, --help  show this help message and exit
+  -a          A (default: False)
+""")
+
+    def test_print_default_str_value(self):
+        class Opt(AbstractParser):
+            a: str = argument('-a', default="", help='A')
+            b: str = argument('-b', default=None, help='B')
+            c: str = argument('-c', default="default", help='C')
+            d: str = argument('-d', help='D')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C] [-d D]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        A (default: '')
+  -b B        B (default: None)
+  -c C        C (default: 'default')
+  -d D        D
+""")
+
+    def test_print_default_int_value(self):
+        class Opt(AbstractParser):
+            a: int = argument('-a', default=0, help='A')
+            b: int = argument('-b', default=100, help='B')
+            c: int = argument('-c', help='C')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        A (default: 0)
+  -b B        B (default: 100)
+  -c C        C
+""")
+
+    def test_print_default_str_value_with_place_holder(self):
+        class Opt(AbstractParser):
+            a: str = argument('-a', default="", help='A (default={DEFAULT})')
+            b: str = argument('-b', default=None, help='B. use default value: {DEFAULT}')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        A (default='')
+  -b B        B. use default value: None
+""")
+
 
 if __name__ == '__main__':
     unittest.main()
