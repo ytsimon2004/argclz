@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from types import UnionType
 from typing import TypeVar, Union, Literal, get_origin, get_args, Any, TYPE_CHECKING
 
@@ -63,6 +64,7 @@ def complete_arg_kwargs(self: Argument):
     if get_origin(self.attr_type) is Literal:
         _complete_arg_kwargs_for_literal(self)
 
+    _complete_arg_kwargs_help_with_default(self)
 
 def _complete_arg_kwargs_for_bool(self: Argument):
     assert self.attr_type == bool
@@ -128,3 +130,12 @@ def _complete_arg_kwargs_for_literal(self: Argument):
     self.kwargs.setdefault('metavar', '|'.join(literal_values))
 
 
+def _complete_arg_kwargs_help_with_default(self: Argument):
+    help_text: str
+    if (help_text := self.kwargs.get('help', None)) not in (None, argparse.SUPPRESS):
+        if (default_value := self.kwargs.get('default', argparse.SUPPRESS)) is not argparse.SUPPRESS:
+            if '{DEFAULT}' in help_text:
+                text = help_text.format(DEFAULT=repr(default_value))
+            else:
+                text = help_text + " (default: " + repr(default_value) + ")"
+            self.kwargs['help'] = text
