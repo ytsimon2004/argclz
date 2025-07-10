@@ -6,7 +6,6 @@ from argclz.core import print_help
 
 class PrintHelpTest(unittest.TestCase):
 
-
     def test_print_help_required_argument(self):
         class Opt(AbstractParser):
             a: bool = argument('-a', help='text', required=True)
@@ -17,7 +16,7 @@ usage: run.py [-h] -a
 
 options:
   -h, --help  show this help message and exit
-  -a          text
+  -a          text (default: False)
 """)
 
     def test_print_help_empty(self):
@@ -42,7 +41,7 @@ usage: run.py [-h] [-a]
 
 options:
   -h, --help  show this help message and exit
-  -a          text
+  -a          text (default: False)
 """)
 
     def test_print_help_for_alias_argument(self):
@@ -135,7 +134,7 @@ usage: test.py [-h] [options]
 
 options:
   -h, --help  show this help message and exit
-  -a          text
+  -a          text (default: False)
 """)
 
     def test_print_help_with_usages(self):
@@ -153,7 +152,7 @@ usage: test.py [-h]
 
 options:
   -h, --help  show this help message and exit
-  -a          text
+  -a          text (default: False)
 """)
 
     def test_print_help_with_description(self):
