@@ -447,7 +447,7 @@ def argument(*options: str,
 
 
 def argument(*options: str, **kwargs):
-    """create an argument attribute
+    r"""create an argument attribute
 
     **Usage**
 
