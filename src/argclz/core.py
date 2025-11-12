@@ -5,7 +5,7 @@ import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import Type, TypeVar, Literal, overload, Any, Optional, get_type_hints, TextIO
+from typing import Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO
 
 from typing_extensions import Self
 
@@ -252,11 +252,11 @@ class Argument(object):
         raise ValueError
 
     @property
-    def metavar(self) -> Optional[str]:
+    def metavar(self) -> str | None:
         return self.kwargs.get('metavar', None)
 
     @property
-    def choices(self) -> Optional[tuple[str, ...]]:
+    def choices(self) -> [tuple[T, ...]] | None:
         return self.kwargs.get('choices', None)
 
     @property
@@ -281,7 +281,7 @@ class Argument(object):
             return caster_by_annotation(self.attr, attr_type)
 
     @property
-    def help(self) -> Optional[str]:
+    def help(self) -> str | None:
         return self.kwargs.get('help', None)
 
     def __set_name__(self, owner: Type, name: str):
@@ -436,7 +436,7 @@ def argument(*options: str,
              default: T = ...,
              type: Type | Callable[[str], T] = ...,
              validator: Callable[[T], bool] = ...,
-             choices: Sequence[str] = ...,
+             choices: Sequence[T] = ...,
              required: bool = False,
              hidden: bool = False,
              help: str = ...,
