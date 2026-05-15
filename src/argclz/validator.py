@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar, Generic, final, overload, Collection
+from types import EllipsisType
+from typing import Any, TypeVar, Generic, final, overload, Collection, cast
 
 from typing_extensions import Self
 
@@ -48,7 +49,7 @@ class LambdaValidator(Validator, Generic[T]):
     """
 
     def __init__(self, validator: Callable[[T], bool],
-                 message: str | Callable[[T], str] = None):
+                 message: str | Callable[[T], str] | None = None):
         """
 
         :param validator: callable
@@ -93,7 +94,7 @@ class LambdaValidator(Validator, Generic[T]):
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return LambdaValidator(validator, self._message)
+        return cast(Self, LambdaValidator(validator, self._message))
 
 
 @final
@@ -114,11 +115,11 @@ class ValidatorBuilder:
         return FloatValidatorBuilder()
 
     @overload
-    def tuple(self, element_type: int) -> TupleValidatorBuilder:
+    def tuple(self, *element_type: int | EllipsisType) -> TupleValidatorBuilder:
         pass
 
     @overload
-    def tuple(self, *element_type: type[T]) -> TupleValidatorBuilder:
+    def tuple(self, *element_type: type[T] | EllipsisType | None) -> TupleValidatorBuilder:
         pass
 
     # noinspection PyMethodMayBeStatic
@@ -136,7 +137,7 @@ class ValidatorBuilder:
         return TupleValidatorBuilder(element_type)
 
     # noinspection PyMethodMayBeStatic
-    def list(self, element_type: type[T] = None) -> ListValidatorBuilder:
+    def list(self, element_type: type[T] | Validator | None = None) -> ListValidatorBuilder:
         """
         a list validator
 
@@ -178,7 +179,7 @@ class ValidatorBuilder:
         return LambdaValidator(lambda it: it is not None)
 
     def __call__(self, validator: Callable[[Any], bool],
-                 message: str | Callable[[Any], str] = None) -> LambdaValidator:
+                 message: str | Callable[[Any], str] | None = None) -> LambdaValidator:
         """
         Create a validator with a failure message.
 
@@ -192,7 +193,7 @@ class ValidatorBuilder:
 
 
 class AbstractTypeValidatorBuilder(Validator, Generic[T]):
-    def __init__(self, value_type: type[T] | tuple[type[T], ...] = None):
+    def __init__(self, value_type: type[T] | tuple[type[T], ...] | None = None):
         self._value_type = value_type
         self._validators: list[LambdaValidator[T]] = []
         self._allow_none = False
@@ -206,7 +207,9 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
 
         # noinspection PyTypeHints
         if self._value_type is not None and not isinstance(value, self._value_type):
-            raise ValidatorFailOnTypeError(f'not instance of {self._value_type.__name__} : {value}')
+            vt = self._value_type
+            vt_name = vt.__name__ if isinstance(vt, type) else str(vt)
+            raise ValidatorFailOnTypeError(f'not instance of {vt_name} : {value}')
 
         for validator in self._validators:
             if not validator(value):
@@ -221,11 +224,11 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         return ret
 
     @overload
-    def _add(self, validator: LambdaValidator[T]):
+    def _add(self, validator: LambdaValidator[T]) -> None:
         pass
 
     @overload
-    def _add(self, validator: Callable[[T], bool], message: str | Callable[[T], str] = None):
+    def _add(self, validator: Callable[[T], bool], message: str | Callable[[T], str] | None = None) -> None:
         pass
 
     def _add(self, validator, message=None):
@@ -412,7 +415,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
     """a list validator"""
 
-    def __init__(self, element_type: type[T] = None):
+    def __init__(self, element_type: type[T] | Validator | None = None):
         super().__init__()
         self._element_type = element_type
         self._allow_empty = True
@@ -471,20 +474,23 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
     """a tuple validator"""
 
-    def __init__(self, element_type: tuple[int] | tuple[type[T], ...]):
+    def __init__(self, element_type: tuple[Any, ...]):
         super().__init__()
 
+        _element_type: tuple[Any, ...]
         match element_type:
             case ():
                 # XXX does validate for empty tuple meaningful?
                 #  No, so it will be interpreted as ...
-                element_type = (...,)
+                _element_type = (...,)
             case (int(length), ):
-                element_type = (None,) * length
+                _element_type = (None,) * length
             case (int(length), e) if e is ...:
-                element_type = (None,) * length + (...,)
+                _element_type = (None,) * length + (...,)
+            case _:
+                _element_type = element_type
 
-        self._element_type = element_type
+        self._element_type: tuple[Any, ...] = _element_type
 
     def freeze(self) -> Self:
         return super().freeze(self._element_type)
@@ -581,7 +587,7 @@ class ListItemValidatorBuilder(LambdaValidator):
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return ListItemValidatorBuilder(validator, self._message)
+        return cast(Self, ListItemValidatorBuilder(validator, self._message))
 
 
 class TupleItemValidatorBuilder(LambdaValidator):
@@ -618,7 +624,7 @@ class TupleItemValidatorBuilder(LambdaValidator):
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return TupleItemValidatorBuilder(self._item, validator)
+        return cast(Self, TupleItemValidatorBuilder(self._item, validator))
 
 
 class OrValidatorBuilder(Validator):
@@ -643,7 +649,7 @@ class OrValidatorBuilder(Validator):
         raise ValidatorFailError('; '.join(coll))
 
     def freeze(self) -> Self:
-        return OrValidatorBuilder(*self.__validators)
+        return cast(Self, OrValidatorBuilder(*self.__validators))
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
         return AndValidatorBuilder(self, validator)
@@ -671,7 +677,7 @@ class AndValidatorBuilder(Validator):
         return True
 
     def freeze(self) -> Self:
-        return AndValidatorBuilder(*self.__validators)
+        return cast(Self, AndValidatorBuilder(*self.__validators))
 
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
         if isinstance(validator, AndValidatorBuilder):

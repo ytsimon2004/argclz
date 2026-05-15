@@ -1,7 +1,7 @@
 import argparse
 import inspect
 import sys
-from typing import Type, TypeVar, overload
+from typing import Type, TypeVar, overload, Any
 
 from .core import AbstractParser, new_parser, ArgumentParser, set_options, ArgumentParserInterrupt
 
@@ -29,7 +29,7 @@ class SubCommandGroup:
         self.attr = name
         setattr(owner, ARGCLZ_SUB_COMMANDS, self)
 
-    def __get__(self, instance, owner=None):
+    def __get__(self, instance, owner=None) -> Any:
         if instance is None:
             return self
 
@@ -51,6 +51,7 @@ class SubCommandGroup:
 
     def add_parser(self, ap: argparse.ArgumentParser):
         sb = ap.add_subparsers(**self.kwargs)
+        assert self.attr is not None
         for command in self.sub_parsers:
             command.add_parser(sb, main=self.attr)
 
@@ -79,13 +80,6 @@ class SubCommand:
             description = description()
 
         sb.add_parser(self.command, help=description, parents=[pp], add_help=False)
-
-
-@overload
-def sub_command_group(*, title: str = ...,
-                      description: str = ...,
-                      required: bool = ...):
-    pass
 
 
 def sub_command_group(**kwargs):
@@ -143,16 +137,17 @@ def init_sub_command(p: AbstractParser) -> AbstractParser:
     if not isinstance(pp, type):
         return pp
 
-    s = inspect.signature(pp.__init__)
+    pp_cls: Type[AbstractParser] = pp
+    s = inspect.signature(pp_cls.__init__)
     if len(s.parameters) == 1:
-        return pp()
+        return pp_cls()
     else:
-        return pp(p)
+        return pp_cls(p)
 
 
 def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]],
-                       usage: str = None,
-                       description: str = None,
+                       usage: str | None = None,
+                       description: str | None = None,
                        **kwargs) -> ArgumentParser:
     """A convenient way to create an ArgumentParser with sub-commands.
 
@@ -170,18 +165,18 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
 
     group = SubCommandGroup(title='commands')
     group.attr = 'main'
-    group.sub_parsers = [SubCommand(cmd, pp) for cmd, pp in parsers.items()]
+    group.sub_parsers = [SubCommand(cmd, pp if isinstance(pp, type) else type(pp)) for cmd, pp in parsers.items()]
     group.add_parser(ap)
 
     return ap
 
 
 def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type[AbstractParser]],
-                       args: list[str] = None,
-                       usage: str = None,
-                       description: str = None,
+                       args: list[str] | None = None,
+                       usage: str | None = None,
+                       description: str | None = None,
                        parse_only=False,
-                       system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
+                       system_exit: Type[BaseException] = SystemExit) -> AbstractParser | None:
     """
     A convenient way to run an ArgumentParser with sub-commands.
 
@@ -197,6 +192,7 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     else:
         parser = new_command_parser(parsers, usage, description)
 
+    pp: AbstractParser | None
     try:
         result = parser.parse_args(args)
     except ArgumentParserInterrupt as e:
@@ -207,7 +203,7 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
         exit_status = None
         exit_message = None
 
-        pp: AbstractParser = getattr(result, 'main', None)
+        pp = getattr(result, 'main', None)
         if isinstance(pp, type):
             pp = pp()
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import textwrap
 from collections.abc import Callable
+from types import EllipsisType
 from typing import NamedTuple, TypeVar, Any, Type, ParamSpec
 
 from typing_extensions import Self
@@ -43,7 +44,7 @@ class DispatchCommand(NamedTuple):
     usage: str | None
     """usage line of this command """
 
-    func: Callable[P, R]
+    func: Callable[..., Any]
     """target function"""
 
     validators: dict[str, Callable[[str], Any]]
@@ -67,7 +68,7 @@ class DispatchCommand(NamedTuple):
         """document of the command."""
         return self.func.__doc__
 
-    def __call__(self, zelf: T, *args: P.args, **kwargs: P.kwargs) -> R:
+    def __call__(self, zelf: Any, *args: Any, **kwargs: Any) -> Any:
         """
         invoke commands.
 
@@ -128,7 +129,7 @@ class DispatchGroup(NamedTuple):
     def __call__(self, command: str,
                  *alias: str,
                  order: float = 5,
-                 usage: str = None,
+                 usage: str | None = None,
                  hidden=False):
         """
         A decorator that mark a function as a dispatch target function.
@@ -157,7 +158,7 @@ class DispatchGroup(NamedTuple):
         if not issubclass(owner, Dispatch):
             raise TypeError('owner not Dispatch')
 
-    def __get__(self, instance: Dispatch, owner: Type[Dispatch]) -> BoundDispatchGroup:
+    def __get__(self, instance: Dispatch | None, owner: Type[Dispatch]) -> BoundDispatchGroup:
         if instance is None:
             return BoundDispatchGroup(owner, self.group)
         else:
@@ -232,7 +233,7 @@ class CommandParameter(NamedTuple):
     @classmethod
     def of(cls, name: str, para: inspect.Parameter) -> Self:
         optional = para.default is not inspect.Parameter.empty
-        return CommandParameter(name, optional, para.kind)
+        return cls(name, optional, para.kind)
 
     def usage(self):
         name = self.name.upper()
@@ -271,7 +272,7 @@ class CommandHelps(NamedTuple):
 
     @classmethod
     def of(cls, command: DispatchCommand) -> Self:
-        return CommandHelps(command.commands, command.order, command.usage, command.parameters(), command.doc or '')
+        return cls(command.commands, command.order, command.usage, command.parameters(), command.doc or '')
 
     def build_command_usage(self, show_para: bool = False) -> str:
         if self.usage is not None:
@@ -334,7 +335,7 @@ class Dispatch:
     """
 
     @classmethod
-    def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | None = ..., *,
+    def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | None | EllipsisType = ..., *,
                       all: bool = False) -> list[DispatchCommand]:
         """list all :func:`~argclz.dispatch.annotations.dispatch` functions.
 
@@ -345,12 +346,11 @@ class Dispatch:
         if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
             group = group.group
 
-        info: DispatchCommand
-
         ret = []
         for attr in dir(cls):
             attr_value = getattr(cls, attr)
-            if (info := getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)) is not None:
+            info: DispatchCommand | None = getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)
+            if info is not None:
                 if group is ... or group == info.group:
                     if all or not info.hidden:
                         ret.append(info)
@@ -359,7 +359,7 @@ class Dispatch:
 
     @classmethod
     def find_command(cls, command: str,
-                     group: str | DispatchGroup | BoundDispatchGroup | None = ...) -> DispatchCommand | None:
+                     group: str | DispatchGroup | BoundDispatchGroup | None | EllipsisType = ...) -> DispatchCommand | None:
         """find :func:`~argclz.dispatch.annotations.dispatch` function according to *command*.
 
         :param command: command or one of command's aliases
@@ -369,11 +369,10 @@ class Dispatch:
         if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
             group = group.group
 
-        info: DispatchCommand
-
         for attr in dir(cls):
             attr_value = getattr(cls, attr)
-            if (info := getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)) is not None:
+            info: DispatchCommand | None = getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)
+            if info is not None:
                 if group is ... or group == info.group:
                     if command == info.command or command in info.aliases:
                         return info
@@ -393,7 +392,8 @@ class Dispatch:
             raise DispatchCommandNotFound(command)
         return info(self, *args, **kwargs)
 
-    def invoke_group_command(self, group: str | DispatchGroup | BoundDispatchGroup, command: str, *args, **kwargs) -> Any:
+    def invoke_group_command(self, group: str | DispatchGroup | BoundDispatchGroup, command: str, *args,
+                             **kwargs) -> Any:
         """invoke a :func:`~argclz.dispatch.annotations.dispatch` function in a certain group.
 
         :param group: dispatch group
@@ -404,7 +404,8 @@ class Dispatch:
         :raise DispatchCommandNotFound:
         """
         if (info := self.find_command(command, group)) is None:
-            raise DispatchCommandNotFound(command, group)
+            group_name = group.group if isinstance(group, (DispatchGroup, BoundDispatchGroup)) else group
+            raise DispatchCommandNotFound(command, group_name)
         return info(self, *args, **kwargs)
 
     @classmethod

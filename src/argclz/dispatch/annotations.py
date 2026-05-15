@@ -1,4 +1,3 @@
-from types import MethodType
 from typing import Callable, TypeVar, overload
 
 from ..validator import Validator
@@ -9,16 +8,15 @@ __all__ = [
 ]
 
 T = TypeVar('T')
-Method = TypeVar('Method', bound=MethodType)
-Decorator = TypeVar('Decorator', bound=Callable[[Method], Method])  # decorator
+F = TypeVar('F', bound=Callable)
 
 
 def dispatch(command: str,
              *alias: str,
-             group: str = None,
+             group: str | None = None,
              order: float = 5,
-             usage: str = None,
-             hidden=False) -> Decorator:
+             usage: str | None = None,
+             hidden=False) -> Callable[[F], F]:
     """
     A decorator that mark a function as a dispatch target function.
 
@@ -48,7 +46,7 @@ def dispatch(command: str,
     if len(command) == 0:
         raise ValueError('empty command string')
 
-    def _dispatch(f):
+    def _dispatch(f: F) -> F:
         from .builder import DispatchCommandBuilder
         DispatchCommandBuilder.of(f).build(command, alias, order, group, usage, hidden)
         return f
@@ -57,21 +55,21 @@ def dispatch(command: str,
 
 
 @overload
-def validator_for(arg: str) -> Decorator:
+def validator_for(arg: str) -> Callable[[F], F]:
     pass
 
 
 @overload
-def validator_for(arg: str, caster: Callable[[str], T] | Validator) -> Decorator:
+def validator_for(arg: str, caster: Callable[[str], T] | Validator) -> Callable[[F], F]:
     pass
 
 
 @overload
-def validator_for(arg: str, caster: Callable[[str], T], validator: Validator) -> Decorator:
+def validator_for(arg: str, caster: Callable[[str], T], validator: Validator) -> Callable[[F], F]:
     pass
 
 
-def validator_for(arg: str, caster=None, validator=None):
+def validator_for(arg: str, caster: Callable[[str], T] | Validator | None = None, validator: Validator | None = None) -> Callable[[F], F]:
     """
     A decorator that do the caster and valudation on dispatch arguments.
 
@@ -95,9 +93,9 @@ def validator_for(arg: str, caster=None, validator=None):
     if isinstance(caster, Validator) and validator is None:
         caster, validator = None, caster
 
-    def _validator_for(f):
+    def _validator_for(f: F) -> F:
         from .builder import DispatchCommandBuilder
-        DispatchCommandBuilder.of(f).validator_for(arg, caster, validator)
+        DispatchCommandBuilder.of(f).validator_for(arg, caster, validator)  # pyright: ignore[reportArgumentType]
         return f
 
     return _validator_for

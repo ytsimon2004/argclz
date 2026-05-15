@@ -34,7 +34,7 @@ class DispatchCommandBuilder:
             raise TypeError()
         return ret
 
-    def validator_for(self, arg: str, caster: Callable[[str], T] = None, validator: Validator = None):
+    def validator_for(self, arg: str, caster: Callable[[str], T] | None = None, validator: Validator | None = None):
         try:
             p = self.signature.parameters[arg]
         except KeyError:
@@ -46,15 +46,15 @@ class DispatchCommandBuilder:
             if p.annotation is P.empty:
                 raise RuntimeError(f'missing type : {self.func.__name__}({arg})')
 
-            caster = caster_by_annotation(arg, p.annotation)
+            caster = caster_by_annotation(arg, p.annotation)  # pyright: ignore[reportAssignmentType]
 
         self.validators[arg] = TypeCasterWithValidator(caster, validator)
 
     def build(self, command: str,
               aliases: tuple[str, ...],
               order: float = 5,
-              group: str = None,
-              usage: str = None,
+              group: str | None = None,
+              usage: str | None = None,
               hidden=False) -> DispatchCommand:
         ret = DispatchCommand(group, command, aliases, order, usage, self.func, self.validators, hidden)
         setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)
@@ -66,28 +66,28 @@ class TypeCasterWithValidator(Generic[T]):
     (internal) Do not use class directly.
     """
     def __init__(self, caster: Callable[[str], T] | None,
-                 validator: Callable[[T], bool]):
+                 validator: Callable[[T], bool] | None):
         self.caster = caster
         self.validator = validator
 
-    def __call__(self, value: str) -> T:
-        raw_value = value
+    def __call__(self, raw_value: str) -> T:
+        result: T
 
-        if self.caster is not None and isinstance(value, str):
+        if self.caster is not None:
             try:
-                value = self.caster(value)
-            except BaseException as e:
-                # print(e)
+                result = self.caster(raw_value)
+            except BaseException:
                 raise
+        else:
+            result = raw_value  # pyright: ignore[reportAssignmentType]
 
         if self.validator is not None:
             try:
-                fail = not self.validator(value)
-            except BaseException as e:
-                # print(e)
+                fail = not self.validator(result)
+            except BaseException:
                 raise
             else:
                 if fail:
                     raise ValueError(f'fail validation : "{raw_value}"')
 
-        return value
+        return result

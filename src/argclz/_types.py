@@ -25,7 +25,7 @@ def caster_by_annotation(a_name: str, a_type):
         a_type_args = get_args(a_type)
         if len(a_type_args) == 2 and get_origin(a_type_args[0]) is Literal and a_type_args[1] == type(None):
             from .types import literal_type
-            return literal_type([*get_args(a_type_args[0]), None])
+            return literal_type((*get_args(a_type_args[0]), None))
 
         from .types import union_type
         return union_type(*get_args(a_type))
@@ -95,17 +95,21 @@ def _complete_arg_kwargs_for_value(self: Argument):
         if len(a_type_args) == 2 and a_type_args[1] == type(None):
             self.kwargs.setdefault('default', None)
 
+    assert self.attr is not None
     self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
 
 
 def _complete_arg_kwargs_for_collection(self: Argument):
-    self.kwargs.setdefault('default', get_origin(self.attr_type)())
+    origin = get_origin(self.attr_type)
+    assert origin is not None
+    self.kwargs.setdefault('default', origin())
 
     a_type_arg = get_args(self.attr_type)  # Coll[T]
     if len(a_type_arg) == 0:
         # XXX what kinds of collection it is?
         raise RuntimeError()
     elif len(a_type_arg) == 1:
+        assert self.attr is not None
         self.kwargs['type'] = caster_by_annotation(self.attr, a_type_arg[0])
     else:
         raise RuntimeError()
@@ -132,8 +136,8 @@ def _complete_arg_kwargs_for_literal(self: Argument):
 
 
 def _complete_arg_kwargs_help_with_default(self: Argument):
-    help_text: str
-    if (help_text := self.kwargs.get('help', None)) not in (None, argparse.SUPPRESS):
+    help_text: str | None = self.kwargs.get('help', None)
+    if help_text is not None and help_text is not argparse.SUPPRESS:
         if (default_value := self.kwargs.get('default', argparse.SUPPRESS)) is not argparse.SUPPRESS:
             if '{DEFAULT}' in help_text:
                 text = help_text.format(DEFAULT=repr(default_value))

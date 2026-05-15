@@ -1,5 +1,5 @@
 from types import EllipsisType
-from typing import TypeVar, Callable, Union, Literal, get_origin, get_args, Type
+from typing import TypeVar, Callable, Union, Literal, get_origin, get_args, Type, Any
 
 __all__ = [
     'literal_value_type',
@@ -71,17 +71,17 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
 
     def _type(arg: str) -> tuple[T, ...]:
         ret = []
-        remain = ...
+        remain: Callable[[str], T] | None = None
         for i, a in enumerate(arg.split(',')):
-            if remain is not ...:
+            if remain is not None:
                 ret.append(remain(a))
             else:
                 t = value_type[i]
                 if t is ...:
-                    remain = value_type[i - 1]
-                    ret.append(remain(a))
+                    remain = value_type[i - 1]  # pyright: ignore[reportAssignmentType]
+                    ret.append(remain(a))  # pyright: ignore[reportOptionalCall]
                 else:
-                    ret.append(t(a))
+                    ret.append(t(a))  # pyright: ignore[reportCallIssue]
 
         return tuple(ret)
 
@@ -96,7 +96,7 @@ float_tuple_type = tuple_type(float, ...)
 """tuple[float, ...]"""
 
 
-def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prepend: list[T] = None):
+def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prepend: list[T] | None = None):
     """Caster which converts a delimited string into a list of typed values
 
     :param value_type: function to convert each element (default: str)
@@ -137,7 +137,7 @@ def union_type(*t: Callable[[str], T]):
     return _type
 
 
-def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] = None):
+def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] | None = None):
     """Caster that accumulates key-value pairs from 'key:value' or 'key=value' strings.
 
     :param value_type: function to convert values (default: str)
@@ -211,16 +211,16 @@ def try_float_type(arg: str) -> Union[float, str, None]:
 class literal_type:
     """Caster enforcing membership in a set of string literals with optional prefix matching"""
 
-    def __init__(self, candidate: type[Literal] | tuple[str, ...] = None, *,
+    def __init__(self, candidate: Any = None, *,
                  complete: bool = False):
-        self.candidate = None
+        self.candidate: tuple[str, ...] | None = None
         self.optional = False
         self.complete = complete
 
         if candidate is not None:
             self.set_candidate(candidate)
 
-    def set_candidate(self, candidate: type[Literal] | tuple[str, ...], overwrite: bool = False):
+    def set_candidate(self, candidate: Any, overwrite: bool = False):
         if get_origin(candidate) is Literal:
             candidate = get_args(candidate)
 
@@ -232,6 +232,7 @@ class literal_type:
             self.candidate = tuple(candidate)
 
     def __call__(self, arg: str):
+        assert self.candidate is not None
         if arg in self.candidate:
             return arg
 
@@ -247,6 +248,7 @@ class literal_type:
                 raise ValueError(f'confused {possible}')
 
     def __str__(self):
+        assert self.candidate is not None
         return 'Literal' + ('*' if self.complete else '') + '[' + ', '.join(self.candidate) + ']'
 
     __repr__ = __str__

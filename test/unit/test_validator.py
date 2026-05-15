@@ -457,7 +457,7 @@ class TestValidateBuilder(unittest.TestCase):
 
     def test_tuple_element_type_var_length(self):
         class Opt:
-            a: tuple[str, int, ...] = argument(
+            a: tuple[Any, ...] = argument(
                 '-a',
                 validator.tuple(str, int, ...)
             )

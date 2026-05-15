@@ -1,4 +1,5 @@
 import unittest
+from typing import Any
 
 from argclz import *
 from argclz.core import print_help
@@ -8,7 +9,7 @@ from argclz.dispatch import *
 class SimpleDispatch(AbstractParser, Dispatch):
     c: str = pos_argument('cmd')
     a: list[str] = var_argument('args')
-    r: str
+    r: Any
 
     def run(self):
         self.invoke_command(self.c, *self.a)
@@ -93,6 +94,7 @@ class TestDispatch(unittest.TestCase):
 
         cmd = Opt.find_command('A')
         self.assertIsNotNone(cmd)
+        assert cmd is not None
         self.assertEqual(cmd.command, 'A')
 
         cmd = Opt.find_command('B')
@@ -303,7 +305,7 @@ class TestDispatchGroup(unittest.TestCase):
     def test_use_group(self):
         class Opt(SimpleDispatch):
             g = dispatch_group('A')
-            r: str = None
+            r: str | None = None
 
             @g('A')
             def run_a(self):
@@ -319,8 +321,10 @@ class TestDispatchGroup(unittest.TestCase):
         self.assertListEqual(commands, ['A'])
 
         command = opt.find_command('A', Opt.g)
+        assert command is not None
         self.assertEqual(command.command, 'A')
         command = opt.find_command('A', opt.g)
+        assert command is not None
         self.assertEqual(command.command, 'A')
 
         opt.r = None
@@ -337,7 +341,7 @@ class TestDispatchGroup(unittest.TestCase):
         g = dispatch_group('A')
 
         class Opt(SimpleDispatch):
-            r: str = None
+            r: str | None = None
 
             @g('A')
             def run_a(self):
@@ -349,6 +353,7 @@ class TestDispatchGroup(unittest.TestCase):
         self.assertListEqual(commands, ['A'])
 
         command = opt.find_command('A', g)
+        assert command is not None
         self.assertEqual(command.command, 'A')
 
         opt.r = None
@@ -427,7 +432,7 @@ A A B               text for A.""")
     def test_build_command_usages_with_optional_para(self):
         class Opt(SimpleDispatch):
             @dispatch('A')
-            def run_a(self, a: str, b: str = None):
+            def run_a(self, a: str, b: str | None = None):
                 """text for A."""
                 pass
 
@@ -437,7 +442,7 @@ A A [B]             text for A.""")
     def test_build_command_usages_with_keyword_para(self):
         class Opt(SimpleDispatch):
             @dispatch('A')
-            def run_a(self, a: str, *, b: str = None):
+            def run_a(self, a: str, *, b: str | None = None):
                 """text for A."""
                 pass
 
@@ -500,10 +505,10 @@ A test is a very long usage text that it is over 20 characters
 
     def test_print_help(self):
         class Opt(SimpleDispatch):
-            EPILOG = lambda: f"""\
+            EPILOG = (lambda: f"""\
 Commands:
 {Opt.build_command_usages()}
-"""
+""")
 
             @dispatch('A', 'a')
             def run_a(self):

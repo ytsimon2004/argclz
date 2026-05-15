@@ -5,9 +5,12 @@ import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO
+from typing import TYPE_CHECKING, Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO, cast
 
 from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from .validator import Validator
 
 __all__ = [
     # parser
@@ -70,7 +73,7 @@ class ArgumentParserInterrupt(RuntimeError):
 class ArgumentParser(argparse.ArgumentParser):
     """(internal) override ``argparse.ArgumentParser``."""
 
-    def exit(self, status: int = 0, message: str = None):
+    def exit(self, status: int = 0, message: str | None = None):
         raise ArgumentParserInterrupt(status, message)
 
     def error(self, message: str):
@@ -80,13 +83,13 @@ class ArgumentParser(argparse.ArgumentParser):
 class AbstractParser(metaclass=abc.ABCMeta):
     """Commandline parser."""
 
-    USAGE: str | list[str] = None
+    USAGE: str | list[str] | None = None
     """parser usage."""
 
-    DESCRIPTION: str = None
+    DESCRIPTION: str | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
 
-    EPILOG: str = None
+    EPILOG: str | None = None
     """parser epilog. Could be override as a method if its content is dynamic-generated."""
 
     def __new__(cls, *args, **kwargs):
@@ -105,7 +108,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
-             system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
+             system_exit: Type[BaseException] | bool = SystemExit) -> AbstractParser:
         """parsing the commandline input *args* and call :meth:`~argclz.core.ArgumentParser.run()`.
 
         :param args: command-line arguments. If omitted, use ``sys.args``.
@@ -140,7 +143,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
                     parser.print_usage(sys.stderr)
                     print(exit_message, file=sys.stderr)
                 sys.exit(exit_status)
-            elif issubclass(system_exit, BaseException):
+            elif isinstance(system_exit, type) and issubclass(system_exit, BaseException):
                 raise system_exit(exit_status)
             else:
                 sys.exit(exit_status)
@@ -187,9 +190,9 @@ class Argument(object):
     """
 
     def __init__(self, *options,
-                 validator: Callable[[T], bool] = None,
-                 group: str = None,
-                 ex_group: str = None,
+                 validator: Callable[[T], bool] | None = None,
+                 group: str | None = None,
+                 ex_group: str | None = None,
                  hidden: bool = False,
                  **kwargs):
         """
@@ -256,7 +259,7 @@ class Argument(object):
         return self.kwargs.get('metavar', None)
 
     @property
-    def choices(self) -> [tuple[T, ...]] | None:
+    def choices(self) -> tuple[Any, ...] | None:
         return self.kwargs.get('choices', None)
 
     @property
@@ -264,7 +267,7 @@ class Argument(object):
         return self.kwargs.get('required', False)
 
     @property
-    def type(self) -> type | Callable[[str], T]:
+    def type(self) -> type | Callable[[str], Any] | None:
         try:
             return self.kwargs['type']
         except KeyError:
@@ -278,6 +281,7 @@ class Argument(object):
             return attr_type
         else:
             from ._types import caster_by_annotation
+            assert self.attr is not None
             return caster_by_annotation(self.attr, attr_type)
 
     @property
@@ -346,24 +350,6 @@ class Argument(object):
                 name = type(instance).__name__
             raise RuntimeError(f'{name}.{self.attr} : ' + repr(e)) from e
 
-    @overload
-    def with_options(self,
-                     option: str | dict[str, str] = None,
-                     *options: str,
-                     action: Actions = None,
-                     nargs: int | Nargs = None,
-                     const: T = None,
-                     default: T = None,
-                     type: Type | Callable[[str], T] = None,
-                     validator: Callable[[T], bool] = None,
-                     choices: Sequence[str] = None,
-                     required: bool = None,
-                     hidden: bool = None,
-                     help: str = None,
-                     group: str = None,
-                     metavar: str = None) -> Self:
-        pass
-
     def with_options(self, *options, **kwargs) -> Self:
         """Modify or update keyword parameter and return a new argument.
 
@@ -429,7 +415,7 @@ class Argument(object):
 
 
 @overload
-def argument(*options: str,
+def argument(*options: str | Validator,
              action: Actions = ...,
              nargs: int | Nargs = ...,
              const: T = ...,
@@ -440,13 +426,13 @@ def argument(*options: str,
              required: bool = False,
              hidden: bool = False,
              help: str = ...,
-             group: str = None,
-             ex_group: str = None,
+             group: str | None = None,
+             ex_group: str | None = None,
              metavar: str = ...) -> T:
-    pass
+    ...
 
 
-def argument(*options: str, **kwargs):
+def argument(*options: str | Validator, **kwargs) -> Any:
     r"""create an argument attribute
 
     **Usage**
@@ -502,18 +488,18 @@ def argument(*options: str, **kwargs):
 @overload
 def pos_argument(option: str,
                  validator: Callable[[T], bool] = ..., *,
-                 nargs: Nargs = None,
+                 nargs: Nargs | None = None,
                  action: Actions = ...,
-                 const=...,
-                 default=...,
+                 const: T = ...,
+                 default: T = ...,
                  type: Type | Callable[[str], T] = ...,
                  choices: Sequence[str] = ...,
                  required: bool = False,
-                 help: str = ..., ) -> T:
-    pass
+                 help: str = ...) -> T:
+    ...
 
 
-def pos_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs=None, **kwargs):
+def pos_argument(option: str, validator: Callable[[T], bool] | None = None, *, nargs=None, **kwargs) -> Any:
     """create a positional (non-flag) command-line argument attribute.
 
     **Usage**
@@ -534,7 +520,7 @@ def pos_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs=Non
     :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
     :param help: help document for this argument.
     """
-    if validator is not ...:
+    if validator is not None:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, **kwargs)
 
@@ -546,10 +532,10 @@ def var_argument(option: str,
                  action: Actions = ...,
                  type: Type | Callable[[str], T] = ...,
                  help: str = ...) -> list[T]:
-    pass
+    ...
 
 
-def var_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs='*', action='extend', **kwargs):
+def var_argument(option: str, validator: Callable[[T], bool] | None = None, *, nargs='*', action='extend', **kwargs) -> Any:
     """
     create a variable-length positional argument, suitable for capturing multiple values into a list.
 
@@ -567,7 +553,7 @@ def var_argument(option: str, validator: Callable[[T], bool] = ..., *, nargs='*'
     :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
     :param help: help document for this argument.
     """
-    if validator is not ...:
+    if validator is not None:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, action=action, **kwargs)
 
@@ -583,10 +569,11 @@ class AliasArgument(Argument):
         super().__init__(*options, **kwargs)
         self.aliases = aliases
 
-    def add_argument(self, ap: argparse._ActionsContainer, owner):
+    def add_argument(self, ap: argparse._ActionsContainer, instance):
         gp = ap.add_mutually_exclusive_group(required=self.required)
-        super().add_argument(gp, owner)
+        result = super().add_argument(gp, instance)
 
+        assert len(self.options) > 0
         primary = self.options[0]
         for name, values in self.aliases.items():
             kw = dict(self.kwargs)
@@ -596,6 +583,7 @@ class AliasArgument(Argument):
             kw['const'] = values
             kw['help'] = f'short for {primary}={values}.'
             gp.add_argument(name, **kw, dest=self.attr)
+        return result
 
 
 @overload
@@ -603,19 +591,19 @@ def aliased_argument(options: str, *,
                      aliases: dict[str, T],
                      nargs: Nargs = ...,
                      action: Actions = ...,
-                     const=...,
-                     default=...,
+                     const: T = ...,
+                     default: T = ...,
                      type: Type | Callable[[str], T] = ...,
                      validator: Callable[[T], bool] = ...,
                      choices: Sequence[str] = ...,
                      help: str = ...,
-                     group: str = None,
-                     ex_group: str = None,
+                     group: str | None = None,
+                     ex_group: str | None = None,
                      metavar: str = ...) -> T:
-    pass
+    ...
 
 
-def aliased_argument(*options: str, aliases: dict[str, T], **kwargs):
+def aliased_argument(*options: str, aliases: dict[str, T], **kwargs) -> Any:
     """
     create an argument that supports shorthand aliases for specific constant values.
 
@@ -713,7 +701,7 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
         sub.add_parser(ap)
 
     # setup non-grouped arguments
-    mu_ex_groups: dict[str, argparse._ActionsContainer] = {}
+    mu_ex_groups: dict[str, argparse._MutuallyExclusiveGroup] = {}
     for arg in foreach_arguments(instance):
         if instance is not None and not isinstance(instance, type) and reset:
             arg.__delete__(instance)
@@ -723,14 +711,15 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
             continue
         elif arg.ex_group is not None:
             try:
-                tp = mu_ex_groups[arg.ex_group]
+                tp: argparse._ActionsContainer = mu_ex_groups[arg.ex_group]
             except KeyError:
                 # XXX current Python does not support add title and description into mutually exclusive group
                 #   so the message in ex_group is dropped.
-                mu_ex_groups[arg.ex_group] = tp = ap.add_mutually_exclusive_group()
+                mu_ex_groups[arg.ex_group] = ap.add_mutually_exclusive_group()
+                tp = mu_ex_groups[arg.ex_group]
 
             if arg.required:
-                tp.required = True
+                mu_ex_groups[arg.ex_group].required = True
         else:
             tp = ap
 
@@ -739,17 +728,18 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     # setup grouped arguments
     for group, args in groups.items():
         pp = ap.add_argument_group(group)
-        mu_ex_groups: dict[str, argparse._ActionsContainer] = {}
+        mu_ex_groups_grp: dict[str, argparse._MutuallyExclusiveGroup] = {}
 
         for arg in args:
             if arg.ex_group is not None:
                 try:
-                    tp = mu_ex_groups[arg.ex_group]
+                    tp = mu_ex_groups_grp[arg.ex_group]
                 except KeyError:
-                    mu_ex_groups[arg.ex_group] = tp = pp.add_mutually_exclusive_group()
+                    mu_ex_groups_grp[arg.ex_group] = pp.add_mutually_exclusive_group()
+                    tp = mu_ex_groups_grp[arg.ex_group]
 
                 if arg.required:
-                    tp.required = True
+                    mu_ex_groups_grp[arg.ex_group].required = True
             else:
                 tp = pp
 
@@ -766,6 +756,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
     :return: *instance* itself.
     """
     for arg in foreach_arguments(instance):
+        assert arg.attr is not None
         try:
             value = getattr(result, arg.attr)
         except AttributeError:
@@ -775,6 +766,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
 
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
+        assert sub.attr is not None
         try:
             value = getattr(result, sub.attr)
         except AttributeError:
@@ -785,7 +777,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
     return instance
 
 
-def parse_args(instance: T, args: list[str] = None) -> T:
+def parse_args(instance: T, args: list[str] | None = None) -> T:
     """Parse the command-list arguments and apply the parsed values to the given instance
 
     :param instance: any instance that contains ``argument``.
@@ -798,16 +790,16 @@ def parse_args(instance: T, args: list[str] = None) -> T:
 
 
 @overload
-def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
+def print_help(instance, file: TextIO = sys.stdout, prog: str | None = None) -> None:
     pass
 
 
 @overload
-def print_help(instance, file: Literal[None], prog: str = None) -> str:
+def print_help(instance, file: Literal[None], prog: str | None = None) -> str:
     pass
 
 
-def print_help(instance, file: TextIO = sys.stdout, prog: str = None):
+def print_help(instance, file: TextIO | None = sys.stdout, prog: str | None = None):
     """
     print help document.
 
@@ -852,17 +844,7 @@ def with_defaults(instance: T) -> T:
     return instance
 
 
-@overload
-def as_dict(instance: list[T]) -> list[dict[str, Any]]:
-    pass
-
-
-@overload
-def as_dict(instance: T) -> dict[str, Any]:
-    pass
-
-
-def as_dict(instance):
+def as_dict(instance: list[T] | T) -> list[dict[str, Any]] | dict[str, Any]:
     """
     Collect all argument attributes into a dictionary with attribute name to its value.
     It *instance* is a list, it works like ``list(map(as_dict, instance))``.
@@ -874,10 +856,11 @@ def as_dict(instance):
         if len(instance) == 0:
             return []
 
-        return list(map(as_dict, instance))
+        return cast(list[dict[str, Any]], list(map(as_dict, instance)))
 
     ret = {}
     for arg in foreach_arguments(instance):
+        assert arg.attr is not None
         try:
             value = arg.__get__(instance)
         except AttributeError:
@@ -887,6 +870,7 @@ def as_dict(instance):
 
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
+        assert sub.attr is not None
         try:
             value = sub.__get__(instance)
         except AttributeError:
@@ -908,6 +892,7 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
     shadow = ShadowOption(ref, **kwargs)
 
     for arg in foreach_arguments(opt):
+        assert arg.attr is not None
         try:
             value = getattr(shadow, arg.attr)
         except AttributeError:
@@ -918,8 +903,9 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
 
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(opt)) is not None:
+        assert sub.attr is not None
         try:
-            value = getattr(shadow, opt)
+            value = getattr(shadow, sub.attr)
         except AttributeError:
             pass
         else:
