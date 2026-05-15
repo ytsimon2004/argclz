@@ -96,9 +96,9 @@ pass options between classes
 
 When working with structured data or shared configurations, you may want to **copy values**
 into an argument parser class without redefining or parsing them again.
-``Clonable`` provides an ``__init__`` that accept an ``AbstractParser``, ``Clonable`` or ``dict``,
-then read and set all matched arguments or keys. It also allows to use keyword argument to overwrite
-the referred data during initialization.
+:class:`~argclz.clone.Cloneable` provides an ``__init__`` that accepts an ``AbstractParser``,
+``Cloneable``, or ``dict``, then reads and sets all matched arguments or keys.
+Keyword arguments can also be used to overwrite individual fields during initialisation.
 
 refer to :class:`~argclz.clone.Cloneable` and underlying :func:`~argclz.core.copy_argument`
 
@@ -116,26 +116,28 @@ refer to :class:`~argclz.clone.Cloneable` and underlying :func:`~argclz.core.cop
     assert dst.path == '/data/file'
     assert dst.debug is True
 
-If ``polars`` is installed, then ``Clonable`` allows to read values from a single row dataframe.
+    # Overwrite a field at copy time
+    dst2 = Config(src, debug=False)
+    assert dst2.debug is False
+
+If ``polars`` is installed, :class:`~argclz.clone.Cloneable` also accepts a single-row
+``pl.DataFrame`` or a plain ``dict`` row, which is useful for iterating a dataframe:
 
 .. code-block:: python
 
     import polars as pl
     from argclz import Cloneable, argument
 
-    class Config(Clonable):
+    class Config(Cloneable):
         type: str = argument('--type')
         path: str = argument('--path')
 
-    src = pl.DataFrame([{'type':'file', 'path':'123.txt'}])
-    dst = Clonable(src)
+    src = pl.DataFrame([{'type': 'file', 'path': '123.txt'}])
+    dst = Config(src)
     assert dst.type == 'file'
     assert dst.path == '123.txt'
 
-For a multi-row dataframe, you can use ``Config`` likes:
-
-.. code-block:: python
-
-    for data in df.item_rows(named=True):
-        config = Config(data)
+    # Multi-row dataframe
+    for row in df.iter_rows(named=True):
+        config = Config(row)
         ...

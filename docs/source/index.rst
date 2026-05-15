@@ -88,6 +88,7 @@ API Reference
    api/argclz.core
    api/argclz.types
    api/argclz.validator
+   api/argclz.commands
    api/argclz.dispatch
    api/argclz.clone
 
