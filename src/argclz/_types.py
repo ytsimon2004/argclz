@@ -45,6 +45,8 @@ def complete_arg_kwargs(self: Argument):
         if 'default' not in self.kwargs:
             self.kwargs.setdefault('nargs', '?')
 
+    from .types import dict_type
+
     if 'type' not in self.kwargs:
         # complete bool argument for action and default
         if self.attr_type == bool:
@@ -60,6 +62,9 @@ def complete_arg_kwargs(self: Argument):
 
         elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
             _complete_arg_kwargs_for_collection(self)
+
+    elif isinstance(dt := self.kwargs['type'], dict_type):
+        self.kwargs['type'] = dt._clone()
 
     if get_origin(self.attr_type) is Literal:
         _complete_arg_kwargs_for_literal(self)

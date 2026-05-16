@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from types import EllipsisType
 from typing import TypeVar, Callable, Union, Literal, get_origin, get_args, Type, Any
 
@@ -22,6 +24,9 @@ T = TypeVar('T')
 
 def literal_value_type(arg: str) -> bool | int | float | str:
     """Parse a string into its literal Python value"""
+    if not isinstance(arg, str):
+        raise TypeError()
+
     if arg.upper() == 'TRUE':
         return True
     elif arg.upper() == 'FALSE':
@@ -46,6 +51,9 @@ def bool_type(value: str) -> bool:
     :return: False for ('-', '0', 'f', 'false', 'n', 'no', 'x'), True for ('', '+', '1', 't', 'true', 'yes', 'y')
     :raises ValueError: if the string is not recognized as a boolean
     """
+    if not isinstance(value, str):
+        raise TypeError()
+
     value = value.lower()
     if value in ('-', '0', 'f', 'false', 'n', 'no', 'x'):
         return False
@@ -58,30 +66,44 @@ def bool_type(value: str) -> bool:
 def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
     """Create a caster that splits a comma-separated string into a tuple of typed values.
 
-    :param value_type: converter functions for each tuple position; use EllipsisType to repeat last
+    :param value_type: converter functions for each tuple position; use ``...`` to repeat last
     :return: a function that converts a comma-separated string into a typed tuple
     """
+    if len(value_type) == 0:
+        raise ValueError('empty tuple')
+
     try:
-        i = value_type.index(...)
+        ellipsis_index = value_type.index(...)
     except ValueError:
-        pass
+        ellipsis_index = None
     else:
-        if i == 0 or i != len(value_type) - 1:
-            raise RuntimeError()
+        if ellipsis_index == 0 or ellipsis_index != len(value_type) - 1:
+            raise ValueError('`...` does not put at last.')
 
     def _type(arg: str) -> tuple[T, ...]:
-        ret = []
-        remain: Callable[[str], T] | None = None
-        for i, a in enumerate(arg.split(',')):
-            if remain is not None:
-                ret.append(remain(a))
-            else:
-                t = value_type[i]
-                if t is ...:
-                    remain = value_type[i - 1]  # pyright: ignore[reportAssignmentType]
-                    ret.append(remain(a))  # pyright: ignore[reportOptionalCall]
+        ret: list[T] = []
+
+        if len(arg):
+            last_type: Type[T] | Callable[[str], T] | None = None
+            for i, a in enumerate(arg.split(',')):
+                if last_type is not None:
+                    ret.append(last_type(a))
                 else:
-                    ret.append(t(a))  # pyright: ignore[reportCallIssue]
+                    try:
+                        t = value_type[i]
+                    except IndexError as e:
+                        raise ValueError(f'not a {len(value_type)}-lengthed tuple') from e
+
+                    if t is ...:
+                        assert ellipsis_index is not None and ellipsis_index == i
+                        last_type = value_type[ellipsis_index - 1]
+                        ret.append(last_type(a))
+                    else:
+                        ret.append(t(a))
+
+        if ellipsis_index is None:
+            if len(ret) != len(value_type):
+                raise ValueError(f'not a {len(value_type)}-lengthed tuple')
 
         return tuple(ret)
 
@@ -104,10 +126,14 @@ def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prep
     :param prepend: list of values to prepend when string starts with '+' + split
     :return: function that converts a delimited string into a list
     """
+    if len(split) != 1:
+        raise ValueError()
 
     def _cast(arg: str) -> list[T]:
-        if arg.startswith(remove := ('+' + split)) and prepend is not None:
-            value = list(map(value_type, arg[len(remove):].split(split)))
+        if len(arg) == 0:
+            return []
+        elif arg.startswith('+') and prepend is not None:
+            value = list(map(value_type, arg[1:].split(split)))
             return [*prepend, *value]
         else:
             return list(map(value_type, arg.split(split)))
@@ -132,41 +158,58 @@ def union_type(*t: Callable[[str], T]):
                     return _t(arg)
                 except (TypeError, ValueError):
                     pass
-        raise TypeError
+        raise ValueError
 
     return _type
 
 
-def dict_type(value_type: Callable[[str], T] = str, default: dict[str, T] | None = None):
+class dict_type:
     """Caster that accumulates key-value pairs from 'key:value' or 'key=value' strings.
-
-    :param value_type: function to convert values (default: str)
-    :param default: initial dict to populate (default: new dict)
-    :return: function that updates and returns the dict
     """
-    if default is None:
-        default = {}
 
-    def _type(arg: str) -> dict[str, T]:
+    def __init__(self, value_type: Type[T] | Callable[[str], T] | None = str, default: dict[str, T] | None = None):
+        """
+
+        :param value_type: function to convert values (default: str)
+        :param default: initial dict to populate (default: new dict)
+        """
+        if default is None:
+            default = {}
+
+        self._value_type = value_type
+        self._default_dict = dict(default)
+        self._current_dict: dict[str, T] | None = None
+
+    def __call__(self, arg: str) -> dict[str, T]:
+        if self._current_dict is None:
+            self._current_dict = dict(self._default_dict)
+
         if ':' in arg:
             i = arg.index(':')
             value = arg[i + 1:]
-            if value_type is not None:
-                value = value_type(value)
-            default[arg[:i]] = value
+            if self._value_type is not None:
+                value = self._value_type(value)
+            self._current_dict[arg[:i]] = value
         elif '=' in arg:
             i = arg.index('=')
             value = arg[i + 1:]
-            if value_type is not None:
-                value = value_type(value)
-            default[arg[:i]] = value
-        elif value_type is None:
-            default[arg] = None
+            if self._value_type is not None:
+                value = self._value_type(value)
+            self._current_dict[arg[:i]] = value
+        elif self._value_type is None:
+            self._current_dict[arg] = None
         else:
-            default[arg] = value_type("")
-        return default
+            self._current_dict[arg] = self._value_type("")
 
-    return _type
+        return self._current_dict
+
+    def _clone(self) -> dict_type:
+        """create a copy of dict_type to avoid from sharing."""
+        return dict_type(self._value_type, self._default_dict)
+
+    def _clear(self):
+        """clear current cache dict"""
+        self._current_dict = None
 
 
 def slice_type(arg: str) -> slice:
@@ -176,10 +219,12 @@ def slice_type(arg: str) -> slice:
     :return: slice(start, end)
     :raises ValueError: if format is invalid or parts are not integers
     """
-    i = arg.index(':')
-    v1 = int(arg[:i])
-    v2 = int(arg[i + 1:])
-    return slice(v1, v2)
+    start, _, remaining = arg.partition(':')
+    end, _, step = remaining.partition(':')
+    s = int(start) if len(start) else None
+    e = int(end) if len(end) else None
+    t = int(step) if len(step) else None
+    return slice(s, e, t)
 
 
 def try_int_type(arg: str) -> Union[int, str, None]:
@@ -220,11 +265,15 @@ class literal_type:
         if candidate is not None:
             self.set_candidate(candidate)
 
-    def set_candidate(self, candidate: Any, overwrite: bool = False):
+    def set_candidate(self, candidate: Any, force: bool = False):
         if get_origin(candidate) is Literal:
             candidate = get_args(candidate)
 
-        if overwrite or self.candidate is None:
+        for element in candidate:
+            if element is not None and not isinstance(element, str):
+                raise ValueError('not a str list')
+
+        if force or self.candidate is None:
             self.optional = None in candidate
             if self.optional:
                 candidate = [it for it in candidate if it is not None]
@@ -236,7 +285,10 @@ class literal_type:
         if arg in self.candidate:
             return arg
 
-        if not self.complete:
+        if len(arg) == 0 and self.optional:
+            return None
+
+        if not self.complete or len(arg) == 0:
             raise ValueError
 
         match [it for it in self.candidate if it.startswith(arg)]:
@@ -245,7 +297,7 @@ class literal_type:
             case [match]:
                 return match
             case possible:
-                raise ValueError(f'confused {possible}')
+                raise ValueError(f"'{arg}' is confused for {possible}")
 
     def __str__(self):
         assert self.candidate is not None

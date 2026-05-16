@@ -336,6 +336,11 @@ class Argument(object):
         except KeyError:
             pass
 
+        # TODO do I need this code actually?
+        from .types import dict_type
+        if isinstance(dt := self.type, dict_type):
+            dt._clear()
+
     def add_argument(self, ap: argparse._ActionsContainer, instance):
         """Add this into `argparse.ArgumentParser`.
 

@@ -26,6 +26,20 @@ class ValidatorFailOnTypeError(ValidatorFailError):
     pass
 
 
+class ValidatorFailOnIndexError(ValidatorFailError):
+    def __init__(self, index: int | tuple[int, ...], raw_message: str):
+        if isinstance(index, int):
+            index = (index,)
+        self.index = index
+        self.message = raw_message
+
+        if len(index) == 1:
+            message = f'at index {str(index[0])}, {raw_message}'
+        else:
+            message = 'at index (' + ', '.join(map(str, index)) + '), ' + raw_message
+        super().__init__(message)
+
+
 class Validator:
     def __call__(self, value: Any) -> bool:
         """
@@ -500,6 +514,30 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
     def freeze(self) -> Self:
         return super().freeze(self._element_type)
 
+    def length_in_range(self, a: int | None, b: int | None, /) -> Self:
+        """Enforce a length range for tuple.
+
+        It only allows to be used in ``validator.tuple()`` and ``validator.tuple(...)`` forms.
+
+        """
+        if self._element_type != (...,):
+            raise RuntimeError('not a vary-length tuple type')
+
+        match (a, b):
+            case (int(a), None):
+                self._add(lambda it: a <= len(it),
+                          lambda it: f'tuple length less than {a}: {len(it)}')
+            case (None, int(b)):
+                self._add(lambda it: len(it) <= b,
+                          lambda it: f'tuple length over {b}: {len(it)}')
+            case (int(a), int(b)):
+                self._add(lambda it: a <= len(it) <= b,
+                          lambda it: f'tuple length out of range [{a}, {b}]: {len(it)}')
+            case _:
+                raise TypeError()
+
+        return self
+
     def on_item(self, item: int | list[int] | None, validator: Callable[[Any], bool]) -> Self:
         """Apply a validator to specific tuple positions
 
@@ -578,11 +616,13 @@ class ListItemValidatorBuilder(LambdaValidator):
         for i, element in enumerate(value):
             try:
                 fail = not super().__call__(element)
+            except ValidatorFailOnIndexError as e:
+                raise ValidatorFailOnIndexError((i, *e.index), e.message) from e
             except BaseException as e:
-                raise ValidatorFailError(f'at index {i}, ' + e.args[0]) from e
+                raise ValidatorFailOnIndexError(i, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailError(f'at index {i}, validate fail : {value}')
+                    raise ValidatorFailOnIndexError(i, f'validate fail : {value}')
         return True
 
     def _on_element(self, value: Any) -> bool:
@@ -620,12 +660,14 @@ class TupleItemValidatorBuilder(LambdaValidator):
         try:
             element = value[index]
         except IndexError as e:
-            raise ValidatorFailError(f'index {index} out of size {len(value)}') from e
+            raise ValidatorFailOnIndexError(index, f'out of size {len(value)}') from e
 
         try:
             return super().__call__(element)
+        except ValidatorFailOnIndexError as e:
+            raise ValidatorFailOnIndexError((index, *e.index), e.message) from e
         except BaseException as e:
-            raise ValidatorFailError(f'at index {index}, ' + e.args[0]) from e
+            raise ValidatorFailOnIndexError(index, *e.args) from e
 
     def freeze(self) -> Self:
         if isinstance(validator := self._validator, Validator):
@@ -698,17 +740,4 @@ class AndValidatorBuilder(Validator):
 
 
 def element_isinstance(e, t) -> bool:
-    if isinstance(t, type):
-        return isinstance(e, t)
-
-    if t is Any:
-        return True
-
-    if callable(t):
-        try:
-            return True if t(e) else False
-        except TypeError:
-            return False
-
-    print(f'NotImplementedError(element_isinstance(..., {t}))')
-    return False
+    return isinstance(t, type) and isinstance(e, t)

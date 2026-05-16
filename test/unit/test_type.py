@@ -6,6 +6,213 @@ from argclz import *
 from argclz.core import parse_args
 
 
+class TypeFunctionTest(unittest.TestCase):
+    def test_literal_value_type(self):
+        self.assertEqual(True, literal_value_type('true'))
+        self.assertEqual(True, literal_value_type('TRUE'))
+        self.assertEqual(False, literal_value_type('false'))
+        self.assertEqual(False, literal_value_type('False'))
+        self.assertEqual(0, literal_value_type('0'))
+        self.assertEqual(10, literal_value_type('10'))
+        self.assertEqual(10.0, literal_value_type('10.0'))
+        self.assertEqual(1e3, literal_value_type('1e3'))
+        self.assertEqual('abc', literal_value_type('abc'))
+        with self.assertRaises(TypeError):
+            bool_type(True)
+        with self.assertRaises(TypeError):
+            bool_type(False)
+        with self.assertRaises(TypeError):
+            bool_type(0)
+
+    def test_bool_type(self):
+        self.assertTrue(bool_type('+'))
+        self.assertTrue(bool_type('1'))
+        self.assertTrue(bool_type('t'))
+        self.assertTrue(bool_type('true'))
+        self.assertTrue(bool_type('T'))
+        self.assertTrue(bool_type('TRUE'))
+        self.assertTrue(bool_type('yes'))
+        self.assertTrue(bool_type('Yes'))
+        self.assertTrue(bool_type('YES'))
+        self.assertTrue(bool_type('y'))
+        self.assertTrue(bool_type('Y'))
+        self.assertFalse(bool_type('-'))
+        self.assertFalse(bool_type('0'))
+        self.assertFalse(bool_type('f'))
+        self.assertFalse(bool_type('F'))
+        self.assertFalse(bool_type('false'))
+        self.assertFalse(bool_type('False'))
+        self.assertFalse(bool_type('FALSE'))
+        self.assertFalse(bool_type('n'))
+        self.assertFalse(bool_type('no'))
+        self.assertFalse(bool_type('No'))
+        self.assertFalse(bool_type('NO'))
+        self.assertFalse(bool_type('x'))
+        self.assertFalse(bool_type('X'))
+        with self.assertRaises(ValueError):
+            bool_type('other')
+        with self.assertRaises(TypeError):
+            bool_type(True)
+        with self.assertRaises(TypeError):
+            bool_type(False)
+
+    def test_tuple_type(self):
+        self.assertTupleEqual(('a', 1, True), tuple_type(str, int, bool_type)('a,1,y'))
+
+        with self.assertRaises(ValueError):
+            tuple_type()
+
+    def test_tuple_type_index_error(self):
+        t = tuple_type(int, int)
+
+        self.assertTupleEqual((1, 2), t('1,2'))
+
+        with self.assertRaises(ValueError):
+            t('')
+        with self.assertRaises(ValueError):
+            t('1')
+        with self.assertRaises(ValueError):
+            t('1,2,3')
+
+    def test_tuple_type_var_length(self):
+        t = tuple_type(int, ...)
+        self.assertTupleEqual((), t(''))
+        self.assertTupleEqual((1,), t('1'))
+        self.assertTupleEqual((1, 2), t('1,2'))
+        self.assertTupleEqual((1, 2, 3), t('1,2,3'))
+
+        with self.assertRaises(ValueError):
+            tuple_type(...)
+
+        with self.assertRaises(ValueError):
+            tuple_type(..., int)
+
+        with self.assertRaises(ValueError):
+            tuple_type(int, ..., int)
+
+        with self.assertRaises(ValueError):
+            tuple_type(int, ..., ...)
+
+    def test_list_type(self):
+        self.assertListEqual([], list_type(int)(''))
+        self.assertListEqual([1], list_type(int)('1'))
+        self.assertListEqual([1, 2, 3], list_type(int)('1,2,3'))
+        self.assertListEqual([1, 2, 3], list_type(int, split=':')('1:2:3'))
+        self.assertListEqual([1, 2, 3], list_type(int, prepend=[0])('1,2,3'))
+        self.assertListEqual([0, 1, 2, 3], list_type(int, prepend=[0])('+1,2,3'))
+
+        with self.assertRaises(ValueError):
+            list_type(int, split='')
+        with self.assertRaises(ValueError):
+            list_type(int, split=',,')
+
+    def test_unit_type(self):
+        t = union_type(int, float, bool_type)
+
+        self.assertEqual(1, t('1'))
+        self.assertEqual(1.1, t('1.1'))
+        self.assertEqual(True, t('y'))
+        with self.assertRaises(ValueError):
+            t('a')
+
+    def test_dict_type(self):
+        # dict_type has internal structure that cannot be invoked repeated.
+        # otherwise, it will give unexpected results.
+
+        # we do not test this special behavior here.
+        # t = dict_type(int)
+        # self.assertDictEqual({'a': 1}, t('a:1'))
+        # self.assertDictEqual({'a': 1, 'b': 2}, t('b:2'))
+
+        self.assertDictEqual({'a': 1}, dict_type(int)('a:1'))
+        self.assertDictEqual({'a': 1}, dict_type(int)('a=1'))
+
+        with self.assertRaises(ValueError):
+            dict_type(int)('a')
+
+        self.assertDictEqual({'a': '1'}, dict_type(str)('a:1'))
+        self.assertDictEqual({'a': '1'}, dict_type(str)('a=1'))
+        self.assertDictEqual({'a': ''}, dict_type(str)('a'))
+
+        self.assertDictEqual({'a': '1'}, dict_type(None)('a:1'))
+        self.assertDictEqual({'a': '1'}, dict_type(None)('a=1'))
+        self.assertDictEqual({'a': None}, dict_type(None)('a'))
+
+    def test_slice_type(self):
+        self.assertEqual(slice(0, 10), slice_type('0:10'))
+        self.assertEqual(slice(None, 10), slice_type(':10'))
+        self.assertEqual(slice(10, None), slice_type('10:'))
+        self.assertEqual(slice(0, 10, 2), slice_type('0:10:2'))
+        self.assertEqual(slice(0, None, 2), slice_type('0::2'))
+        self.assertEqual(slice(None, None, 2), slice_type('::2'))
+
+    def test_try_int_type(self):
+        self.assertEqual(None, try_int_type(''))
+        self.assertEqual(0, try_int_type('0'))
+        self.assertEqual('0.0', try_int_type('0.0'))
+        self.assertEqual('1.2', try_int_type('1.2'))
+        self.assertEqual('abc', try_int_type('abc'))
+
+    def test_try_float_type(self):
+        self.assertEqual(None, try_float_type(''))
+        self.assertEqual(0.0, try_float_type('0'))
+        self.assertEqual(1.2, try_float_type('1.2'))
+        self.assertEqual('abc', try_float_type('abc'))
+
+    def test_literal_type(self):
+        tt = [
+            ('literal_type[list]', literal_type(['AAA', 'BBB', 'CCC'])),
+            ('literal_type[Literal]', literal_type(Literal['AAA', 'BBB', 'CCC'])),
+        ]
+
+        for message, t in tt:
+            with self.subTest(message):
+                self.assertEqual('AAA', t('AAA'))
+                self.assertEqual('BBB', t('BBB'))
+                self.assertEqual('CCC', t('CCC'))
+                with self.assertRaises(ValueError):
+                    t('DDD')
+                with self.assertRaises(ValueError):
+                    t('')
+
+    def test_literal_type_optional(self):
+        t = literal_type(['AAA', 'BBB', None])
+        self.assertEqual('AAA', t('AAA'))
+        self.assertEqual('BBB', t('BBB'))
+        self.assertEqual(None, t(''))
+        with self.assertRaises(ValueError):
+            t('DDD')
+
+        t = literal_type(['AAA', 'BBB', ''])
+        self.assertEqual('', t(''))
+
+    def test_literal_type_of_non_str_types(self):
+        with self.assertRaises(ValueError):
+            literal_type([1])
+        with self.assertRaises(ValueError):
+            literal_type(Literal[1])
+
+    def test_literal_type_complete(self):
+        t = literal_type(['AAA', 'BBB', 'CCC'], complete=True)
+        self.assertEqual('AAA', t('A'))
+        self.assertEqual('BBB', t('B'))
+        self.assertEqual('CCC', t('C'))
+        with self.assertRaises(ValueError):
+            t('D')
+        with self.assertRaises(ValueError):
+            t('')
+
+    def test_literal_type_complete_confuse(self):
+        t = literal_type(['AAA', 'ABC', 'BBB'], complete=True)
+        self.assertEqual('AAA', t('AA'))
+        self.assertEqual('ABC', t('AB'))
+
+        with self.assertRaises(ValueError) as capture:
+            t('A')
+        self.assertEqual(capture.exception.args[0],
+                         "'A' is confused for ['AAA', 'ABC']")
+
+
 class TypeAnnotationTest(unittest.TestCase):
     def test_bool(self):
         class Opt:
@@ -236,7 +443,7 @@ class TypeAnnotationTest(unittest.TestCase):
 
         opt = parse_args(Opt(), ['-a=1,2'])
         self.assertListEqual(opt.a, [1, 2])
-        opt = parse_args(Opt(), ['-a=+,1,2'])
+        opt = parse_args(Opt(), ['-a=+1,2'])
         self.assertListEqual(opt.a, [0, 1, 2])
 
     def test_tuple_type(self):
@@ -255,23 +462,6 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=1,2,3'])
         self.assertTupleEqual(opt.a, (1, 2, 3))
 
-    def test_tuple_type_func(self):
-        _ = tuple_type(int)
-        _ = tuple_type(int, int)
-        _ = tuple_type(int, ...)
-
-        with self.assertRaises(RuntimeError):
-            tuple_type(...)
-
-        with self.assertRaises(RuntimeError):
-            tuple_type(..., int)
-
-        with self.assertRaises(RuntimeError):
-            tuple_type(int, ..., int)
-
-        with self.assertRaises(RuntimeError):
-            tuple_type(int, ..., ...)
-
     def test_dict_type(self):
         class Opt:
             a: dict[str, int] = argument('-a', type=dict_type(literal_value_type))
@@ -284,6 +474,30 @@ class TypeAnnotationTest(unittest.TestCase):
 
         opt = parse_args(Opt(), ['-a=a=1', '-a=b:2', '-a=c'])
         self.assertDictEqual(opt.a, {'a': 1, 'b': 2, 'c': ''})
+
+    def test_dict_type_recall_should_not_append(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', type=dict_type(int))
+
+        opt = parse_args(Opt(), ['-a=a=1'])
+        self.assertDictEqual(opt.a, {'a': 1})
+
+        opt = parse_args(Opt(), ['-a=b=2'])
+        self.assertDictEqual(opt.a, {'b': 2})
+
+        opt = parse_args(opt, ['-a=c=3'])
+        self.assertDictEqual(opt.a, {'c': 3})
+
+    def test_shared_dict_type(self):
+        t = dict_type(int)
+
+        class Opt:
+            a: dict[str, int] = argument('-a', type=t)
+            b: dict[str, int] = argument('-b', type=t)
+
+        opt = parse_args(Opt(), ['-a=a=1', '-b=b=2'])
+        self.assertDictEqual(opt.a, {'a': 1})
+        self.assertDictEqual(opt.b, {'b': 2})
 
 
 if __name__ == '__main__':

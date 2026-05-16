@@ -433,6 +433,44 @@ class TestValidateBuilder(unittest.TestCase):
         opt.a = ('a', 'b')
         opt.a = ('a', 'b', 'c')
 
+    def test_tuple_in_range(self):
+        class Opt:
+            a: tuple[str, ...] = argument('-a', validator.tuple().length_in_range(2, None))
+            b: tuple[str, ...] = argument('-a', validator.tuple().length_in_range(None, 2))
+            c: tuple[str, ...] = argument('-a', validator.tuple().length_in_range(2, 4))
+
+        opt = Opt()
+        opt.a = ('1', '2', '3')
+        opt.b = ()
+        opt.b = ('1',)
+        opt.c = ('1', '2')
+
+        with self.assertRaises(ValueError):
+            opt.a = ()
+        with self.assertRaises(ValueError):
+            opt.c = ()
+
+    def test_tuple_in_range_error(self):
+        class Opt:
+            a: tuple[str, ...] = argument('-a', validator.tuple().length_in_range(2, 3))
+            b: tuple[str, ...] = argument('-a', validator.tuple(...).length_in_range(2, 3))
+
+        with self.assertRaises(RuntimeError):
+            class Opt:
+                a: tuple[str, ...] = argument('-a', validator.tuple(2).length_in_range(2, 3))
+
+        with self.assertRaises(RuntimeError):
+            class Opt:
+                a: tuple[str, ...] = argument('-a', validator.tuple(2, ...).length_in_range(2, 3))
+
+        with self.assertRaises(RuntimeError):
+            class Opt:
+                a: tuple[str, ...] = argument('-a', validator.tuple(int).length_in_range(2, 3))
+
+        with self.assertRaises(RuntimeError):
+            class Opt:
+                a: tuple[str, ...] = argument('-a', validator.tuple(int, ...).length_in_range(2, 3))
+
     def test_tuple_element_type(self):
         class Opt:
             a: tuple[str, int, float] = argument(
@@ -489,6 +527,81 @@ class TestValidateBuilder(unittest.TestCase):
 
         opt = Opt()
         opt.a = ('', 0, 0.0)
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('1234', 0, 0.0)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 0, str length over 2: "1234"')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('12', 100, 0.0)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 1, value out of range [0, 10]: 100')
+
+    def test_tuple_multiple_element_validating(self):
+        class Opt:
+            a: tuple[str, int, str, int] = argument(
+                '-a',
+                validator.tuple(str, int, str, int)
+                .on_item((0, 2), validator.str.length_in_range(None, 2))
+                .on_item((1, 3), validator.int.in_range(0, 10))
+            )
+
+        opt = Opt()
+        opt.a = ('', 0, '1', 1)
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('1234', 0, '1', 1)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 0, str length over 2: "1234"')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('', 100, '1', 1)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 1, value out of range [0, 10]: 100')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('1', 0, '1234', 1)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 2, str length over 2: "1234"')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('', 1, '1', 100)
+        self.assertEqual(capture.exception.args[0],
+                         'at index 3, value out of range [0, 10]: 100')
+
+        # TODO how to handle multiple failure?
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('', 1000, '1234', 1)  # validator.str comes first
+        self.assertEqual(capture.exception.args[0],
+                         'at index 2, str length over 2: "1234"')
+
+    def test_tuple_n_element_validating(self):
+        class Opt:
+            a: tuple[str, int, float] = argument(
+                '-a',
+                validator.tuple(3)
+                .on_item(0, validator.str.length_in_range(None, 2))
+                .on_item(1, validator.int.in_range(0, 10))
+            )
+
+        opt = Opt()
+        opt.a = ('', 0, 0.0)
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('',)
+        self.assertEqual(capture.exception.args[0],
+                         "length not match to 3 : ('',)")
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('', 1)
+        self.assertEqual(capture.exception.args[0],
+                         "length not match to 3 : ('', 1)")
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ('', 1, 2.0, False)
+        self.assertEqual(capture.exception.args[0],
+                         "length not match to 3 : ('', 1, 2.0, False)")
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('1234', 0, 0.0)
@@ -576,7 +689,15 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'str length out of range [0, 10]: "1111111111111"')
 
-    def test_any_literal(self):
+    def test_empty_any(self):
+        class Opt:
+            a: str = argument('-a', validator.any())
+
+        opt = Opt()
+        opt.a = 0
+        opt.a = ''
+
+    def test_any_oper(self):
         class Opt:
             a: int | str = argument('-a', (
                     validator.int.in_range(0, 10) | validator.str.length_in_range(0, 10)
@@ -642,7 +763,15 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'not a non-negative value : -1')
 
-    def test_all_literal(self):
+    def test_empty_all(self):
+        class Opt:
+            a: str = argument('-a', validator.all())
+
+        opt = Opt()
+        opt.a = 0
+        opt.a = ''
+
+    def test_all_oper(self):
         class Opt:
             a: int = argument('-a', (
                     validator.int.positive(include_zero=True) & validator.int.negative(include_zero=True)
@@ -720,13 +849,19 @@ class TestValidateBuilder(unittest.TestCase):
         # print(capture.exception.args)
         # length not match to 2 : (0, 1, 2, 3); length not match to 3 : (0, 1, 2, 3)
 
+    def test_list_type_but_validator(self):
+        with self.assertRaises(TypeError) as capture:
+            class Opt:
+                a: list[int] = argument('-a', validator.list(validator.int))
+
     def test_nested_list(self):
         class Opt:
-            a: list[tuple[int, list[list[int]]]] = argument('-a', validator.list(
-                validator.tuple(int, None)
-                .on_item(0, validator.int)
-                .on_item(1, validator.list().on_item(validator.list(int)))
-            ))
+            a: list[tuple[int, list[list[int]]]] = argument(
+                '-a',
+                validator.list()
+                .on_item(validator.tuple(int, None)
+                         .on_item(0, validator.int)
+                         .on_item(1, validator.list().on_item(validator.list(int)))))
 
         opt = Opt()
         opt.a = []
@@ -735,11 +870,11 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = [([[0]])]
         self.assertEqual(capture.exception.args[0],
-                         'not a tuple : [[0]]')
+                         'at index 0, not a tuple : [[0]]')
         with self.assertRaises(ValueError) as capture:
             opt.a = [(0, [0])]
         self.assertEqual(capture.exception.args[0],
-                         'at index 1, at index 0, not a list : 0')
+                         'at index (0, 1, 0), not a list : 0')
 
     def test_tuple_on_multiple_item(self):
         class Opt:
@@ -789,6 +924,11 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('0', '1')
+
+    def test_tuple_type_but_validator(self):
+        with self.assertRaises(TypeError) as capture:
+            class Opt:
+                a: tuple[int, ...] = argument('-a', validator.tuple(validator.int))
 
     def test_reuse_validator(self):
         class Opt:
