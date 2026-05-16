@@ -13,7 +13,7 @@ P = inspect.Parameter
 
 class DispatchCommandBuilder:
     """
-    (internal) Do not use class directly.
+    (internal) Do not use this class directly.
     """
     def __init__(self, func):
         self.func = func
@@ -63,7 +63,7 @@ class DispatchCommandBuilder:
 
 class TypeCasterWithValidator(Generic[T]):
     """
-    (internal) Do not use class directly.
+    (internal) Do not use this class directly.
     """
     def __init__(self, caster: Callable[[str], T] | None,
                  validator: Callable[[T], bool] | None):

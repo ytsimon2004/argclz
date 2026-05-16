@@ -247,8 +247,8 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(opt.r, 'a')
 
         with self.assertRaises(ValueError) as capture:
-            opt.main(['A', '0'], system_exit=False)
-        print(capture.exception)
+            opt.main(['A', '0'])
+        self.assertEqual(capture.exception.args[0], 'command A argument "a" : not a positive value : 0')
 
     def test_dispatch_command_argument_validator_misorder(self):
         with self.assertRaises(RuntimeError) as capture:

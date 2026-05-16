@@ -1,4 +1,4 @@
-from typing import Callable, TypeVar, overload
+from typing import Callable, TypeVar, overload, ParamSpec, TypeAlias
 
 from ..validator import Validator
 
@@ -7,16 +7,18 @@ __all__ = [
     'validator_for'
 ]
 
-T = TypeVar('T')
+P = ParamSpec("P")
+R = TypeVar('R')
 F = TypeVar('F', bound=Callable)
-
+Method: TypeAlias = Callable[P, R]
+Decorator: TypeAlias = Callable[[Method], Method]
 
 def dispatch(command: str,
              *alias: str,
              group: str | None = None,
              order: float = 5,
              usage: str | None = None,
-             hidden=False) -> Callable[[F], F]:
+             hidden=False) -> Decorator:
     """
     A decorator that mark a function as a dispatch target function.
 
@@ -46,7 +48,7 @@ def dispatch(command: str,
     if len(command) == 0:
         raise ValueError('empty command string')
 
-    def _dispatch(f: F) -> F:
+    def _dispatch(f: Method) -> Method:
         from .builder import DispatchCommandBuilder
         DispatchCommandBuilder.of(f).build(command, alias, order, group, usage, hidden)
         return f
@@ -55,45 +57,45 @@ def dispatch(command: str,
 
 
 @overload
-def validator_for(arg: str) -> Callable[[F], F]:
+def validator_for(arg: str) -> Decorator:
     pass
 
 
 @overload
-def validator_for(arg: str, caster: Callable[[str], T] | Validator) -> Callable[[F], F]:
+def validator_for(arg: str, caster: Callable[[str], R] | Validator) -> Decorator:
     pass
 
 
 @overload
-def validator_for(arg: str, caster: Callable[[str], T], validator: Validator) -> Callable[[F], F]:
+def validator_for(arg: str, caster: Callable[[str], R], validator: Validator) -> Decorator:
     pass
 
 
-def validator_for(arg: str, caster: Callable[[str], T] | Validator | None = None, validator: Validator | None = None) -> Callable[[F], F]:
+def validator_for(arg: str, caster: Callable[[str], R] | None = None, validator: Validator | None = None) -> Decorator:
     """
-    A decorator that do the caster and valudation on dispatch arguments.
+    A decorator that do the caster and validation on dispatch arguments.
 
     **Example**
 
     >>> class D(Dispatch):
     ...     @dispatch('cmd')
-    ...     @validator_for('a')
+    ...     @validator_for('a') # indicating to cast 'a' to int from command parameter
     ...     def run_cmd(self, a: int):
     ...         assert isinstance(a, int)
 
     **Type (caster)**
 
-    The parameter ``caster`` usually can be infered via the annotation of target parameter,
+    The parameter ``caster`` usually can be inferred via the annotation of target parameter,
     like the `a: int` in above example.
 
     :param arg: name of the parameter.
-    :param caster: type caster with the signature ``(str) -> T``.
-    :param validator: validator with the signatire ``(T) -> bool``.
+    :param caster: type caster with the signature ``(str) -> R``.
+    :param validator: validator with the signature ``(R) -> bool``.
     """
     if isinstance(caster, Validator) and validator is None:
         caster, validator = None, caster
 
-    def _validator_for(f: F) -> F:
+    def _validator_for(f: Method) -> Method:
         from .builder import DispatchCommandBuilder
         DispatchCommandBuilder.of(f).validator_for(arg, caster, validator)  # pyright: ignore[reportArgumentType]
         return f

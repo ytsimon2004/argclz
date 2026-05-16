@@ -67,7 +67,7 @@ class SubCommandGroup:
 
 
 class SubCommand:
-    def __init__(self, command: str, sub_parser: Type[AbstractParser]):
+    def __init__(self, command: str, sub_parser: AbstractParser | Type[AbstractParser]):
         self.command = command
         self.sub_parser = sub_parser
 
@@ -80,6 +80,14 @@ class SubCommand:
             description = description()
 
         sb.add_parser(self.command, help=description, parents=[pp], add_help=False)
+
+
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
+def sub_command_group(*, title: str = ...,
+                      description: str = ...,
+                      required: bool = ...):
+    pass
 
 
 def sub_command_group(**kwargs):
@@ -140,8 +148,10 @@ def init_sub_command(p: AbstractParser) -> AbstractParser:
     pp_cls: Type[AbstractParser] = pp
     s = inspect.signature(pp_cls.__init__)
     if len(s.parameters) == 1:
+        # def __init__(self):
         return pp_cls()
     else:
+        # def __init__(self, parent):
         return pp_cls(p)
 
 
@@ -165,7 +175,7 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
 
     group = SubCommandGroup(title='commands')
     group.attr = 'main'
-    group.sub_parsers = [SubCommand(cmd, pp if isinstance(pp, type) else type(pp)) for cmd, pp in parsers.items()]
+    group.sub_parsers = [SubCommand(cmd, pp) for cmd, pp in parsers.items()]
     group.add_parser(ap)
 
     return ap

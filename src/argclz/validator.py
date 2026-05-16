@@ -137,7 +137,7 @@ class ValidatorBuilder:
         return TupleValidatorBuilder(element_type)
 
     # noinspection PyMethodMayBeStatic
-    def list(self, element_type: type[T] | Validator | None = None) -> ListValidatorBuilder:
+    def list(self, element_type: type[T] | None = None) -> ListValidatorBuilder:
         """
         a list validator
 
@@ -415,7 +415,10 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
     """a list validator"""
 
-    def __init__(self, element_type: type[T] | Validator | None = None):
+    def __init__(self, element_type: type[T] | None = None):
+        if element_type is not None and not isinstance(element_type, type):
+            raise TypeError('not a type ' + str(element_type))
+
         super().__init__()
         self._element_type = element_type
         self._allow_empty = True
@@ -477,20 +480,22 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
     def __init__(self, element_type: tuple[Any, ...]):
         super().__init__()
 
-        _element_type: tuple[Any, ...]
+        modified_element_type: tuple[Any, ...]
         match element_type:
             case ():
-                # XXX does validate for empty tuple meaningful?
-                #  No, so it will be interpreted as ...
-                _element_type = (...,)
-            case (int(length), ):
-                _element_type = (None,) * length
-            case (int(length), e) if e is ...:
-                _element_type = (None,) * length + (...,)
+                modified_element_type = (...,)
+            case (int(length), ):  # exact length
+                modified_element_type = (None,) * length
+            case (int(length), e) if e is ...:  # at least length
+                modified_element_type = (None,) * length + (...,)
             case _:
-                _element_type = element_type
+                modified_element_type = element_type
 
-        self._element_type: tuple[Any, ...] = _element_type
+        for et in modified_element_type:
+            if et is not None and et is not ... and not isinstance(et, type):
+                raise TypeError('not a type ' + str(element_type))
+
+        self._element_type: tuple[Any, ...] = modified_element_type
 
     def freeze(self) -> Self:
         return super().freeze(self._element_type)
@@ -552,7 +557,7 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
 
         return self
 
-    def is_exists(self) -> Self:
+    def is_exists(self) -> Self:  # TODO rename to must_existed?
         """Check if path exists"""
         self._add(lambda it: it.exists(), f'path does not exist: %s')
         return self
@@ -601,8 +606,10 @@ class TupleItemValidatorBuilder(LambdaValidator):
                 if not self.__call_on_index__(index, value):
                     return False
             return True
+
         elif isinstance(self._item, int):
             return self.__call_on_index__(self._item, value)
+
         else:
             for index in self._item:
                 if not self.__call_on_index__(index, value):

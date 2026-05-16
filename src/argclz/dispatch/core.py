@@ -16,8 +16,8 @@ __all__ = [
 ]
 
 T = TypeVar('T')
-P = ParamSpec('P')
-R = TypeVar('R')
+P: ParamSpec = ParamSpec('P')
+R: TypeVar = TypeVar('R')
 
 ARGCLZ_DISPATCH_COMMAND = '__argclz_dispatch_command__'
 
@@ -44,7 +44,7 @@ class DispatchCommand(NamedTuple):
     usage: str | None
     """usage line of this command """
 
-    func: Callable[..., Any]
+    func: Callable[P, R]
     """target function"""
 
     validators: dict[str, Callable[[str], Any]]
@@ -68,7 +68,7 @@ class DispatchCommand(NamedTuple):
         """document of the command."""
         return self.func.__doc__
 
-    def __call__(self, zelf: Any, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, zelf: Any, *args: P.args, **kwargs: P.kwargs) -> R:
         """
         invoke commands.
 
@@ -81,7 +81,7 @@ class DispatchCommand(NamedTuple):
         **parameter post-processing**
 
         If any argument has a validator (by :func:`~argclz.dispatch.annotations.validator_for`),
-        the argument will be casted to desired type (if it is a str) and be validated.
+        the argument will be cast to desired type (if it is a str) and be validated.
         An `ValueError` will be raised when validation fail.
 
         :param zelf: instance of the target function
@@ -254,13 +254,18 @@ class CommandParameter(NamedTuple):
 
 
 class DispatchCommandNotFound(RuntimeError):
-    def __init__(self, command: str, group: str | None = None):
+    def __init__(self, command: str, group: str | DispatchGroup | BoundDispatchGroup | None = None):
         if group is None:
             message = f'command {command} not found'
         else:
+            if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
+                group = group.group
+
             message = f'command {group}:{command} not found'
 
         super().__init__(message)
+        self.group: str | None = group
+        self.command: str = command
 
 
 class CommandHelps(NamedTuple):
@@ -335,11 +340,11 @@ class Dispatch:
     """
 
     @classmethod
-    def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | None | EllipsisType = ..., *,
+    def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | EllipsisType | None = ..., *,
                       all: bool = False) -> list[DispatchCommand]:
         """list all :func:`~argclz.dispatch.annotations.dispatch` functions.
 
-        :param group: dispatch group.
+        :param group: dispatch group. Use ``None`` for default group, and use ``...`` for all groups.
         :param all: including hidden commands
         :return: list of DispatchCommand
         """
@@ -359,11 +364,11 @@ class Dispatch:
 
     @classmethod
     def find_command(cls, command: str,
-                     group: str | DispatchGroup | BoundDispatchGroup | None | EllipsisType = ...) -> DispatchCommand | None:
+                     group: str | DispatchGroup | BoundDispatchGroup | EllipsisType | None = ...) -> DispatchCommand | None:
         """find :func:`~argclz.dispatch.annotations.dispatch` function according to *command*.
 
         :param command: command or one of command's aliases
-        :param group: dispatch group
+        :param group: dispatch group. Use ``None`` for default group, and use ``...`` for all groups.
         :return: found :class:`DispatchCommand`
         """
         if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
@@ -404,8 +409,7 @@ class Dispatch:
         :raise DispatchCommandNotFound:
         """
         if (info := self.find_command(command, group)) is None:
-            group_name = group.group if isinstance(group, (DispatchGroup, BoundDispatchGroup)) else group
-            raise DispatchCommandNotFound(command, group_name)
+            raise DispatchCommandNotFound(command, group)
         return info(self, *args, **kwargs)
 
     @classmethod

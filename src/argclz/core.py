@@ -5,7 +5,7 @@ import argparse
 import collections
 import sys
 from collections.abc import Sequence, Iterable, Callable
-from typing import TYPE_CHECKING, Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO, cast
+from typing import TYPE_CHECKING, Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO
 
 from typing_extensions import Self
 
@@ -108,12 +108,12 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
-             system_exit: Type[BaseException] | bool = SystemExit) -> AbstractParser:
+             system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
         """parsing the commandline input *args* and call :meth:`~argclz.core.ArgumentParser.run()`.
 
         :param args: command-line arguments. If omitted, use ``sys.args``.
         :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
-        :param system_exit: error raised when commandline parsed fail.
+        :param system_exit: error raised when commandline parsed fail. default raise ``SystemExit``.
         :return: parser itself. If it has sub command, return sub parser when used.
         """
         parser = self.new_parser(reset=True)
@@ -207,7 +207,7 @@ class Argument(object):
         from .validator import Validator
         if len(options) > 0 and isinstance(options[-1], Validator):
             if validator is not None:
-                raise RuntimeError()
+                raise RuntimeError('multiple validators in both last position and keyword arguments.')
             validator = options[-1]
             options = options[:-1]
 
@@ -267,11 +267,14 @@ class Argument(object):
         return self.kwargs.get('required', False)
 
     @property
-    def type(self) -> type | Callable[[str], Any] | None:
+    def type(self) -> Type | Callable[[str], T]:
         try:
             return self.kwargs['type']
         except KeyError:
             pass
+
+        if self.attr is None:
+            raise RuntimeError('Argument is not setup properly.')
 
         attr_type = self.attr_type
         if attr_type == bool:
@@ -281,7 +284,6 @@ class Argument(object):
             return attr_type
         else:
             from ._types import caster_by_annotation
-            assert self.attr is not None
             return caster_by_annotation(self.attr, attr_type)
 
     @property
@@ -290,7 +292,7 @@ class Argument(object):
 
     def __set_name__(self, owner: Type, name: str):
         if self.attr is not None:
-            raise RuntimeError('reuse Argument')
+            raise RuntimeError(f'Argument reused by {self.attr} and {name}')
 
         self.attr = name
         self.attr_type = get_type_hints(owner).get(name, Any)
@@ -349,6 +351,25 @@ class Argument(object):
             else:
                 name = type(instance).__name__
             raise RuntimeError(f'{name}.{self.attr} : ' + repr(e)) from e
+
+    # noinspection PyOverloads
+    @overload  # this overload is used to show the actual keyword arguments.
+    def with_options(self,
+                     option: str | dict[str, str] = None,
+                     *options: str,
+                     action: Actions = None,
+                     nargs: int | Nargs = None,
+                     const: T = None,
+                     default: T = None,
+                     type: Type | Callable[[str], T] = None,
+                     validator: Callable[[T], bool] = None,
+                     choices: Sequence[str] = None,
+                     required: bool = None,
+                     hidden: bool = None,
+                     help: str = None,
+                     group: str = None,
+                     metavar: str = None) -> Self:
+        pass
 
     def with_options(self, *options, **kwargs) -> Self:
         """Modify or update keyword parameter and return a new argument.
@@ -414,8 +435,9 @@ class Argument(object):
         return ret
 
 
-@overload
-def argument(*options: str | Validator,
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
+def argument(*options: str,
              action: Actions = ...,
              nargs: int | Nargs = ...,
              const: T = ...,
@@ -432,7 +454,7 @@ def argument(*options: str | Validator,
     ...
 
 
-def argument(*options: str | Validator, **kwargs) -> Any:
+def argument(*options, **kwargs) -> Any:
     r"""create an argument attribute
 
     **Usage**
@@ -485,9 +507,10 @@ def argument(*options: str | Validator, **kwargs) -> Any:
     return Argument(*options, **kwargs)
 
 
-@overload
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
 def pos_argument(option: str,
-                 validator: Callable[[T], bool] = ..., *,
+                 validator: Callable[[T], bool] = None, *,
                  nargs: Nargs | None = None,
                  action: Actions = ...,
                  const: T = ...,
@@ -525,9 +548,10 @@ def pos_argument(option: str, validator: Callable[[T], bool] | None = None, *, n
     return Argument(metavar=option, nargs=nargs, **kwargs)
 
 
-@overload
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
 def var_argument(option: str,
-                 validator: Callable[[T], bool] = ..., *,
+                 validator: Callable[[T], bool] = None, *,
                  nargs: Nargs = ...,
                  action: Actions = ...,
                  type: Type | Callable[[str], T] = ...,
@@ -583,10 +607,12 @@ class AliasArgument(Argument):
             kw['const'] = values
             kw['help'] = f'short for {primary}={values}.'
             gp.add_argument(name, **kw, dest=self.attr)
+
         return result
 
 
-@overload
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
 def aliased_argument(options: str, *,
                      aliases: dict[str, T],
                      nargs: Nargs = ...,
@@ -594,7 +620,7 @@ def aliased_argument(options: str, *,
                      const: T = ...,
                      default: T = ...,
                      type: Type | Callable[[str], T] = ...,
-                     validator: Callable[[T], bool] = ...,
+                     validator: Callable[[T], bool] | None = None,
                      choices: Sequence[str] = ...,
                      help: str = ...,
                      group: str | None = None,
@@ -711,7 +737,7 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
             continue
         elif arg.ex_group is not None:
             try:
-                tp: argparse._ActionsContainer = mu_ex_groups[arg.ex_group]
+                tp = mu_ex_groups[arg.ex_group]
             except KeyError:
                 # XXX current Python does not support add title and description into mutually exclusive group
                 #   so the message in ex_group is dropped.
@@ -719,7 +745,7 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
                 tp = mu_ex_groups[arg.ex_group]
 
             if arg.required:
-                mu_ex_groups[arg.ex_group].required = True
+                tp.required = True
         else:
             tp = ap
 
@@ -739,7 +765,7 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
                     tp = mu_ex_groups_grp[arg.ex_group]
 
                 if arg.required:
-                    mu_ex_groups_grp[arg.ex_group].required = True
+                    tp.required = True
             else:
                 tp = pp
 
@@ -757,6 +783,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
     """
     for arg in foreach_arguments(instance):
         assert arg.attr is not None
+
         try:
             value = getattr(result, arg.attr)
         except AttributeError:
@@ -767,6 +794,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
         assert sub.attr is not None
+
         try:
             value = getattr(result, sub.attr)
         except AttributeError:
@@ -844,7 +872,17 @@ def with_defaults(instance: T) -> T:
     return instance
 
 
-def as_dict(instance: list[T] | T) -> list[dict[str, Any]] | dict[str, Any]:
+@overload
+def as_dict(instance: list[T]) -> list[dict[str, Any]]:
+    pass
+
+
+@overload
+def as_dict(instance: T) -> dict[str, Any]:
+    pass
+
+
+def as_dict(instance):
     """
     Collect all argument attributes into a dictionary with attribute name to its value.
     It *instance* is a list, it works like ``list(map(as_dict, instance))``.
@@ -856,11 +894,12 @@ def as_dict(instance: list[T] | T) -> list[dict[str, Any]] | dict[str, Any]:
         if len(instance) == 0:
             return []
 
-        return cast(list[dict[str, Any]], list(map(as_dict, instance)))
+        return list(map(as_dict, instance))
 
     ret = {}
     for arg in foreach_arguments(instance):
         assert arg.attr is not None
+
         try:
             value = arg.__get__(instance)
         except AttributeError:
@@ -871,6 +910,7 @@ def as_dict(instance: list[T] | T) -> list[dict[str, Any]] | dict[str, Any]:
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
         assert sub.attr is not None
+
         try:
             value = sub.__get__(instance)
         except AttributeError:
@@ -893,6 +933,7 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
 
     for arg in foreach_arguments(opt):
         assert arg.attr is not None
+
         try:
             value = getattr(shadow, arg.attr)
         except AttributeError:
@@ -904,6 +945,7 @@ def copy_argument(opt: T, ref, **kwargs) -> T:
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(opt)) is not None:
         assert sub.attr is not None
+
         try:
             value = getattr(shadow, sub.attr)
         except AttributeError:
