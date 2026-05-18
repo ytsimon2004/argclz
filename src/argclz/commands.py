@@ -116,6 +116,17 @@ def sub_command_group(**kwargs):
 
     where the parameter ``parent`` refer to its outer ``AbstractParser`` (e.g. ``Example`` in above example).
 
+    **parsing**
+
+    When :meth:`~argclz.core.AbstractParser.main` is invoked and sub command is called,
+    the method will return instance of the corresponding sub command and the command group
+    (``command_group`` in above example) will be set to the class of the corresponding sub command.
+
+    >>> main = Example()
+    ... ret = main.main(['a'])
+    ... assert isinstance(main, Example)
+    ... assert isinstance(ret, Example.SubCommand)
+    ... assert main.command_group is Example.SubCommand
 
     """
     return SubCommandGroup(**kwargs)

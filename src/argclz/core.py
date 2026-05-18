@@ -160,24 +160,25 @@ class AbstractParser(metaclass=abc.ABCMeta):
     def __str__(self):
         return type(self).__name__
 
-    def __repr__(self):
-        """print key value pair content"""
-        self_type = type(self)
-        ret = []
-        for a_name in dir(self_type):
-            a_value = getattr(self_type, a_name)
-            if isinstance(a_value, Argument) and not a_name.startswith('_'):
-                try:
-                    ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
-                except:
-                    ret.append(f'{a_name} = <error>')
-            elif isinstance(a_value, property):
-                try:
-                    ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
-                except:
-                    ret.append(f'{a_name} = <error>')
-
-        return '\n'.join(ret)
+    # TODO do we need this repr which goes all of the arguments and properties?
+    # def __repr__(self):
+    #     """print key value pair content"""
+    #     self_type = type(self)
+    #     ret = []
+    #     for a_name in dir(self_type):
+    #         a_value = getattr(self_type, a_name)
+    #         if isinstance(a_value, Argument) and not a_name.startswith('_'):
+    #             try:
+    #                 ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
+    #             except:
+    #                 ret.append(f'{a_name} = <error>')
+    #         elif isinstance(a_value, property):
+    #             try:
+    #                 ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
+    #             except:
+    #                 ret.append(f'{a_name} = <error>')
+    #
+    #     return '\n'.join(ret)
 
 
 class Argument(object):
@@ -674,7 +675,7 @@ def as_argument(a) -> Argument:
     """cast argument attribute as an :class:`~argclz.core.Argument` for type checking framework/IDE."""
     if isinstance(a, Argument):
         return a
-    raise TypeError
+    raise TypeError('not an argument')
 
 
 def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
@@ -915,7 +916,11 @@ def as_dict(instance: T) -> dict[str, Any]:
 def as_dict(instance):
     """
     Collect all argument attributes into a dictionary with attribute name to its value.
-    It *instance* is a list, it works like ``list(map(as_dict, instance))``.
+    If *instance* is a list, it works like ``list(map(as_dict, instance))``.
+
+    If ``instance`` is an :class:`~argclz.core.AbstractParser` and has sub commands,
+    the returned dict contains the name of the attribute of :func:`~argclz.commands.sub_command_group`
+    maps to the corresponding to the class of the sub command.
 
     :param instance: any instance that contains ``argument``.
     :return: A dictionary mapping argument attribute names to their values
@@ -946,13 +951,16 @@ def as_dict(instance):
         except AttributeError:
             pass
         else:
-            ret[sub.attr] = value
+            if value is None:
+                ret[sub.attr] = None
+            else:
+                ret[sub.attr] = value
 
     return ret
 
 
 def copy_argument(opt: T, ref, **kwargs) -> T:
-    """copy argument from ref to opt
+    """copy argument from ``ref`` to ``opt``.
 
     :param opt: any instance that contains ``argument``.
     :param ref: any instance that contains ``argument``.

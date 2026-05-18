@@ -49,8 +49,6 @@ class CommandParserTest(unittest.TestCase):
         self.assertIsNone(opt)
 
     def test_command_run(self):
-        result = None
-
         class P1(AbstractParser):
             a: str = argument('-a', default='default P1')
 
@@ -65,31 +63,30 @@ class CommandParserTest(unittest.TestCase):
                 nonlocal result
                 result = self
 
-        parsers = new_command_parser(dict(a=P1, b=P2))
-        self.assertIsNone(result)
-        opt = parse_command_args(parsers, ['a'])
-        self.assertIsInstance(opt, P1)
-        self.assertIsInstance(result, P1)
-        self.assertEqual(opt.a, 'default P1')
+        with self.subTest('case a'):
+            result = None
+            parsers = new_command_parser(dict(a=P1, b=P2))
+            opt = parse_command_args(parsers, ['a'])
+            self.assertIsInstance(opt, P1)
+            self.assertIsInstance(result, P1)
+            self.assertEqual(opt.a, 'default P1')
 
-        result = None  # reset
-        self.assertIsNone(result)
-        opt = parse_command_args(parsers, ['b'])
-        self.assertIsInstance(opt, P2)
-        self.assertIsInstance(result, P2)
-        self.assertEqual(opt.a, 'default P2')
+        with self.subTest('case b'):
+            result = None  # reset
+            opt = parse_command_args(parsers, ['b'])
+            self.assertIsInstance(opt, P2)
+            self.assertIsInstance(result, P2)
+            self.assertEqual(opt.a, 'default P2')
 
-        result = None  # reset
-        self.assertIsNone(result)
-        opt = parse_command_args(parsers, [])
-        self.assertIsNone(result)
-        self.assertIsNone(opt)
+        with self.subTest('case none'):
+            result = None  # reset
+            opt = parse_command_args(parsers, [])
+            self.assertIsNone(result)
+            self.assertIsNone(opt)
 
 
 class CommandParserClassTest(unittest.TestCase):
     def test_command_class(self):
-        result = None
-
         class P(AbstractParser):
             sub_command = sub_command_group()
 
@@ -109,27 +106,28 @@ class CommandParserClassTest(unittest.TestCase):
                     nonlocal result
                     result = self
 
-        result = None  # reset
-        self.assertIsNone(result)
         main = P()
-        ret = main.main(['a'], parse_only=True)
-        self.assertEqual(main.sub_command, P.P1)
-        self.assertIsInstance(ret, P.P1)
-        self.assertIsNone(result)
 
-        result = None  # reset
-        self.assertIsNone(result)
-        ret = main.main(['b'], parse_only=True)
-        self.assertEqual(main.sub_command, P.P2)
-        self.assertIsInstance(ret, P.P2)
-        self.assertIsNone(result)
+        with self.subTest('case a'):
+            result = None  # reset
+            ret = main.main(['a'], parse_only=True)
+            self.assertIs(main.sub_command, P.P1)
+            self.assertIsInstance(ret, P.P1)
+            self.assertIsNone(result)  # because parse_only=True
 
-        result = None  # reset
-        self.assertIsNone(result)
-        ret = main.main([], parse_only=True)
-        self.assertIsNone(main.sub_command)
-        self.assertIsInstance(ret, P)
-        self.assertIsNone(result)
+        with self.subTest('case b'):
+            result = None  # reset
+            ret = main.main(['b'], parse_only=True)
+            self.assertIs(main.sub_command, P.P2)
+            self.assertIsInstance(ret, P.P2)
+            self.assertIsNone(result)  # because parse_only=True
+
+        with self.subTest('case none'):
+            result = None  # reset
+            ret = main.main([], parse_only=True)
+            self.assertIsNone(main.sub_command)
+            self.assertIsInstance(ret, P)
+            self.assertIsNone(result)  # because parse_only=True
 
     def test_sub_command_init_with_parent(self):
         result = None
@@ -154,6 +152,7 @@ class CommandParserClassTest(unittest.TestCase):
         self.assertIsInstance(p.parent, P)
         self.assertTrue(p.parent.a)
         self.assertTrue(p.b)
+        self.assertIsInstance(result, P.P1)
 
     def test_sub_share_same_name_arg_with_parent(self):
         result = None
@@ -176,10 +175,9 @@ class CommandParserClassTest(unittest.TestCase):
         p = P().main(['-a1', 'a', '-a2'])
         self.assertIsInstance(p, P.P1)
         self.assertIsInstance(p.parent, P)
-        self.assertEqual(p.parent.a, 2)  # overwrite by P1 parser
+        self.assertEqual(p.parent.a, 2)  # XXX overwrite by P1 parser
         self.assertEqual(p.a, 2)
-
-
+        self.assertIsInstance(result, P.P1)
 
 
 class PrintHelpTest(unittest.TestCase):

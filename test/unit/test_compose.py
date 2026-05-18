@@ -41,6 +41,14 @@ class ParserClassTest(unittest.TestCase):
         opt.main(['-a=1'], parse_only=True)
         self.assertEqual(opt.a, -1)
 
+    def test_overwrite_on_unknown_attribute(self):
+        class Parent(AbstractParser):
+            a: int = 1
+
+        with self.assertRaises(TypeError):
+            class Child(Parent):
+                a: int = as_argument(Parent.a)
+
     def test_reuse_argument(self):
         class Parent(AbstractParser):
             a: int = argument('-a')

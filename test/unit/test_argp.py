@@ -123,6 +123,49 @@ class AsDictTest(unittest.TestCase):
             as_dict(opt)
         )
 
+        # on empty list
+        self.assertListEqual([], as_dict([]))
+
+    def test_on_sub_commands(self):
+        class Opt(AbstractParser):
+            a: str = argument('-a', default='Opt default')
+
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class Sub(AbstractParser):
+                b: str = argument('-b', default='Sub default')
+
+                def run(self):
+                    pass
+
+            def run(self):
+                pass
+
+        main = Opt()
+        ret = main.main([])
+        self.assertIsInstance(ret, Opt)
+        self.assertIsNone(main.sub_command)
+        self.assertIsNone(ret.sub_command)
+        self.assertDictEqual(as_dict(ret), {'a': 'Opt default', 'sub_command': None})
+
+        main = Opt()
+        ret = main.main(['-a', '1'])
+        self.assertIsInstance(ret, Opt)
+        self.assertIsNone(main.sub_command)
+        self.assertIsNone(ret.sub_command)
+        self.assertDictEqual(as_dict(ret), {'a': '1', 'sub_command': None})
+
+        main = Opt()
+        ret = main.main(['a', '-b', '10'])
+        self.assertIsInstance(main, Opt)
+        self.assertIs(main.sub_command, Opt.Sub)
+        self.assertIsInstance(ret, Opt.Sub)
+        self.assertDictEqual(as_dict(ret), {'b': '10'})
+        self.assertDictEqual(as_dict(main), {'a': 'Opt default', 'sub_command': Opt.Sub})
+
+
+
 
 class AbstractParserTest(unittest.TestCase):
     def test_exit_on_error(self):
@@ -243,7 +286,7 @@ class CopyArgsTest(unittest.TestCase):
         except ImportError:
             pass
         else:
-            self.fail()
+            self.fail('polar should not be imported in this test')
 
         class Opt(Cloneable):
             a: str = argument('-a')
@@ -263,6 +306,64 @@ class CopyArgsTest(unittest.TestCase):
         opt = Opt(data)
         self.assertEqual(opt.a, '2')
 
+    def test_with_sub_commands(self):
+        class Opt(AbstractParser):
+            a: str = argument('-a', default='Opt default')
+
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class Sub(AbstractParser):
+                b: str = argument('-b', default='Sub default')
+
+                def run(self):
+                    pass
+
+            def run(self):
+                pass
+
+        with self.subTest('empty case'):
+            main = Opt()
+            ret = main.main([])
+            self.assertIsInstance(ret, Opt)
+            self.assertIsNone(main.sub_command)
+            self.assertIsNone(ret.sub_command)
+
+            ano = copy_argument(Opt(), ret)
+            self.assertIsInstance(ano, Opt)
+            self.assertIsNone(ano.sub_command)
+            self.assertIsNone(ano.sub_command)
+
+        with self.subTest('parent case'):
+            main = Opt()
+            ret = main.main(['-a', '10'])
+            self.assertIsInstance(ret, Opt)
+            self.assertIsNone(main.sub_command)
+            self.assertIsNone(ret.sub_command)
+            self.assertEqual(ret.a, '10')
+
+            ano = copy_argument(Opt(), ret)
+            self.assertIsInstance(ano, Opt)
+            self.assertIsNone(ano.sub_command)
+            self.assertIsNone(ano.sub_command)
+            self.assertEqual(ano.a, '10')
+
+        with self.subTest('sub command case'):
+            main = Opt()
+            ret = main.main(['a', '-b', '10'])
+            self.assertIsInstance(ret, Opt.Sub)
+            self.assertIs(main.sub_command, Opt.Sub)
+            self.assertEqual(main.a, 'Opt default')
+            self.assertEqual(ret.b, '10')
+
+            ano = copy_argument(Opt(), main)
+            self.assertIsInstance(ano, Opt)
+            self.assertIs(ano.sub_command, Opt.Sub)
+            self.assertEqual(ano.a, 'Opt default')
+
+            ano = copy_argument(Opt.Sub(), ret)
+            self.assertIsInstance(ano, Opt.Sub)
+            self.assertEqual(ano.b, '10')
 
 class WithOptionsTest(unittest.TestCase):
     def test_no_args(self):
