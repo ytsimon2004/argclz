@@ -89,7 +89,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
     DESCRIPTION: str | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
 
-    EPILOG: str | None = None
+    EPILOG: str | Callable[[], str] | None = None
     """parser epilog. Could be override as a method if its content is dynamic-generated."""
 
     def __new__(cls, *args, **kwargs):
@@ -716,11 +716,36 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
             description = description()
         kwargs.setdefault('description', description)
 
+        # epilog
         epilog = instance.EPILOG
         if callable(epilog):
             epilog = epilog()
+
+        assert epilog is None or isinstance(epilog, str)
+
+        # special handler for Dispatch for command sections.
+        # it put above epilog, but as part of epilog.
+        from argclz.dispatch import Dispatch
+        if isinstance(instance, Dispatch) or (isinstance(instance, type) and issubclass(instance, Dispatch)):
+            command_help = instance.COMMAND_HELP_DOC
+            if command_help is None:
+                command_help = instance.build_command_usages()
+            elif callable(command_help):
+                command_help = command_help()
+
+            assert isinstance(command_help, str)
+
+            if len(command_help):
+                if epilog is not None:
+                    if not command_help.endswith('\n'):
+                        command_help += '\n'
+                    epilog = command_help + "\n" + epilog
+                else:
+                    epilog = command_help
+
         kwargs.setdefault('epilog', epilog)
 
+        # we do not need special handle for help text.
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
     ap = ArgumentParser(**kwargs)

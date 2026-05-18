@@ -339,6 +339,9 @@ class Dispatch:
     ... Main().invoke_command('A')
     """
 
+    COMMAND_HELP_DOC: str | Callable[[], str] | None = None
+    """Command help text. Could be override as a method if its content is dynamic-generated."""
+
     @classmethod
     def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | EllipsisType | None = ..., *,
                       all: bool = False) -> list[DispatchCommand]:
@@ -416,18 +419,44 @@ class Dispatch:
     def build_command_usages(cls, group: str | None = None, *,
                              show_para: bool = False,
                              width: int = 120,
-                             doc_indent: int = 20) -> str:
+                             doc_indent: int = 20,
+                             header: str | None = "Commands:") -> str:
         """
         Build a help document for :func:`~argclz.dispatch.annotations.dispatch` functions
         in this class.
+
+        **Usage**
+
+        :func:`~argclz.core.print_help` (:func:`~argclz.core.new_parser` actually) reads
+        :attr:`~argclz.dispatch.Dispatch.COMMAND_HELP_DOC` to cooperate the content into
+        epilog.
+
+        By default, ``None`` :attr:`~argclz.dispatch.Dispatch.COMMAND_HELP_DOC` value will
+        use the content of ``build_command_usages()``.
+
+        To customize the command help text in a :class:`~argclz.dispatch.Dispatch` subclass,
+        you can do
+
+        >>> class MyCommands(Dispatch):
+        ...     COMMAND_HELP_DOC = 'my content'
+
+        Or make it a callable or method to let the content generated dynamic.
+
+        >>> class MyCommands(Dispatch):
+        ...     @classmethod
+        ...     def COMMAND_HELP_DOC(cls):
+        ...         return cls.build_command_usages()
 
         :param group: for functions in the group.
         :param show_para: show parameters.
         :param width: text-wrap width.
         :param doc_indent: description indent.
+        :param header: the header of commands help section.
         :return: help document.
         """
         ret = []
+        if header is not None:
+            ret.append(header)
 
         commands = cls.list_commands(group)
         commands.sort(key=lambda it: it.order)

@@ -542,6 +542,7 @@ class PrintHelpTest(unittest.TestCase):
                 pass
 
         self.assertEqual(Opt.build_command_usages(), """\
+Commands:
 A (a)               text for A.
 B                   text for B.""")
 
@@ -556,6 +557,7 @@ B                   text for B.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(), """\
+Commands:
 A B C D             text for A.""")
 
     def test_build_command_usages_with_empty_doc(self):
@@ -568,6 +570,7 @@ A B C D             text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(), """\
+Commands:
 A""")
 
     def test_build_command_usages_with_para(self):
@@ -578,6 +581,7 @@ A""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
 A A B               text for A.""")
 
     def test_build_command_usages_with_optional_para(self):
@@ -588,6 +592,7 @@ A A B               text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
 A A [B]             text for A.""")
 
     def test_build_command_usages_with_keyword_para(self):
@@ -598,6 +603,7 @@ A A [B]             text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
 A A [B=]            text for A.""")
 
     def test_build_command_usages_with_var_para(self):
@@ -608,6 +614,7 @@ A A [B=]            text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
 A A *B **C          text for A.""")
 
     def test_build_command_on_order(self):
@@ -628,6 +635,7 @@ A A *B **C          text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
 C                   text for C.
 B                   text for B.
 A                   text for A.""")
@@ -645,22 +653,19 @@ A                   text for A.""")
                 pass
 
         self.assertEqual(Opt.build_command_usages(), """\
+Commands:
 A test is a very long usage text that it is over 20 characters
                     it is also a very long command document for dispatch command A that it is over 120 characters, and
                     it does not need to be fit into one line.""")
 
         self.assertEqual(Opt.build_command_usages(doc_indent=10, width=80), """\
+Commands:
 A test is a very long usage text that it is over 20 characters
           it is also a very long command document for dispatch command A that it
           is over 120 characters, and it does not need to be fit into one line.""")
 
     def test_print_help(self):
         class Opt(SimpleDispatch):
-            EPILOG = (lambda: f"""\
-Commands:
-{Opt.build_command_usages()}
-""")
-
             @dispatch('A', 'a')
             def run_a(self):
                 """text for A.
@@ -689,6 +694,81 @@ options:
 Commands:
 A (a)               text for A.
 B                   text for B.
+""")
+
+    def test_print_help_custom_section(self):
+        class Opt(SimpleDispatch):
+            COMMAND_HELP_DOC = lambda: Opt.build_command_usages(group='A', show_para=True)
+            EPILOG = 'A epilog text'
+
+            @dispatch('A', 'a', group='A')
+            def run_a(self):
+                """text for A.
+
+                """
+                pass
+
+            @dispatch('B')
+            def run_b(self):
+                """
+                text for B.
+
+                """
+                pass
+
+        self.assertEqual(print_help(Opt, None, prog='run.py'), """\
+usage: run.py [-h] cmd [args ...]
+
+positional arguments:
+  cmd
+  args
+
+options:
+  -h, --help  show this help message and exit
+
+Commands:
+A (a)               text for A.
+
+A epilog text
+""")
+
+    def test_print_help_custom_section_method(self):
+        class Opt(SimpleDispatch):
+            EPILOG = 'A epilog text'
+
+            @classmethod
+            def COMMAND_HELP_DOC(cls):
+                return cls.build_command_usages(group='A', show_para=True)
+
+            @dispatch('A', 'a', group='A')
+            def run_a(self):
+                """text for A.
+
+                """
+                pass
+
+            @dispatch('B')
+            def run_b(self):
+                """
+                text for B.
+
+                """
+                pass
+
+        self.assertEqual(print_help(Opt, None, prog='run.py'), """\
+usage: run.py [-h] cmd [args ...]
+
+positional arguments:
+  cmd
+  args
+
+options:
+  -h, --help  show this help message and exit
+
+Commands:
+A (a)               text for A.
+
+A epilog text
 """)
 
 

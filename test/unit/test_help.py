@@ -44,6 +44,20 @@ options:
   -a          text (default: False)
 """)
 
+    def test_print_help_with_hidden_options(self):
+        class Opt(AbstractParser):
+            a: bool = argument('-a', help='text')
+            b: bool = argument('-b', help='text', hidden=True)
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a]
+
+options:
+  -h, --help  show this help message and exit
+  -a          text (default: False)
+""")
+
     def test_print_help_for_alias_argument(self):
         class Opt:
             a: str = aliased_argument('-a', aliases={
@@ -172,6 +186,22 @@ options:
     def test_print_help_with_epilog(self):
         class Opt(AbstractParser):
             EPILOG = 'text'
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h]
+
+options:
+  -h, --help  show this help message and exit
+
+text
+""")
+
+    def test_print_help_with_epilog_method(self):
+        class Opt(AbstractParser):
+            @classmethod
+            def EPILOG(cls):
+                return 'text'
 
         h = print_help(Opt, None, prog='run.py')
         self.assertEqual(h, """\
