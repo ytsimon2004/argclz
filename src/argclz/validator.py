@@ -286,17 +286,17 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
         """Check if string matches a regular expression"""
         if isinstance(r, str):
             r = re.compile(r)
-        self._add(lambda it: r.match(it) is not None, f'str does not match to {r.pattern} : "%s"')
+        self._add(lambda it: r.match(it) is not None, f'str does not match to r"{r.pattern}": "%s"')
         return self
 
     def starts_with(self, prefix: str) -> StrValidatorBuilder:
         """Check if string values start with a substring"""
-        self._add(lambda it: it.startswith(prefix), f'str does not start with {prefix}: "%s"')
+        self._add(lambda it: it.startswith(prefix), f'str does not start with "{prefix}": "%s"')
         return self
 
     def ends_with(self, suffix: str) -> StrValidatorBuilder:
         """Check if string values end with a substring"""
-        self._add(lambda it: it.endswith(suffix), f'str does not end with {suffix}: "%s"')
+        self._add(lambda it: it.endswith(suffix), f'str does not end with "{suffix}": "%s"')
         return self
 
     def contains(self, *texts: str) -> StrValidatorBuilder:

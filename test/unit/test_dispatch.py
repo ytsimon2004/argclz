@@ -172,6 +172,23 @@ class TestDispatch(unittest.TestCase):
 
     def test_dispatch_command_keyword_arguments(self):
         class Opt(SimpleDispatch):
+            r: dict[str, str]
+
+            @dispatch('A')
+            def run_a(self, **a):
+                self.r = a
+
+        opt = Opt()
+        ret = opt.main(['A'])
+        self.assertIs(ret, opt)
+        self.assertDictEqual(opt.r, {})
+
+        ret = opt.main(['A', 'a=1', 'b=2'])
+        self.assertIs(ret, opt)
+        self.assertDictEqual(opt.r, {'a': '1', 'b': '2'})
+
+    def test_dispatch_command_keyword_argument_mapping(self):
+        class Opt(SimpleDispatch):
             r: tuple[str, ...]
 
             @dispatch('A')
@@ -179,6 +196,10 @@ class TestDispatch(unittest.TestCase):
                 self.r = (a, b, c)
 
         opt = Opt()
+
+        with self.assertRaises(TypeError):
+            opt.main(['A'])
+
         ret = opt.main(['A', '1', '2'])
         self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('1', '2', 'none'))
@@ -195,6 +216,53 @@ class TestDispatch(unittest.TestCase):
         self.assertIs(ret, opt)
         self.assertTupleEqual(opt.r, ('3', '2', '1'))
 
+    def test_dispatch_command_keyword_argument_mapping_with_remaining(self):
+        class Opt(SimpleDispatch):
+            ra: str
+            rb: str
+            rc: dict[str, str]
+
+            @dispatch('A')
+            def run_a(self, a, b='none', **c):
+                self.ra = a
+                self.rb = b
+                self.rc = c
+
+        opt = Opt()
+
+        with self.assertRaises(TypeError):
+            opt.main(['A'])
+
+        ret = opt.main(['A', '1'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, '1')
+        self.assertEqual(opt.rb, 'none')
+        self.assertDictEqual(opt.rc, {})
+
+        ret = opt.main(['A', '10', '20'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, '10')
+        self.assertEqual(opt.rb, '20')
+        self.assertDictEqual(opt.rc, {})
+
+        ret = opt.main(['A', 'b=10', 'a=20'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, '20')
+        self.assertEqual(opt.rb, '10')
+        self.assertDictEqual(opt.rc, {})
+
+        ret = opt.main(['A', '11', '12', 'c=10'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, '11')
+        self.assertEqual(opt.rb, '12')
+        self.assertDictEqual(opt.rc, {'c': '10'})
+
+        ret = opt.main(['A', '11', 'd=12', 'c=13'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, '11')
+        self.assertEqual(opt.rb, 'none')
+        self.assertDictEqual(opt.rc, {'c': '13', 'd': '12'})
+
     def test_dispatch_command_argument_casting(self):
         class Opt(SimpleDispatch):
             r: int
@@ -208,6 +276,53 @@ class TestDispatch(unittest.TestCase):
         ret = opt.main(['A', '1'])
         self.assertIs(ret, opt)
         self.assertEqual(opt.r, 1)
+
+    def test_dispatch_command_argument_with_default(self):
+        class Opt(SimpleDispatch):
+            ra: int
+            rb: int
+
+            @dispatch('A')
+            @validator_for('a')
+            @validator_for('b')
+            def run_a(self, a: int, b: int = 0):
+                self.ra = a
+                self.rb = b
+
+        opt = Opt()
+        ret = opt.main(['A', '1'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, 1)
+        self.assertEqual(opt.rb, 0)
+
+        ret = opt.main(['A', '10', '20'])
+        self.assertIs(ret, opt)
+        self.assertEqual(opt.ra, 10)
+        self.assertEqual(opt.rb, 20)
+
+    def test_dispatch_command_validator_on_wrong_parameter(self):
+        with self.assertWarns(RuntimeWarning) as capture:
+            class Opt(SimpleDispatch):
+
+                @dispatch('A')
+                @validator_for('b')
+                def run_a(self, a: int):
+                    pass
+
+        self.assertEqual(capture.warnings[0].message.args[0],
+                         'unknown parameter name : b for function run_a')
+
+    def test_dispatch_command_validator_on_no_type_hint_parameter(self):
+        with self.assertRaises(RuntimeError) as capture:
+            class Opt(SimpleDispatch):
+
+                @dispatch('A')
+                @validator_for('a')
+                def run_a(self, a):
+                    pass
+
+        self.assertEqual(capture.exception.args[0],
+                         'unknown parameter type : a for function run_a')
 
     def test_dispatch_command_argument_casting_validator(self):
         class Opt(SimpleDispatch):
@@ -249,6 +364,42 @@ class TestDispatch(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.main(['A', '0'])
         self.assertEqual(capture.exception.args[0], 'command A argument "a" : not a positive value : 0')
+
+    def test_dispatch_command_argument_casting_fail(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a')
+            def run_a(self, a: int):
+                pass
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().main(['A', 'a'])
+        self.assertEqual(capture.exception.args[0],
+                         'command A argument "a" : cannot cast "a" to type int')
+
+    def test_dispatch_command_argument_validator_fail(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a', validator(lambda it: it.startswith("a")))
+            def run_a(self, a: str):
+                pass
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().main(['A', 'b'])
+        self.assertEqual(capture.exception.args[0],
+                         'command A argument "a" : fail validation : "b"')
+
+    def test_dispatch_command_argument_validator_error_fail(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a', validator.str.starts_with('a'))
+            def run_a(self, a: str):
+                pass
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().main(['A', 'b'])
+        self.assertEqual(capture.exception.args[0],
+                         'command A argument "a" : str does not start with "a": "b"')
 
     def test_dispatch_command_argument_validator_misorder(self):
         with self.assertRaises(RuntimeError) as capture:

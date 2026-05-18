@@ -91,6 +91,8 @@ def validator_for(arg: str, caster: Callable[[str], R] | None = None, validator:
     :param arg: name of the parameter.
     :param caster: type caster with the signature ``(str) -> R``.
     :param validator: validator with the signature ``(R) -> bool``.
+    :raise RuntimeError: if any parameter is not annotated its type.
+    :raise RuntimeWarning: if ``arg`` does not match to any parameter.
     """
     if isinstance(caster, Validator) and validator is None:
         caster, validator = None, caster

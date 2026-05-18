@@ -1,5 +1,5 @@
 import inspect
-import sys
+import warnings
 from typing import Callable, TypeVar, Generic
 
 from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand
@@ -38,13 +38,13 @@ class DispatchCommandBuilder:
         try:
             p = self.signature.parameters[arg]
         except KeyError:
-            print(f'unknown arg name : {arg} for function {self.func.__name__}', file=sys.stderr)
+            warnings.warn(f'unknown parameter name : {arg} for function {self.func.__name__}', RuntimeWarning)
             return
 
         if caster is None:
             from .._types import caster_by_annotation
             if p.annotation is P.empty:
-                raise RuntimeError(f'missing type : {self.func.__name__}({arg})')
+                raise RuntimeError(f'unknown parameter type : {arg} for function {self.func.__name__}')
 
             caster = caster_by_annotation(arg, p.annotation)  # pyright: ignore[reportAssignmentType]
 
@@ -76,8 +76,11 @@ class TypeCasterWithValidator(Generic[T]):
         if self.caster is not None:
             try:
                 result = self.caster(raw_value)
-            except BaseException:
-                raise
+            except BaseException as e:
+                if isinstance(self.caster, type):
+                    raise ValueError(f'cannot cast "{raw_value}" to type {self.caster.__name__}') from e
+                else:
+                    raise ValueError(f'cannot cast "{raw_value}"') from e
         else:
             result = raw_value  # pyright: ignore[reportAssignmentType]
 
