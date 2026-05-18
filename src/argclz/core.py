@@ -609,6 +609,7 @@ class AliasArgument(Argument):
             kw = dict(self.kwargs)
             kw.pop('metavar', None)
             kw.pop('type', None)
+            kw.pop('choices', None)
             kw['action'] = 'store_const'
             kw['const'] = values
             kw['help'] = f'short for {primary}={values}.'

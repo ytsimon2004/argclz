@@ -36,6 +36,11 @@ class TypeFunctionTest(unittest.TestCase):
         self.assertTrue(bool_type('YES'))
         self.assertTrue(bool_type('y'))
         self.assertTrue(bool_type('Y'))
+        self.assertTrue(bool_type('on'))
+        self.assertTrue(bool_type('On'))
+        self.assertTrue(bool_type('ON'))
+        self.assertTrue(bool_type('enable'))
+        self.assertTrue(bool_type('Enable'))
         self.assertFalse(bool_type('-'))
         self.assertFalse(bool_type('0'))
         self.assertFalse(bool_type('f'))
@@ -49,6 +54,11 @@ class TypeFunctionTest(unittest.TestCase):
         self.assertFalse(bool_type('NO'))
         self.assertFalse(bool_type('x'))
         self.assertFalse(bool_type('X'))
+        self.assertFalse(bool_type('off'))
+        self.assertFalse(bool_type('Off'))
+        self.assertFalse(bool_type('OFF'))
+        self.assertFalse(bool_type('disable'))
+        self.assertFalse(bool_type('Disable'))
         with self.assertRaises(ValueError):
             bool_type('other')
         with self.assertRaises(TypeError):
@@ -175,6 +185,19 @@ class TypeFunctionTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     t('')
 
+    def test_literal_type_case_insensitive(self):
+        t = literal_type(['AAA', 'BBB', 'CCC'], case_sensitive=False)
+
+        self.assertEqual('AAA', t('aaa'))
+        self.assertEqual('BBB', t('bbb'))
+
+    def test_literal_type_unique(self):
+        with self.assertRaises(ValueError):
+            literal_type(['AAA', 'AAA'])
+
+        with self.assertRaises(ValueError):
+            literal_type(['AAA', 'aaa'], case_sensitive=False)
+
     def test_literal_type_optional(self):
         t = literal_type(['AAA', 'BBB', None])
         self.assertEqual('AAA', t('AAA'))
@@ -199,6 +222,16 @@ class TypeFunctionTest(unittest.TestCase):
         self.assertEqual('CCC', t('C'))
         with self.assertRaises(ValueError):
             t('D')
+        with self.assertRaises(ValueError):
+            t('')
+
+    def test_literal_type_complete_case_insensitive(self):
+        t = literal_type(['AAA', 'BBB', 'CCC'], complete=True, case_sensitive=False)
+        self.assertEqual('AAA', t('a'))
+        self.assertEqual('BBB', t('b'))
+        self.assertEqual('CCC', t('c'))
+        with self.assertRaises(ValueError):
+            t('d')
         with self.assertRaises(ValueError):
             t('')
 
@@ -335,6 +368,13 @@ class TypeAnnotationTest(unittest.TestCase):
             a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(complete=True))
 
         opt = parse_args(Opt(), ['-a', 'A'])
+        self.assertEqual(opt.a, 'AAA')
+
+    def test_literal_complete_case_insensitive(self):
+        class Opt:
+            a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(complete=True, case_sensitive=False))
+
+        opt = parse_args(Opt(), ['-a', 'a'])
         self.assertEqual(opt.a, 'AAA')
 
     def test_optional_literal(self):

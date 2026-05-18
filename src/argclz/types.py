@@ -55,9 +55,9 @@ def bool_type(value: str) -> bool:
         raise TypeError()
 
     value = value.lower()
-    if value in ('-', '0', 'f', 'false', 'n', 'no', 'x'):
+    if value in ('-', '0', 'f', 'false', 'n', 'no', 'x', 'off', 'disable'):
         return False
-    elif value in ('+', '1', 't', 'true', 'yes', 'y'):
+    elif value in ('+', '1', 't', 'true', 'yes', 'y', 'on', 'enable'):
         return True
     else:
         raise ValueError()
@@ -257,10 +257,18 @@ class literal_type:
     """Caster enforcing membership in a set of string literals with optional prefix matching"""
 
     def __init__(self, candidate: Any = None, *,
-                 complete: bool = False):
+                 complete: bool = False,
+                 case_sensitive: bool = True):
+        """
+
+        :param candidate: restricted str literal list.
+        :param complete: enable completion feature that support unique prefix matching.
+        :param case_sensitive: is matching case-sensitive?
+        """
         self.candidate: tuple[str, ...] | None = None
         self.optional = False
         self.complete = complete
+        self.case_sensitive = case_sensitive
 
         if candidate is not None:
             self.set_candidate(candidate)
@@ -280,10 +288,25 @@ class literal_type:
 
             self.candidate = tuple(candidate)
 
+            # unique checking
+            if self.case_sensitive:
+                if len(candidate) != len(set(candidate)):
+                    raise ValueError('candidate not unique')
+            else:
+                if len(candidate) != len(set([it.upper() for it in candidate])):
+                    raise ValueError('candidate not unique')
+
     def __call__(self, arg: str):
         assert self.candidate is not None
         if arg in self.candidate:
             return arg
+
+        up_arg = None
+        if not self.case_sensitive:
+            up_arg = arg.upper()
+            found = [it for it in self.candidate if it.upper() == up_arg]
+            if len(found):
+                return self.__return_if_unique(arg, found)
 
         if len(arg) == 0 and self.optional:
             return None
@@ -291,7 +314,14 @@ class literal_type:
         if not self.complete or len(arg) == 0:
             raise ValueError
 
-        match [it for it in self.candidate if it.startswith(arg)]:
+        if self.case_sensitive:
+            return self.__return_if_unique(arg, [it for it in self.candidate if it.startswith(arg)])
+        else:
+            assert up_arg is not None
+            return self.__return_if_unique(arg, [it for it in self.candidate if it.upper().startswith(up_arg)])
+
+    def __return_if_unique(self, arg: str, found: list[str]):
+        match found:
             case []:
                 raise ValueError()
             case [match]:
