@@ -65,17 +65,16 @@ users extend a base list by prefixing the value with ``+,``.
 
 .. code-block:: bash
 
-    $ python script.py --tags a,b,c --levels +,warning
+    $ python script.py --tags a,b,c --levels +warning
 
 
 bool_type
 ---------
 
-:func:`~argclz.types.bool_type` accepts flexible truthy/falsy strings.
+:func:`~argclz.types.bool_type` accepts flexible truthy/falsy strings (case insensitive).
 
-Truthy: ``+``, ``1``, ``t``, ``true``, ``yes``, ``y``
-
-Falsy:  ``-``, ``0``, ``f``, ``false``, ``no``, ``n``, ``x``
+* Truthy: ``+``, ``1``, ``t``, ``true``, ``yes``, ``y``, ``on``, ``enable``
+* Falsy:  ``-``, ``0``, ``f``, ``false``, ``no``, ``n``, ``x``, ``off``, ``disable``
 
 .. code-block:: python
 
@@ -84,7 +83,7 @@ Falsy:  ``-``, ``0``, ``f``, ``false``, ``no``, ``n``, ``x``
 
     class MyArgs(AbstractParser):
 
-        verbose: bool = argument('--verbose', type=bool_type)
+        verbose: bool = argument('--verbose', type=bool_type) # `type=bool_type` can be omitted
 
         def run(self):
             print(self.verbose)
@@ -180,7 +179,9 @@ With ``complete=True`` it additionally supports unique prefix matching.
 
     class MyArgs(AbstractParser):
 
-        mode: str = argument('--mode', type=literal_type('fast', 'slow', 'auto'))
+        mode: Literal['fast', 'show', 'auto'] = argument('--mode')
+        # Equivalent to
+        mode: str = argument('--mode', type=literal_type(['fast', 'slow', 'auto']))
 
         def run(self):
             print(self.mode)
@@ -194,7 +195,9 @@ With prefix completion:
 
 .. code-block:: python
 
-    mode_type = literal_type('fast', 'slow', 'auto', complete=True)
+    mode: Literal['fast', 'show', 'auto'] = argument('--mode', type=literal_type(complete=True))
+    # or
+    mode: str = argument('--mode', type=literal_type(['fast', 'slow', 'auto'], complete=True))
     # --mode f  →  "fast"
 
 

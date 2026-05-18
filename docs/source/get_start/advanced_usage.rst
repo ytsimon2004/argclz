@@ -66,6 +66,19 @@ refer to :func:`~argclz.core.aliased_argument()`
 3. The ``choices`` parameter limits valid values to a predefined set, ensuring that even aliased values
    are validated properly
 
+**Run the script with -h**
+
+.. code-block:: text
+
+    usage: my_script.py [-h] [--level {low,medium,high} | --low | --high]
+
+    options:
+      -h, --help            show this help message and exit
+      --level {low,medium,high}
+                            Set the difficulty level
+      --low                 short for --level=low.
+      --high                short for --level=high.
+
 - **run the script with**
 
 .. code-block:: bash

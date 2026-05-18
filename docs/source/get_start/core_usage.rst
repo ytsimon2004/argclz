@@ -18,8 +18,8 @@ refer to :func:`~argclz.core.argument()`
 
     class MyArgs(AbstractParser): # [1]
 
-        verbose: bool = argument('--verbose', help='Enable verbose output')
-        #        ^^^^ [2] ^^^^^^^ [3]
+        verbose: bool   = argument('--verbose', help='Enable verbose output')
+        #        ^^^^[2]  ^^^^^^^^[3]
 
         name: str = argument('-n', '--name', required=True, metavar='NAME', help='Name of the user')
 
@@ -131,8 +131,8 @@ refer to :func:`~argclz.core.var_argument()`
 
     class MyArgs(AbstractParser):
 
-        items: list[str] = var_argument('ITEMS', help='Items to process')
-        #      ^^^^^^^^^[1]^^^^^^^^^^^^[2]
+        items: list[str]   = var_argument('ITEMS', help='Items to process')
+        #      ^^^^^^^^^[1]  ^^^^^^^^^^^^[2]
 
 1. ``list[str]`` tells the parser to expect multiple values and return them as a list of strings
 2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple inputs.

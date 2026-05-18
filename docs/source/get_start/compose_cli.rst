@@ -30,16 +30,13 @@ This enables **modular** and **maintainable** CLI definitions.
         )
 
         # [4]
-        log_level = as_argument(LoggingOptions.log_level).with_options(
-            choices=['info', 'debug'],
-            hidden=True
-        )
+        log_level = 'debug'
 
         # [5]
         other_option = argument(...)
 
-1. reusable options classes, which might be put at different files.
+1. reusable options classes, which might be put at different files or modules.
 2. class ``MyOptions`` inherit arguments from ``IOOptions`` and ``LoggingOptions``.
-3. overwrite ``IOOptions.input_path`` by adding a file validator that only accept .csv suffix, and setting ``required=True``
-4. overwrite ``LoggingOptions.log_level`` by limiting accepted choices for ``log_level`` only ``info`` or ``debug``, and hiding it from help output.
+3. overwrite ``IOOptions.input_path`` by adding a file validator that only accept ``.csv`` suffix, and setting ``required=True``
+4. overwrite ``LoggingOptions.log_level`` by forcing logging level to ``debug``. The corresponding options is disappeared.
 5. class ``MyOptions`` specific arguments.
