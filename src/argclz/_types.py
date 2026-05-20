@@ -63,8 +63,9 @@ def complete_arg_kwargs(self: Argument):
         elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
             _complete_arg_kwargs_for_collection(self)
 
-    elif isinstance(dt := self.kwargs['type'], dict_type):
-        self.kwargs['type'] = dt._clone()
+    elif isinstance(self.kwargs['type'], dict_type):
+        # TODO raise error when action is set?
+        self.kwargs['action'] = dict_type.Action
 
     if get_origin(self.attr_type) is Literal:
         _complete_arg_kwargs_for_literal(self)

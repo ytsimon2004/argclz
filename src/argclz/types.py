@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from types import EllipsisType
 from typing import TypeVar, Callable, Literal, get_origin, get_args, Type, Any
 
@@ -207,44 +208,75 @@ class dict_type:
         self._kv_split = kv_split
         self._split = split
         self._default_dict = dict(default)
-        self._current_dict: dict[str, T] | None = None
 
     def __call__(self, arg: str) -> dict[str, T]:
-        if self._current_dict is None:
-            self._current_dict = dict(self._default_dict)
-
-        assert self._current_dict is not None
+        ret = dict(self._default_dict)
 
         if len(arg):
             if self._split is None:
-                self.__add(arg)
+                self.__add(arg, ret)
             else:
                 for a in arg.split(self._split):
                     if len(a):
-                        self.__add(a)
+                        self.__add(a, ret)
 
-        return self._current_dict
+        return ret
 
-    def __add(self, arg: str):
-        assert self._current_dict is not None
-
+    def __add(self, arg: str, ret: dict[str, T]):
         if self._kv_split in arg:
             k, _, v = arg.partition(self._kv_split)
             if self._value_type is not None:
                 v = self._value_type(v)
-            self._current_dict[k] = v
+            ret[k] = v
         elif self._value_type is None:
-            self._current_dict[arg] = None
+            ret[arg] = None
         else:
-            self._current_dict[arg] = self._value_type("")
+            ret[arg] = self._value_type("")
 
-    def _clone(self) -> dict_type:
-        """create a copy of dict_type to avoid from sharing."""
-        return dict_type(self._value_type, kv_split=self._kv_split, split=self._split, default=self._default_dict)
+    class Action(argparse.Action):
+        def __init__(self,
+                     option_strings,
+                     dest: str,
+                     type: dict_type,
+                     required: bool = False,
+                     help: str = None,
+                     metavar: str | tuple[str, str] = ('Key', 'Value')):
+            if not isinstance(type, dict_type):
+                raise TypeError('type should be dict_type')
 
-    def _clear(self):
-        """clear current cache dict"""
-        self._current_dict = None
+            self._dict_type = type
+
+            match metavar:
+                case str():
+                    pass
+                case (str(m_key), str(m_value)):
+                    if type._split is None:
+                        metavar = f'{m_key}{type._kv_split}{m_value}'
+                    else:
+                        metavar = f'{m_key}{type._kv_split}{m_value}{type._split}...'
+                case _:
+                    raise TypeError('illegal metavar')
+
+            super().__init__(
+                option_strings=option_strings,
+                dest=dest,
+                nargs=1,
+                default={},
+                required=required,
+                help=help,
+                metavar=metavar)
+
+        def __call__(self,
+                     parser: argparse.ArgumentParser,
+                     namespace: argparse.Namespace,
+                     values: str,
+                     option_string: str | None = None) -> None:
+            coll = getattr(namespace, self.dest, {})
+            if coll is None:
+                coll = {}
+
+            coll.update(self._dict_type(values[0]))
+            setattr(namespace, self.dest, coll)
 
 
 def slice_type(arg: str) -> slice:

@@ -318,6 +318,45 @@ options:
   -a A|B|C    one of them
 """)
 
+    def test_print_dict_type(self):
+        class Opt(AbstractParser):
+            a: dict[str, int] = argument('-a', type=dict_type(int), help='a dict')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a Key=Value]
+
+options:
+  -h, --help    show this help message and exit
+  -a Key=Value  a dict
+""")
+
+    def test_print_dict_type_with_custom_kv_split(self):
+        class Opt(AbstractParser):
+            a: dict[str, int] = argument('-a', type=dict_type(int, kv_split=':'), metavar=('A', 'B'), help='a dict')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A:B]
+
+options:
+  -h, --help  show this help message and exit
+  -a A:B      a dict
+""")
+
+    def test_print_dict_type_with_custom_split(self):
+        class Opt(AbstractParser):
+            a: dict[str, int] = argument('-a', type=dict_type(int, split=','), metavar=('A', 'B'), help='a dict')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A=B,...]
+
+options:
+  -h, --help  show this help message and exit
+  -a A=B,...  a dict
+""")
+
 
 if __name__ == '__main__':
     unittest.main()

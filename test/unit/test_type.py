@@ -135,25 +135,22 @@ class TypeFunctionTest(unittest.TestCase):
             t('a')
 
     def test_dict_type(self):
-        # dict_type has internal structure that cannot be invoked repeated.
-        # otherwise, it will give unexpected results.
-
-        # we do not test this special behavior here.
-        # t = dict_type(int)
-        # self.assertDictEqual({'a': 1}, t('a:1'))
-        # self.assertDictEqual({'a': 1, 'b': 2}, t('b:2'))
-
-        self.assertDictEqual({}, dict_type(int)(''))
-        self.assertDictEqual({'a': 1}, dict_type(int)('a=1'))
+        t = dict_type(int)
+        self.assertDictEqual({}, t(''))
+        self.assertDictEqual({'a': 1}, t('a=1'))
 
         with self.assertRaises(ValueError):
-            dict_type(int)('a')
+            t('a')
 
-        self.assertDictEqual({'a': '1'}, dict_type(str)('a=1'))
-        self.assertDictEqual({'a': ''}, dict_type(str)('a'))
+        with self.subTest('dict_type(str)'):
+            t = dict_type(str)
+            self.assertDictEqual({'a': '1'}, t('a=1'))
+            self.assertDictEqual({'a': ''}, t('a'))
 
-        self.assertDictEqual({'a': '1'}, dict_type(None)('a=1'))
-        self.assertDictEqual({'a': None}, dict_type(None)('a'))
+        with self.subTest('dict_type(None)'):
+            t = dict_type(None)
+            self.assertDictEqual({'a': '1'}, t('a=1'))
+            self.assertDictEqual({'a': None}, t('a'))
 
     def test_dict_type_with_kv_split(self):
         self.assertDictEqual({'a': 1}, dict_type(int, kv_split='=')('a=1'))
@@ -563,10 +560,10 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=a=1'])
         self.assertDictEqual(opt.a, {'a': 1})
 
-        opt = parse_args(Opt(), ['-a=a=1', '-a=b:2'])
+        opt = parse_args(Opt(), ['-a=a=1', '-a=b=2'])
         self.assertDictEqual(opt.a, {'a': 1, 'b': 2})
 
-        opt = parse_args(Opt(), ['-a=a=1', '-a=b:2', '-a=c'])
+        opt = parse_args(Opt(), ['-a=a=1', '-a=b=2', '-a=c'])
         self.assertDictEqual(opt.a, {'a': 1, 'b': 2, 'c': ''})
 
     def test_dict_type_recall_should_not_append(self):
