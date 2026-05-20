@@ -386,6 +386,32 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['-a', 'a'])
         self.assertEqual(opt.a, 'AAA')
 
+    def test_literal_candidate_confusion(self):
+        class Opt:
+            a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(['CCC', 'DDD']))
+
+        with self.assertRaises(RuntimeError) as capture:
+            # raise from argparse choices checking
+            parse_args(Opt(), ['-a', 'CCC'])
+        self.assertEqual(capture.exception.args[0], "exit 2: argument -a: invalid choice: 'CCC' (choose from AAA, BBB)")
+
+        with self.assertRaises(RuntimeError) as capture:
+            # raise from literal_type validation
+            parse_args(Opt(), ['-a', 'AAA'])
+        self.assertEqual(capture.exception.args[0], "exit 2: argument -a: invalid Literal[CCC, DDD] value: 'AAA'")
+
+    def test_literal_candidate_confusion_cancelled(self):
+        class Opt:
+            # add `choices` to force unset choices.
+            a: Literal['AAA', 'BBB'] = argument('-a', type=literal_type(['CCC', 'DDD']), choices=None)
+
+        opt = parse_args(Opt(), ['-a', 'CCC'])
+        self.assertEqual(opt.a, 'CCC')
+
+        with self.assertRaises(RuntimeError):
+            # raise from literal_type validation
+            parse_args(Opt(), ['-a', 'AAA'])
+
     def test_optional_literal(self):
         class Opt:
             a: Literal['A', 'B', None] = argument('-a')

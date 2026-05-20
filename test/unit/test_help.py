@@ -1,4 +1,5 @@
 import unittest
+from typing import Literal
 
 from argclz import *
 from argclz.core import print_help
@@ -275,6 +276,46 @@ options:
   -h, --help  show this help message and exit
   -a A        A (default='')
   -b B        B. use default value: None
+""")
+
+    def test_print_literal_choices(self):
+        class Opt(AbstractParser):
+            a: Literal['A', 'B', 'C'] = argument('-a', help='one of them')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A|B|C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A|B|C    one of them
+""")
+
+    def test_print_literal_choices_on_declare_instead_of_real_value(self):
+        class Opt(AbstractParser):
+            a: Literal['A', 'B', 'C'] = argument('-a', type=literal_type(['D', 'E', 'F']), help='one of them')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A|B|C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A|B|C    one of them
+""")
+
+    def test_print_literal_for_choices_completion(self):
+        class Opt(AbstractParser):
+            # `complete=True` should not change the help text, but changing on paring behavior.
+            a: Literal['A', 'B', 'C'] = argument('-a', type=literal_type(complete=True), help='one of them')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A|B|C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A|B|C    one of them
 """)
 
 
