@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from argclz import *
 from argclz.clone import Cloneable
-from argclz.core import with_defaults, as_dict, parse_args, copy_argument
+from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument
 
 try:
     import polars as pl
@@ -44,7 +44,7 @@ class WithDefaultTest(unittest.TestCase):
 
         opt = with_defaults(Opt())
         with self.assertRaises(AttributeError):
-            a = opt.a
+            _ = opt.a
 
     def test_default_str(self):
         class Opt:
@@ -59,7 +59,7 @@ class WithDefaultTest(unittest.TestCase):
 
         opt = with_defaults(Opt())
         with self.assertRaises(AttributeError):
-            a = opt.a
+            _ = opt.a
 
     def test_default_int(self):
         class Opt:
@@ -74,7 +74,7 @@ class WithDefaultTest(unittest.TestCase):
 
         opt = with_defaults(Opt())
         with self.assertRaises(AttributeError):
-            a = opt.a
+            _ = opt.a
 
     def test_default_float(self):
         class Opt:
@@ -89,7 +89,7 @@ class WithDefaultTest(unittest.TestCase):
 
         opt = with_defaults(Opt())
         with self.assertRaises(AttributeError):
-            a = opt.a
+            _ = opt.a
 
     def test_default_literal(self):
         class Opt:
@@ -142,30 +142,110 @@ class AsDictTest(unittest.TestCase):
             def run(self):
                 pass
 
-        main = Opt()
-        ret = main.main([])
-        self.assertIsInstance(ret, Opt)
-        self.assertIsNone(main.sub_command)
-        self.assertIsNone(ret.sub_command)
-        self.assertDictEqual(as_dict(ret), {'a': 'Opt default', 'sub_command': None})
+        with self.subTest('none case'):
+            main = Opt()
+            ret = main.main([])
+            self.assertIsInstance(ret, Opt)
+            self.assertIsNone(main.sub_command)
+            self.assertIsNone(ret.sub_command)
+            self.assertDictEqual(as_dict(ret), {'a': 'Opt default', 'sub_command': None})
 
-        main = Opt()
-        ret = main.main(['-a', '1'])
-        self.assertIsInstance(ret, Opt)
-        self.assertIsNone(main.sub_command)
-        self.assertIsNone(ret.sub_command)
-        self.assertDictEqual(as_dict(ret), {'a': '1', 'sub_command': None})
+        with self.subTest('default case'):
+            main = Opt()
+            ret = main.main(['-a', '1'])
+            self.assertIsInstance(ret, Opt)
+            self.assertIsNone(main.sub_command)
+            self.assertIsNone(ret.sub_command)
+            self.assertDictEqual(as_dict(ret), {'a': '1', 'sub_command': None})
 
-        main = Opt()
-        ret = main.main(['a', '-b', '10'])
-        self.assertIsInstance(main, Opt)
-        self.assertIs(main.sub_command, Opt.Sub)
-        self.assertIsInstance(ret, Opt.Sub)
-        self.assertDictEqual(as_dict(ret), {'b': '10'})
-        self.assertDictEqual(as_dict(main), {'a': 'Opt default', 'sub_command': Opt.Sub})
+        with self.subTest('sub-command case'):
+            main = Opt()
+            ret = main.main(['a', '-b', '10'])
+            self.assertIsInstance(main, Opt)
+            self.assertIs(main.sub_command, Opt.Sub)
+            self.assertIsInstance(ret, Opt.Sub)
+            self.assertDictEqual(as_dict(ret), {'b': '10'})
+            self.assertDictEqual(as_dict(main), {'a': 'Opt default', 'sub_command': Opt.Sub})
+
+    @skipIf(pl is None, reason='no polars installed')
+    def test_polars_data_frame_from_as_dict(self):
+        from polars.testing import assert_frame_equal
+        class Opt:
+            a: int = argument('-a')
+            b: str = argument('-b')
+
+            def __init__(self, a, b):
+                self.a, self.b = a, b
+
+        df = pl.DataFrame(as_dict([Opt(1, '2'), Opt(3, '4')]))
+        assert_frame_equal(df, pl.DataFrame({
+            'a': [1, 3],
+            'b': ['2', '4'],
+        }))
 
 
+class ForeachArgumentsTest(unittest.TestCase):
+    def test_with_class(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
 
+        args = list(foreach_arguments(Opt))
+        self.assertEqual(2, len(args))
+        self.assertEqual(args[0].attr, 'a')
+        self.assertEqual(args[1].attr, 'b')
+
+    def test_with_parent(self):
+        class Parent:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        class Opt(Parent):
+            c: str = argument('-c')
+            d: str = argument('-d')
+
+        args = list(foreach_arguments(Opt))
+        self.assertEqual(4, len(args))
+        # always start from Parent's arguments
+        self.assertEqual(args[0].attr, 'a')
+        self.assertEqual(args[1].attr, 'b')
+        self.assertEqual(args[2].attr, 'c')
+        self.assertEqual(args[3].attr, 'd')
+
+    def test_with_argument_overwrite(self):
+        class Parent:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        class Opt(Parent):
+            c: str = argument('-c')
+            b: str = as_argument(Parent.b).with_options()
+            d: str = argument('-d')
+
+        args = list(foreach_arguments(Opt))
+        self.assertEqual(4, len(args))
+        # always start from Parent's arguments
+        self.assertEqual(args[0].attr, 'a')
+        self.assertEqual(args[1].attr, 'b')
+        self.assertEqual(args[2].attr, 'c')
+        self.assertEqual(args[3].attr, 'd')
+
+    def test_with_argument_remove(self):
+        class Parent:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        class Opt(Parent):
+            c: str = argument('-c')
+            b: str = 'B'
+            d: str = argument('-d')
+
+        args = list(foreach_arguments(Opt))
+        self.assertEqual(3, len(args))
+        # always start from Parent's arguments
+        self.assertEqual(args[0].attr, 'a')
+        self.assertEqual(args[1].attr, 'c')
+        self.assertEqual(args[2].attr, 'd')
 
 class AbstractParserTest(unittest.TestCase):
     def test_exit_on_error(self):
@@ -231,14 +311,61 @@ class CopyArgsTest(unittest.TestCase):
         ano = copy_argument(Opt(), opt)
         self.assertEqual(ano.a, '2')
 
-    def test_copy_argument_from_dict(self):
+    def test_copy_from_dict(self):
         class Opt:
             a: str = argument('-a')
 
         ano = copy_argument(Opt(), None, a='2')
         self.assertEqual(ano.a, '2')
 
-    def test_copy_argument_from_distinct(self):
+    def test_with_dongle_attr(self):
+        class Opt:
+            _a: str = argument('-a')
+
+        opt = copy_argument(Opt(), None, a='A')
+        self.assertEqual(opt._a, 'A')
+
+    def test_copy_argument_from_opt_and_dict(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        opt = copy_argument(Opt(), None, a='A', b='B')
+        self.assertEqual(opt.a, 'A')
+        self.assertEqual(opt.b, 'B')
+
+        ano = copy_argument(Opt(), opt, b='C')
+        self.assertEqual(ano.a, 'A')
+        self.assertEqual(ano.b, 'C')
+
+    def test_copy_also_include_parent_opts(self):
+        class Parent:
+            a: str = argument('-a')
+
+        class Opt(Parent):
+            b: str = argument('-b')
+
+        opt = copy_argument(Opt(), None, a='A', b='B')
+        self.assertEqual(opt.a, 'A')
+        self.assertEqual(opt.b, 'B')
+
+        ano = copy_argument(Opt(), opt, b='C')
+        self.assertEqual(ano.a, 'A')
+        self.assertEqual(ano.b, 'C')
+
+    @skipIf(pl is None, reason='no polars installed')
+    def test_set_from_polars_data_frame(self):
+        class Opt:
+            a: int = argument('-a')
+            b: str = argument('-b')
+
+        df = pl.DataFrame({'a': [0, 1], 'b': ['2', '3']})
+        for row in df.iter_rows(named=True):
+            opt = copy_argument(Opt(), None, **row)
+            self.assertEqual(opt.a, row['a'])
+            self.assertEqual(opt.b, row['b'])
+
+    def test_copy_argument_from_distinct_opt_class(self):
         class Opt1:
             a: str = argument('-a')
 
@@ -364,6 +491,7 @@ class CopyArgsTest(unittest.TestCase):
             ano = copy_argument(Opt.Sub(), ret)
             self.assertIsInstance(ano, Opt.Sub)
             self.assertEqual(ano.b, '10')
+
 
 class WithOptionsTest(unittest.TestCase):
     def test_no_args(self):
