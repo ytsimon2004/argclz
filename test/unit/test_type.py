@@ -108,13 +108,22 @@ class TypeFunctionTest(unittest.TestCase):
         self.assertListEqual([1], list_type(int)('1'))
         self.assertListEqual([1, 2, 3], list_type(int)('1,2,3'))
         self.assertListEqual([1, 2, 3], list_type(int, split=':')('1:2:3'))
-        self.assertListEqual([1, 2, 3], list_type(int, prepend=[0])('1,2,3'))
-        self.assertListEqual([0, 1, 2, 3], list_type(int, prepend=[0])('+1,2,3'))
 
         with self.assertRaises(ValueError):
-            list_type(int, split='')
+            list_type(str, split='')
         with self.assertRaises(ValueError):
-            list_type(int, split=',,')
+            list_type(str, split=',,')
+
+    def test_list_type_prepend(self):
+        self.assertListEqual([], list_type(int, prepend=[0])(''))
+        self.assertListEqual([1, 2, 3], list_type(int, prepend=[0])('1,2,3'))
+
+        self.assertListEqual([0], list_type(int, prepend=[0])('+,'))
+        self.assertListEqual([0, 1, 2, 3], list_type(int, prepend=[0])('+1,2,3'))
+        self.assertListEqual([0, 1, 2, 3], list_type(int, prepend=[0])('+,1,2,3'))
+
+        with self.assertRaises(ValueError):
+            list_type(int)('++')  # str '+' cast int
 
     def test_unit_type(self):
         t = union_type(int, float, bool_type)

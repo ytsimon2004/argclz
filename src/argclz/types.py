@@ -133,8 +133,16 @@ def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prep
         if len(arg) == 0:
             return []
         elif arg.startswith('+') and prepend is not None:
-            value = list(map(value_type, arg[1:].split(split)))
-            return [*prepend, *value]
+            if arg.startswith('+' + split):
+                arg = arg[2:]
+            else:
+                arg = arg[1:]
+
+            if len(arg):
+                value = list(map(value_type, arg.split(split)))
+                return [*prepend, *value]
+            else:
+                return list(prepend)
         else:
             return list(map(value_type, arg.split(split)))
 

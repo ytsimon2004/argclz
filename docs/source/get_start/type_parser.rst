@@ -45,7 +45,8 @@ list_type
 ---------
 
 :func:`~argclz.types.list_type` converts a delimited string into a list.  The ``prepend`` parameter lets
-users extend a base list by prefixing the value with ``+,``.
+users extend a base list by prefixing the value with ``+`` or ``+,`` (where ``,`` is a splitter that can be set
+by keyword parameter ``split``).
 
 .. code-block:: python
 
