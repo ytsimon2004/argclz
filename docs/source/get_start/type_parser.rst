@@ -99,7 +99,7 @@ bool_type
 dict_type
 ---------
 
-:func:`~argclz.types.dict_type` accumulates ``key=value`` or ``key:value`` pairs across repeated calls.
+:func:`~argclz.types.dict_type` accumulates ``key=value`` pairs across repeated calls.
 
 .. code-block:: python
 

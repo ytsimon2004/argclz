@@ -177,19 +177,35 @@ def union_type(*t: Callable[[str], T]):
 
 
 class dict_type:
-    """Caster that accumulates key-value pairs from 'key:value' or 'key=value' strings.
+    """Caster that accumulates key-value pairs from 'key=value' strings.
     """
 
-    def __init__(self, value_type: Type[T] | Callable[[str], T] | None = str, default: dict[str, T] | None = None):
+    def __init__(self, value_type: Type[T] | Callable[[str], T] | None = str, *,
+                 kv_split: str = '=',
+                 split: str | None = None,
+                 default: dict[str, T] | None = None):
         """
 
         :param value_type: function to convert values (default: str)
+        :param kv_split: the splitter of key and value.
+        :param split: the splitter that allow dict_type accept a list of key-value pairs.
         :param default: initial dict to populate (default: new dict)
         """
+        if len(kv_split) == 0:
+            raise ValueError('empty kv_split')
+
+        if split is not None:
+            if len(split) == 0:
+                raise ValueError('empty split')
+            if split in kv_split:
+                raise ValueError('split reused in kv_split')
+
         if default is None:
             default = {}
 
         self._value_type = value_type
+        self._kv_split = kv_split
+        self._split = split
         self._default_dict = dict(default)
         self._current_dict: dict[str, T] | None = None
 
@@ -197,28 +213,34 @@ class dict_type:
         if self._current_dict is None:
             self._current_dict = dict(self._default_dict)
 
-        if ':' in arg:
-            i = arg.index(':')
-            value = arg[i + 1:]
+        assert self._current_dict is not None
+
+        if len(arg):
+            if self._split is None:
+                self.__add(arg)
+            else:
+                for a in arg.split(self._split):
+                    if len(a):
+                        self.__add(a)
+
+        return self._current_dict
+
+    def __add(self, arg: str):
+        assert self._current_dict is not None
+
+        if self._kv_split in arg:
+            k, _, v = arg.partition(self._kv_split)
             if self._value_type is not None:
-                value = self._value_type(value)
-            self._current_dict[arg[:i]] = value
-        elif '=' in arg:
-            i = arg.index('=')
-            value = arg[i + 1:]
-            if self._value_type is not None:
-                value = self._value_type(value)
-            self._current_dict[arg[:i]] = value
+                v = self._value_type(v)
+            self._current_dict[k] = v
         elif self._value_type is None:
             self._current_dict[arg] = None
         else:
             self._current_dict[arg] = self._value_type("")
 
-        return self._current_dict
-
     def _clone(self) -> dict_type:
         """create a copy of dict_type to avoid from sharing."""
-        return dict_type(self._value_type, self._default_dict)
+        return dict_type(self._value_type, kv_split=self._kv_split, split=self._split, default=self._default_dict)
 
     def _clear(self):
         """clear current cache dict"""

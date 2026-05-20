@@ -143,19 +143,38 @@ class TypeFunctionTest(unittest.TestCase):
         # self.assertDictEqual({'a': 1}, t('a:1'))
         # self.assertDictEqual({'a': 1, 'b': 2}, t('b:2'))
 
-        self.assertDictEqual({'a': 1}, dict_type(int)('a:1'))
+        self.assertDictEqual({}, dict_type(int)(''))
         self.assertDictEqual({'a': 1}, dict_type(int)('a=1'))
 
         with self.assertRaises(ValueError):
             dict_type(int)('a')
 
-        self.assertDictEqual({'a': '1'}, dict_type(str)('a:1'))
         self.assertDictEqual({'a': '1'}, dict_type(str)('a=1'))
         self.assertDictEqual({'a': ''}, dict_type(str)('a'))
 
-        self.assertDictEqual({'a': '1'}, dict_type(None)('a:1'))
         self.assertDictEqual({'a': '1'}, dict_type(None)('a=1'))
         self.assertDictEqual({'a': None}, dict_type(None)('a'))
+
+    def test_dict_type_with_kv_split(self):
+        self.assertDictEqual({'a': 1}, dict_type(int, kv_split='=')('a=1'))
+        self.assertDictEqual({'a': 1}, dict_type(int, kv_split=':')('a:1'))
+        self.assertDictEqual({'a=1': ''}, dict_type(str, kv_split=':')('a=1'))
+        self.assertDictEqual({'a=1': None}, dict_type(try_int_type, kv_split=':')('a=1'))
+
+    def test_dict_type_with_split(self):
+        self.assertDictEqual({}, dict_type(int, split=',')(''))
+        self.assertDictEqual({'a': 1, 'b': 2}, dict_type(int, split=',')('a=1,b=2'))
+        self.assertDictEqual({'a': 1, 'b': 2}, dict_type(int, split=',')('a=1,,b=2'))
+        self.assertDictEqual({'a': '1', 'b': '2', 'c': ''}, dict_type(str, split=',')('a=1,c,b=2'))
+        self.assertDictEqual({'a': 1, 'b': 2, 'c': None}, dict_type(try_int_type, split=',')('a=1,c,b=2'))
+
+    def test_dict_type_with_wrong_split(self):
+        with self.assertRaises(ValueError):
+            dict_type(str, split='')
+        with self.assertRaises(ValueError):
+            dict_type(str, kv_split='')
+        with self.assertRaises(ValueError):
+            dict_type(str, split=',', kv_split=',')
 
     def test_slice_type(self):
         self.assertEqual(slice(0, 10), slice_type('0:10'))
