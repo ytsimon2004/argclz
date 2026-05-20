@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import EllipsisType
-from typing import TypeVar, Callable, Union, Literal, get_origin, get_args, Type, Any
+from typing import TypeVar, Callable, Literal, get_origin, get_args, Type, Any
 
 __all__ = [
     'literal_value_type',
@@ -46,6 +46,11 @@ def literal_value_type(arg: str) -> bool | int | float | str:
 
 def bool_type(value: str) -> bool:
     """Convert a string to a boolean.
+
+    An attribute with a ``bool`` type implicit using ``bool_type``.
+
+    >>> class Example:
+    ...     value: bool = argument(...) # using ``type=bool_type``.
 
     :param value: the input string to evaluate
     :return: False for ('-', '0', 'f', 'false', 'n', 'no', 'x'), True for ('', '+', '1', 't', 'true', 'yes', 'y')
@@ -235,7 +240,7 @@ def slice_type(arg: str) -> slice:
     return slice(s, e, t)
 
 
-def try_int_type(arg: str) -> Union[int, str, None]:
+def try_int_type(arg: str) -> int | str | None:
     """Attempt to convert a string to int, returning original or None on failure.
 
     :param arg: the input string
@@ -248,7 +253,7 @@ def try_int_type(arg: str) -> Union[int, str, None]:
         return arg
 
 
-def try_float_type(arg: str) -> Union[float, str, None]:
+def try_float_type(arg: str) -> float | str | None:
     """Attempt to convert a string to float, returning original or None on failure.
 
     :param arg: the input string
@@ -262,7 +267,19 @@ def try_float_type(arg: str) -> Union[float, str, None]:
 
 
 class literal_type:
-    """Caster enforcing membership in a set of string literals with optional prefix matching"""
+    """Caster enforcing membership in a set of string literals with optional prefix matching.
+
+    An attribute with a ``Literal`` type implicit using ``literal_type`` (no completion, case-sensitive).
+
+    >>> class Example:
+    ...     value: Literal['A', 'B', 'C'] = argument('-o') # using ``type=literal_type()``.
+
+    If you want advance features from ``literal_type``, you do not need to repeat the restricted values.
+
+    >>> class Example:
+    ...     value: Literal['A', 'B', 'C'] = argument('-o', type=literal_type(complete=True, case_sensitive=False))
+
+    """
 
     def __init__(self, candidate: Any = None, *,
                  complete: bool = False,
@@ -304,7 +321,7 @@ class literal_type:
                 if len(candidate) != len(set([it.upper() for it in candidate])):
                     raise ValueError('candidate not unique')
 
-    def __call__(self, arg: str):
+    def __call__(self, arg: str) -> str | None:
         assert self.candidate is not None
         if arg in self.candidate:
             return arg
@@ -328,7 +345,7 @@ class literal_type:
             assert up_arg is not None
             return self.__return_if_unique(arg, [it for it in self.candidate if it.upper().startswith(up_arg)])
 
-    def __return_if_unique(self, arg: str, found: list[str]):
+    def __return_if_unique(self, arg: str, found: list[str]) -> str:
         match found:
             case []:
                 raise ValueError()
