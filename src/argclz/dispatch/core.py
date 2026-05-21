@@ -4,7 +4,7 @@ import inspect
 import textwrap
 from collections.abc import Callable
 from types import EllipsisType
-from typing import NamedTuple, TypeVar, Any, Type, ParamSpec
+from typing import NamedTuple, TypeVar, Any, Type, ParamSpec, Literal, get_origin, get_args
 
 from typing_extensions import Self
 
@@ -61,7 +61,7 @@ class DispatchCommand(NamedTuple):
     def parameters(self) -> list[CommandParameter]:
         """information of command's parameters"""
         s = inspect.signature(self.func)
-        return [CommandParameter.of(name, para) for i, (name, para) in enumerate(s.parameters.items()) if i > 0]
+        return [CommandParameter(name, para) for i, (name, para) in enumerate(s.parameters.items()) if i > 0]
 
     @property
     def doc(self) -> str | None:
@@ -227,27 +227,34 @@ def dispatch_group(group: str) -> DispatchGroup:
 
 class CommandParameter(NamedTuple):
     name: str
-    optional: bool
-    kind: inspect._ParameterKind
+    para: inspect.Parameter
 
-    @classmethod
-    def of(cls, name: str, para: inspect.Parameter) -> Self:
-        optional = para.default is not inspect.Parameter.empty
-        return cls(name, optional, para.kind)
+    @property
+    def is_optional(self) -> bool:
+        return self.para.default is not inspect.Parameter.empty
 
     def usage(self):
         name = self.name.upper()
-        match self.kind:
+
+        is_literal = get_origin(self.para.annotation) is Literal
+        if is_literal:
+            name = '{' + '|'.join(get_args(self.para.annotation)) + '}'
+
+        match self.para.kind:
             case inspect.Parameter.VAR_KEYWORD:
                 return f'**{name}'
             case inspect.Parameter.VAR_POSITIONAL:
                 return f'*{name}'
             case inspect.Parameter.KEYWORD_ONLY:
-                ret = f'{name}='
+                if is_literal:
+                    par_name = self.name.upper()
+                    ret = f'{par_name}={name}'
+                else:
+                    ret = f'{name}='
             case _:
                 ret = name
 
-        if self.optional:
+        if self.is_optional:
             return f'[{ret}]'
         else:
             return ret

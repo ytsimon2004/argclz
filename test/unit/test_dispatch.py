@@ -1,5 +1,5 @@
 import unittest
-from typing import Any
+from typing import Any, Literal
 
 from argclz import *
 from argclz.core import print_help
@@ -413,6 +413,37 @@ class TestDispatch(unittest.TestCase):
 
         self.assertEqual(capture.exception.args[0], 'run_a already frozen')
 
+    def test_dispatch_on_literal_parameter(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a')
+            def run_a(self, a: Literal['AAA', 'BBB']):
+                self.r = a
+
+        main = Opt()
+        ret = main.main(['A', 'AAA'])
+        self.assertEqual(ret.r, 'AAA')
+
+        with self.assertRaises(ValueError) as capture:
+            main.main(['A', 'A'])
+
+        self.assertEqual(capture.exception.args[0],
+                         'command A argument "a" : cannot cast "A"')
+
+    def test_dispatch_on_literal_parameter_complete(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a', literal_type(complete=True))
+            def run_a(self, a: Literal['AAA', 'BBB']):
+                self.r = a
+
+        main = Opt()
+        ret = main.main(['A', 'AAA'])
+        self.assertEqual(ret.r, 'AAA')
+
+        ret = main.main(['A', 'A'])
+        self.assertEqual(ret.r, 'AAA')
+
 
 class TestDispatchGroup(unittest.TestCase):
     def test_dispatch_group(self):
@@ -616,6 +647,42 @@ A A [B=]            text for A.""")
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
 A A *B **C          text for A.""")
+
+    def test_build_command_with_literal_para(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a')
+            def run_a(self, a: Literal['AAA', 'BBB']):
+                """text for A."""
+                pass
+
+        self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
+A {AAA|BBB}         text for A.""")
+
+    def test_build_command_with_literal_para_complete(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a', literal_type(complete=True))
+            def run_a(self, a: Literal['AAA', 'BBB']):
+                """text for A."""
+                pass
+
+        self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
+A {AAA|BBB}         text for A.""")
+
+    def test_build_command_with_literal_keyword_para(self):
+        class Opt(SimpleDispatch):
+            @dispatch('A')
+            @validator_for('a')
+            def run_a(self, *, a: Literal['AAA', 'BBB']):
+                """text for A."""
+                pass
+
+        self.assertEqual(Opt.build_command_usages(show_para=True), """\
+Commands:
+A A={AAA|BBB}       text for A.""")
 
     def test_build_command_on_order(self):
         class Opt(SimpleDispatch):

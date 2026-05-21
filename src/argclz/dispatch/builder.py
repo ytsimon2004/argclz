@@ -1,6 +1,6 @@
 import inspect
 import warnings
-from typing import Callable, TypeVar, Generic
+from typing import Callable, TypeVar, Generic, get_origin, Literal
 
 from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand
 from ..validator import Validator
@@ -47,6 +47,10 @@ class DispatchCommandBuilder:
                 raise RuntimeError(f'unknown parameter type : {arg} for function {self.func.__name__}')
 
             caster = caster_by_annotation(arg, p.annotation)  # pyright: ignore[reportAssignmentType]
+
+        from ..types import literal_type
+        if isinstance(caster, literal_type) and get_origin(p.annotation) is Literal:
+            caster.set_candidate(p.annotation)
 
         self.validators[arg] = TypeCasterWithValidator(caster, validator)
 
