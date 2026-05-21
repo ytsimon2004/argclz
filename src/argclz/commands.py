@@ -20,11 +20,12 @@ class SubCommandGroup:
     def __init__(self, **kwargs):
         self.attr = None
         self.kwargs = kwargs
-        self.sub_parsers: list[SubCommand] = []
+        self.sub_parsers: dict[str, SubCommand] = {}
 
     def __set_name__(self, owner, name):
-        if hasattr(owner, ARGCLZ_SUB_COMMANDS):
-            raise RuntimeError('cannot have multiple sub-commands group')
+        if (prev := getattr(owner, ARGCLZ_SUB_COMMANDS, None)) is not None:
+            assert isinstance(prev, SubCommandGroup)
+            raise RuntimeError(f'cannot have multiple sub-commands groups: {prev.attr} and {name}')
 
         self.attr = name
         setattr(owner, ARGCLZ_SUB_COMMANDS, self)
@@ -50,18 +51,25 @@ class SubCommandGroup:
             pass
 
     def add_parser(self, ap: argparse.ArgumentParser):
+        """Add sub-commands into *ap*."""
         sb = ap.add_subparsers(**self.kwargs)
         assert self.attr is not None
-        for command in self.sub_parsers:
+        for command in self.sub_parsers.values():
             command.add_parser(sb, main=self.attr)
 
     def __call__(self, command: str):
-        def _sub_command(clz: Type[AbstractParser]):
-            if not issubclass(clz, AbstractParser):
-                raise TypeError()
+        def _sub_command(sub_parser: AbstractParser | Type[AbstractParser]):
+            if isinstance(sub_parser, AbstractParser) or (isinstance(sub_parser, type) and issubclass(sub_parser, AbstractParser)):
+                if command in self.sub_parsers:
+                    raise RuntimeError(f'sub-command "{command}" has been used.')
 
-            self.sub_parsers.append(SubCommand(command, clz))
-            return clz
+                self.sub_parsers[command] = SubCommand(command, sub_parser)
+                return sub_parser
+            else:
+                if not isinstance(sub_parser, type):
+                    sub_parser = type(sub_parser)
+                raise TypeError(f'{sub_parser.__name__} is not an AbstractParser')
+
 
         return _sub_command
 
@@ -72,6 +80,7 @@ class SubCommand:
         self.sub_parser = sub_parser
 
     def add_parser(self, sb, main='main'):
+        """Add sub-commands into *sb*."""
         pp = new_parser(self.sub_parser, reset=True)
         pp.set_defaults(**{main: self.sub_parser})
 
@@ -186,7 +195,7 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
 
     group = SubCommandGroup(title='commands')
     group.attr = 'main'
-    group.sub_parsers = [SubCommand(cmd, pp) for cmd, pp in parsers.items()]
+    group.sub_parsers = {cmd: SubCommand(cmd, pp) for cmd, pp in parsers.items()}
     group.add_parser(ap)
 
     return ap

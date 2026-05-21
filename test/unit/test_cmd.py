@@ -1,7 +1,7 @@
 import unittest
 
 from argclz import *
-from argclz.commands import parse_command_args, new_command_parser
+from argclz.commands import parse_command_args, new_command_parser, get_sub_command_group
 from argclz.core import print_help
 
 
@@ -172,12 +172,140 @@ class CommandParserClassTest(unittest.TestCase):
                     nonlocal result
                     result = self
 
-        p = P().main(['-a1', 'a', '-a2'])
-        self.assertIsInstance(p, P.P1)
-        self.assertIsInstance(p.parent, P)
-        self.assertEqual(p.parent.a, 2)  # XXX overwrite by P1 parser
-        self.assertEqual(p.a, 2)
-        self.assertIsInstance(result, P.P1)
+        p = P()
+        r = p.main(['-a1', 'a', '-a2'])
+        self.assertIsInstance(r, P.P1)
+        self.assertIsInstance(r.parent, P)
+        self.assertEqual(r.parent, p)
+        self.assertEqual(r.parent.a, 2)  # XXX overwrite by P1 parser
+        self.assertEqual(r.a, 2)
+        self.assertEqual(result, r)
+
+    def test_sub_from_outer_class(self):
+        class Sub(AbstractParser):
+            a: int = argument('-a')
+
+        class Par(AbstractParser):
+            sub_command = sub_command_group()
+            sub_command('a')(Sub)
+
+        p = Par()
+        r = p.main(['a', '-a2'])
+        self.assertIsInstance(p, Par)
+        self.assertIsInstance(r, Sub)
+        self.assertIs(p.sub_command, Sub)
+        self.assertEqual(r.a, 2)
+
+    def test_sub_from_outer_parser(self):
+        class Sub(AbstractParser):
+            a: int = argument('-a')
+
+        sub = Sub()
+
+        class Par(AbstractParser):
+            sub_command = sub_command_group()
+
+            # we do not suggest this usage.
+            sub_command('a')(sub)
+
+        p = Par()
+        r = p.main(['a', '-a2'])
+        self.assertIsInstance(p, Par)
+        self.assertIsInstance(r, Sub)
+        self.assertIs(r, sub)
+        self.assertIs(p.sub_command, sub)
+        self.assertEqual(r.a, 2)
+        self.assertEqual(sub.a, 2)
+
+    def test_sub_inherit_from_outer_class(self):
+        class Outer(AbstractParser):
+            a: int = argument('-a')
+
+        class Par(AbstractParser):
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class Inner(Outer):
+                def __init__(self, parent):
+                    self.parent = parent
+
+        p = Par()
+        r = p.main(['a', '-a2'])
+        self.assertIsInstance(p, Par)
+        self.assertIsInstance(r, Par.Inner)
+        self.assertIs(p.sub_command, Par.Inner)
+        self.assertEqual(r.a, 2)
+        self.assertEqual(r.parent, p)
+
+    def test_multiple_sub_groups(self):
+        with self.assertRaises(RuntimeError) as capture:
+            class Par(AbstractParser):
+                g1 = sub_command_group()
+                g2 = sub_command_group()
+
+        self.assertEqual(capture.exception.args[0],
+                         'cannot have multiple sub-commands groups: g1 and g2')
+
+    def test_sub_command_should_be_a_parser(self):
+        with self.assertRaises(TypeError) as capture:
+            class Par(AbstractParser):
+                sub_command = sub_command_group()
+
+                @sub_command('a')
+                class A1:
+                    pass
+
+        self.assertEqual(capture.exception.args[0],
+                         'A1 is not an AbstractParser')
+
+    def test_same_sub_command_name(self):
+        with self.assertRaises(RuntimeError) as capture:
+            class Par(AbstractParser):
+                sub_command = sub_command_group()
+
+                @sub_command('a')
+                class A1(AbstractParser):
+                    pass
+
+                @sub_command('a')
+                class A2(AbstractParser):
+                    pass
+
+        self.assertEqual(capture.exception.args[0],
+                         'sub-command "a" has been used.')
+
+
+class UtilMethodTest(unittest.TestCase):
+    def test_get_sub_command_group(self):
+        class Par(AbstractParser):
+            sub_command = sub_command_group()
+
+        r = get_sub_command_group(Par)
+        self.assertIs(r, Par.sub_command)
+
+    def test_get_sub_command_group_on_null(self):
+        class Par(AbstractParser):
+            pass
+
+        r = get_sub_command_group(Par)
+        self.assertIsNone(r)
+
+    def test_list_sub_commands(self):
+        class Par(AbstractParser):
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class A(AbstractParser): ...
+
+            @sub_command('b')
+            class B(AbstractParser): ...
+
+            @sub_command('c')
+            class C(AbstractParser): ...
+
+        g = get_sub_command_group(Par)
+        self.assertIsNotNone(g)
+        self.assertSetEqual({'a', 'b', 'c'}, set(g.sub_parsers))
 
 
 class PrintHelpTest(unittest.TestCase):
@@ -187,16 +315,10 @@ class PrintHelpTest(unittest.TestCase):
 
             a: str = argument('-a', default='default', help='P1.a help')
 
-            def run(self):
-                pass
-
         class P2(AbstractParser):
             DESCRIPTION = 'P2 description'
 
             a: str = argument('-a', default='default', help='P2.a help')
-
-            def run(self):
-                pass
 
         parser = new_command_parser(dict(a=P1, b=P2), prog='run.py', description='DESCRIPTION')
         self.assertEqual(print_help(parser, None), """\
