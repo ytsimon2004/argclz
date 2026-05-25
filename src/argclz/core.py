@@ -99,6 +99,9 @@ class AbstractParser(metaclass=abc.ABCMeta):
     DESCRIPTION: str | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
 
+    ARGUMENT_GROUP_LIST: list[str] | Callable[[str], int] | None = None
+    """argument group list"""
+
     EPILOG: str | Callable[[], str] | None = None
     """parser epilog. Could be override as a method if its content is dynamic-generated."""
 
@@ -713,45 +716,9 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     :return:
     """
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
-        usage = instance.USAGE
-        if isinstance(usage, list):
-            usage = '\n       '.join(usage)
-        kwargs.setdefault('usage', usage)
-
-        description = instance.DESCRIPTION
-        if callable(description):
-            description = description()
-        kwargs.setdefault('description', description)
-
-        # epilog
-        epilog = instance.EPILOG
-        if callable(epilog):
-            epilog = epilog()
-
-        assert epilog is None or isinstance(epilog, str)
-
-        # special handler for Dispatch for command sections.
-        # it put above epilog, but as part of epilog.
-        from argclz.dispatch import Dispatch
-        if isinstance(instance, Dispatch) or (isinstance(instance, type) and issubclass(instance, Dispatch)):
-            command_help = instance.COMMAND_HELP_DOC
-            if command_help is None:
-                command_help = instance.build_command_usages()
-            elif callable(command_help):
-                command_help = command_help()
-
-            assert isinstance(command_help, str)
-
-            if len(command_help):
-                if epilog is not None:
-                    if not command_help.endswith('\n'):
-                        command_help += '\n'
-                    epilog = command_help + "\n" + epilog
-                else:
-                    epilog = command_help
-
-        kwargs.setdefault('epilog', epilog)
-
+        kwargs.setdefault('usage', _parser_usage(instance))
+        kwargs.setdefault('description', _parser_description(instance))
+        kwargs.setdefault('epilog', _parser_epilog(instance))
         # we do not need special handle for help text.
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
@@ -789,7 +756,7 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
         arg.add_argument(tp, instance)
 
     # setup grouped arguments
-    for group, args in groups.items():
+    for group, args in _iter_grouped_arguments_in_order(instance, groups):
         pp = ap.add_argument_group(group)
         mu_ex_groups_grp: dict[str, argparse._MutuallyExclusiveGroup] = {}
 
@@ -809,6 +776,85 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
             arg.add_argument(tp, instance)
 
     return ap
+
+
+def _parser_usage(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+    usage = instance.USAGE
+    if isinstance(usage, list):
+        usage = '\n       '.join(usage)
+    return usage
+
+
+def _parser_description(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+    description = instance.DESCRIPTION
+    if callable(description):
+        description = description()
+    return description
+
+
+def _parser_epilog(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+    epilog = instance.EPILOG
+    if callable(epilog):
+        epilog = epilog()
+
+    assert epilog is None or isinstance(epilog, str)
+
+    # special handler for Dispatch for command sections.
+    # it put above epilog, but as part of epilog.
+    from argclz.dispatch import Dispatch
+    if isinstance(instance, Dispatch) or (isinstance(instance, type) and issubclass(instance, Dispatch)):
+        command_help = instance.COMMAND_HELP_DOC
+        if command_help is None:
+            command_help = instance.build_command_usages()
+        elif callable(command_help):
+            command_help = command_help()
+
+        assert isinstance(command_help, str)
+
+        if len(command_help):
+            if epilog is not None:
+                if not command_help.endswith('\n'):
+                    command_help += '\n'
+                epilog = command_help + "\n" + epilog
+            else:
+                epilog = command_help
+
+    return epilog
+
+
+def _iter_grouped_arguments_in_order(instance: T | Type[T],
+                                     groups: dict[str, list[Argument]]) -> Iterable[tuple[str, list[Argument]]]:
+    if not isinstance(instance, type):
+        instance = type(instance)
+
+    if not issubclass(instance, AbstractParser) or instance.ARGUMENT_GROUP_LIST is None:
+        yield from groups.items()
+    else:
+        argument_group_list = instance.ARGUMENT_GROUP_LIST
+        if isinstance(argument_group_list, list):
+            for group in argument_group_list:
+                try:
+                    yield group, groups[group]
+                except KeyError:
+                    pass
+
+            for group, args in groups.items():
+                if group not in argument_group_list:
+                    yield group, args
+
+        elif callable(argument_group_list):
+            argument_group_list_func = argument_group_list
+            argument_group_list = list(groups)
+            argument_group_list.sort(key=argument_group_list_func)
+
+            for group in argument_group_list:
+                try:
+                    yield group, groups[group]
+                except KeyError:
+                    pass
+
+        else:
+            raise TypeError('ARGUMENT_GROUP_LIST not a list')
 
 
 def set_options(instance: T, result: argparse.Namespace) -> T:
