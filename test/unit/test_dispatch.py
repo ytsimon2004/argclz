@@ -15,7 +15,40 @@ class SimpleDispatch(AbstractParser, Dispatch):
         self.invoke_command(self.c, *self.a)
 
 
-class TestDispatch(unittest.TestCase):
+class AbstractDispatchTester(unittest.TestCase):
+    def assert_command_list(self, left, right):
+        def to_command_name(cmd):
+            if not isinstance(cmd, str):
+                from argclz.dispatch.core import DispatchCommand
+                self.assertIsInstance(cmd, DispatchCommand)
+                return cmd.command
+            else:
+                return cmd
+
+        a = list(map(to_command_name, left))
+        b = list(map(to_command_name, right))
+        self.assertListEqual(a, b)
+
+    def assert_command_group_list(self, left, right):
+        def to_command_name(cmd):
+            from argclz.dispatch.core import DispatchCommand
+
+            match cmd:
+                case str():
+                    return None, cmd
+                case (str() | None, str()):
+                    return cmd
+                case DispatchCommand(group=group, command=command):
+                    return group, command
+                case _:
+                    raise TypeError(str(cmd))
+
+        a = list(map(to_command_name, left))
+        b = list(map(to_command_name, right))
+        self.assertListEqual(a, b)
+
+
+class TestDispatch(AbstractDispatchTester):
     def test_dispatch_command(self):
         class Opt(SimpleDispatch):
             @dispatch('A')
@@ -52,21 +85,10 @@ class TestDispatch(unittest.TestCase):
             def run_c(self):
                 pass
 
-        commands = Opt.list_commands()
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A', 'B', 'C'])
-
-        commands = Opt.list_commands(None)
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A', 'B'])
-
-        commands = Opt.list_commands('A')
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['C'])
-
-        commands = Opt.list_commands('C')
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, [])
+        self.assert_command_list(Opt.list_commands(), ['A', 'B', 'C'])
+        self.assert_command_list(Opt.list_commands(None), ['A', 'B'])
+        self.assert_command_list(Opt.list_commands('A'), ['C'])
+        self.assert_command_list(Opt.list_commands('C'), [])
 
     def test_list_hidden_commands(self):
         class Opt(SimpleDispatch):
@@ -78,13 +100,8 @@ class TestDispatch(unittest.TestCase):
             def run_b(self):
                 pass
 
-        commands = Opt.list_commands()
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A'])
-
-        commands = Opt.list_commands(all=True)
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A', 'B'])
+        self.assert_command_list(Opt.list_commands(), ['A'])
+        self.assert_command_list(Opt.list_commands(include_hidden=True), ['A', 'B'])
 
     def test_dispatch_find_command(self):
         class Opt(SimpleDispatch):
@@ -445,7 +462,8 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(ret.r, 'AAA')
 
 
-class TestDispatchGroup(unittest.TestCase):
+class TestDispatchGroup(AbstractDispatchTester):
+
     def test_dispatch_group(self):
         class Opt(SimpleDispatch):
             g = dispatch_group('A')
@@ -464,6 +482,71 @@ class TestDispatchGroup(unittest.TestCase):
         ret = Opt().main(['A'])
         self.assertEqual(ret.r, 'GGG')
 
+    def test_dispatch_group_by_literal_str(self):
+        class Opt(SimpleDispatch):
+
+            @dispatch('A', group='G')
+            def run_a(self):
+                ...
+
+            @dispatch('A', group='H')
+            def run_b(self):
+                ...
+
+        self.assertSetEqual(Opt.list_groups(), {'G', 'H'})
+        self.assert_command_group_list(Opt.list_commands('G'), [('G', 'A')])
+        self.assert_command_group_list(Opt.list_commands('H'), [('H', 'A')])
+
+    def test_dispatch_group_by_dispatch_group(self):
+        class Opt(SimpleDispatch):
+            a = dispatch_group('G')
+
+            @dispatch('A', group=a)
+            def run_a(self):
+                ...
+
+            @dispatch('B', group=a)
+            def run_b(self):
+                ...
+
+        self.assertSetEqual(Opt.list_groups(), {'G'})
+        self.assert_command_group_list(Opt.list_commands('G'), [('G', 'A'), ('G', 'B')])
+        self.assert_command_group_list(Opt.list_commands(Opt.a), [('G', 'A'), ('G', 'B')])
+        self.assert_command_group_list(Opt.a.list_commands(), [('G', 'A'), ('G', 'B')])
+
+    def test_dispatch_group_from_outer_scope(self):
+        a = dispatch_group('a')
+
+        class Opt(SimpleDispatch):
+            @a('A')
+            def run_a(self):
+                pass
+
+        self.assertSetEqual(Opt.list_groups(), {'a'})
+        self.assert_command_list(Opt.list_commands('a'), ['A'])
+        self.assert_command_list(Opt.list_commands(a), ['A'])
+
+    def test_list_groups(self):
+        class Opt(SimpleDispatch):
+            a = dispatch_group('a')
+            b = dispatch_group('b')
+            c = dispatch_group('c')
+            d = dispatch_group('d')  # no function under this group, is not counted
+
+            @a('A')
+            def run_a(self):
+                pass
+
+            @b('B')
+            def run_b(self):
+                pass
+
+            @c('C')
+            def run_c(self):
+                pass
+
+        self.assertSetEqual(Opt.list_groups(), {'a', 'b', 'c'})
+
     def test_list_commands(self):
         class Opt(SimpleDispatch):
             g = dispatch_group('A')
@@ -480,9 +563,10 @@ class TestDispatchGroup(unittest.TestCase):
             def run_c_in_g(self):
                 pass
 
-        commands = Opt.g.list_commands()
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['B', 'C'])
+        self.assert_command_group_list(Opt.list_commands(None), ['A'])
+        self.assert_command_group_list(Opt.list_commands('A'), [('A', 'B'), ('A', 'C')])
+        self.assert_command_group_list(Opt.list_commands(Opt.g), [('A', 'B'), ('A', 'C')])
+        self.assert_command_group_list(Opt.g.list_commands(), [('A', 'B'), ('A', 'C')])
 
     def test_use_group(self):
         class Opt(SimpleDispatch):
@@ -494,30 +578,34 @@ class TestDispatchGroup(unittest.TestCase):
                 self.r = 'A'
 
         opt = Opt()
-        commands = opt.list_commands(Opt.g)
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A'])
 
-        commands = opt.list_commands(opt.g)
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A'])
+        with self.subTest('list_commands'):
+            self.assert_command_group_list(opt.list_commands('A'), [('A', 'A')])
+            self.assert_command_group_list(opt.list_commands(opt.g), [('A', 'A')])
 
-        command = opt.find_command('A', Opt.g)
-        assert command is not None
-        self.assertEqual(command.command, 'A')
-        command = opt.find_command('A', opt.g)
-        assert command is not None
-        self.assertEqual(command.command, 'A')
+        with self.subTest('find_command'):
+            command = opt.find_command('A', Opt.g)
+            self.assert_command_list([command], ['A'])
+            command = opt.find_command('A', opt.g)
+            self.assert_command_list([command], ['A'])
 
-        opt.r = None
-        self.assertIsNone(opt.r)
-        opt.invoke_group_command(Opt.g, 'A')
-        self.assertEqual(opt.r, 'A')
+        with self.subTest('invoke_group_command(str)'):
+            opt.r = None
+            self.assertIsNone(opt.r)
+            opt.invoke_group_command('A', 'A')
+            self.assertEqual(opt.r, 'A')
 
-        opt.r = None
-        self.assertIsNone(opt.r)
-        opt.invoke_group_command(opt.g, 'A')
-        self.assertEqual(opt.r, 'A')
+        with self.subTest('invoke_group_command(cls)'):
+            opt.r = None
+            self.assertIsNone(opt.r)
+            opt.invoke_group_command(Opt.g, 'A')
+            self.assertEqual(opt.r, 'A')
+
+        with self.subTest('invoke_group_command(ins)'):
+            opt.r = None
+            self.assertIsNone(opt.r)
+            opt.invoke_group_command(opt.g, 'A')
+            self.assertEqual(opt.r, 'A')
 
     def test_use_group_outside_class(self):
         g = dispatch_group('A')
@@ -530,23 +618,24 @@ class TestDispatchGroup(unittest.TestCase):
                 self.r = 'A'
 
         opt = Opt()
-        commands = opt.list_commands(g)
-        commands = [it.command for it in commands]
-        self.assertListEqual(commands, ['A'])
+        with self.subTest('list_commands'):
+            self.assert_command_group_list(opt.list_commands('A'), [('A', 'A')])
+            self.assert_command_group_list(opt.list_commands(g), [('A', 'A')])
 
-        command = opt.find_command('A', g)
-        assert command is not None
-        self.assertEqual(command.command, 'A')
+        with self.subTest('find_command'):
+            command = opt.find_command('A', g)
+            self.assert_command_group_list([command], [('A', 'A')])
 
-        opt.r = None
-        self.assertIsNone(opt.r)
-        opt.invoke_group_command(g, 'A')
-        self.assertEqual(opt.r, 'A')
+        with self.subTest('invoke_group_command'):
+            opt.r = None
+            self.assertIsNone(opt.r)
+            opt.invoke_group_command(g, 'A')
+            self.assertEqual(opt.r, 'A')
 
     def test_use_in_non_Dispatch(self):
         # python version: >= 3.12 (TypeError), otherwise RuntimeError
         with self.assertRaises((RuntimeError, TypeError)):
-            class Opt:
+            class Opt:  # not a subclass of Dispatch
                 g = dispatch_group('A')
 
 

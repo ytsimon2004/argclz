@@ -26,6 +26,7 @@ class DispatchCommand(NamedTuple):
     """
     The information of :func:`~argclz.dispatch.annotations.dispatch` function.
     Use :func:`~argclz.dispatch.annotations.dispatch` instead.
+
     Do not create this class directly.
     """
 
@@ -121,10 +122,24 @@ class DispatchCommand(NamedTuple):
 
 
 class DispatchGroup(NamedTuple):
-    """dispatch group."""
+    """
+    Dispatch command group.
+
+    **Example**
+
+        >>> class D(Dispatch):
+        ...     command_group = dispatch_group('A')
+        ...     @command_group('A')
+        ...     def function_a(self, a, b, c=None):
+        ...         pass
+
+    """
 
     group: str
-    """group name"""
+
+    def __set_name__(self, owner, name: str):
+        if not issubclass(owner, Dispatch):
+            raise TypeError('owner not Dispatch')
 
     def __call__(self, command: str,
                  *alias: str,
@@ -132,18 +147,8 @@ class DispatchGroup(NamedTuple):
                  usage: str | None = None,
                  hidden=False):
         """
-        A decorator that mark a function as a dispatch target function.
-
-        All functions decorated in same dispatch group should have save
-        function signature (at least for non-default parameters). For example:
-
-        **Example**
-
-        >>> class D(Dispatch):
-        ...     command_group = dispatch_group('A')
-        ...     @command_group('A')
-        ...     def function_a(self, a, b, c=None):
-        ...         pass
+        A decorator that mark a function as a dispatch target function under
+        this group.
 
         :param command: primary command name
         :param alias: secondary command names
@@ -154,10 +159,6 @@ class DispatchGroup(NamedTuple):
         from .annotations import dispatch
         return dispatch(command, *alias, group=self.group, order=order, usage=usage, hidden=hidden)
 
-    def __set_name__(self, owner, name):
-        if not issubclass(owner, Dispatch):
-            raise TypeError('owner not Dispatch')
-
     def __get__(self, instance: Dispatch | None, owner: Type[Dispatch]) -> BoundDispatchGroup:
         if instance is None:
             return BoundDispatchGroup(owner, self.group)
@@ -166,17 +167,28 @@ class DispatchGroup(NamedTuple):
 
 
 class BoundDispatchGroup(NamedTuple):
+    """
+    A dispatch command group.
+
+    **Example**
+
+        >>> class D(Dispatch):
+        ...     command_group = dispatch_group('A')
+        ... print(D.command_group.list_commands())
+
+    """
+
     zelf: Dispatch | Type[Dispatch]
     group: str
 
     def list_commands(self, *,
-                      all: bool = False) -> list[DispatchCommand]:
+                      include_hidden: bool = False) -> list[DispatchCommand]:
         """list all :func:`~argclz.dispatch.annotations.dispatch` info in this group.
 
-        :param all: including hidden commands
+        :param include_hidden: including hidden commands
         :return: list of DispatchCommand
         """
-        return self.zelf.list_commands(self.group, all=all)
+        return self.zelf.list_commands(self.group, include_hidden=include_hidden)
 
     def find_command(self, command: str) -> DispatchCommand | None:
         """find :func:`~argclz.dispatch.annotations.dispatch` function according to *command* in this group.
@@ -215,8 +227,28 @@ def dispatch_group(group: str) -> DispatchGroup:
         ...     def function_a(self, a, b, c=None):
         ...         pass
 
-    dispatch_group can be assign inside a :class:`Dispatch` (like example above) or
+    ``dispatch_group`` can be assign inside a :class:`Dispatch` (like example above) or
     at the global level.
+
+    There are three styles to associate dispatch function under a group:
+
+    1. use ``group`` in ``@dispatch`` without introducing ``dispatch_group``.
+
+        >>> @dispatch('A', group='group')
+        ... def function_a(self): ...
+
+    2. ``group`` in ``@dispatch`` with introducing ``dispatch_group``.
+
+        >>> command_group = dispatch_group('A')
+        ... @dispatch('A', group=command_group)
+        ... def function_a(self): ...
+
+    3. use ``dispatch_group`` as ``@dispatch``
+
+        >>> command_group = dispatch_group('A')
+        ... @command_group('A')
+        ... def function_a(self): ...
+
 
     :param group: group name.
     :return:
@@ -339,23 +371,92 @@ class Dispatch:
 
     **Example**
 
-    >>> from argclz.dispatch import Dispatch, dispatch
-    ...     class Main(Dispatch):
-    ...         @dispatch('A')
-    ...         def run_a(self): ...
-    ... Main().invoke_command('A')
+    >>> from argclz import *
+    ... from argclz.dispatch import Dispatch, dispatch
+    ... class Main(Dispatch):
+    ...     @dispatch('A')
+    ...     def run_a(self): ...
+    ... Main().invoke_command('A') # invoke run_a
+
+    **Grouping**
+
+    Dispatch functions can be grouped with a giving name.
+
+    Usage case: put commandline related dispatch functions into default group (with a ``None`` name),
+    and put a categories parameter into another group. For Example
+
+    >>> class Main(AbstractParser, Dispatch):
+    ...     mode : Literal['A', 'B'] = argument('--mode')
+    ...     command: str = pos_argument('CMD')
+    ...     @dispatch('A', group='mode')
+    ...     def get_mode_a(self): ...
+    ...     @dispatch('B', group='mode')
+    ...     def get_mode_b(self): ...
+    ...     @dispatch('run')
+    ...     def run_command(self):
+    ...         mode = self.invoke_group_command('mode', self.mode)
+    ...     def run(self):
+    ...         self.invoke_command(self.command)
+
+
+    TODO more content
+
+    **Help Doc**
+
+    Dispatch class can be cooperated with :func:`~argclz.dispatch.core.AbstractPatser`, as
+    well as cooperated with the help text generating.
+    The content of the class attribute ``COMMAND_HELP_DOC`` will be joined in front of the
+    epilog text.
+
+    There are
+
+    1. By default, just like above example ``Main`` class, it works as same as below:
+
+        >>> class Main(Dispatch):
+        ...     COMMAND_HELP_DOC = Main.build_command_usages()
+
+        Although the above code has name resolution issue (use ``Main``), you get the meaning.
+
+    2. For static content:
+
+        >>> class Main(Dispatch):
+        ...     COMMAND_HELP_DOC = 'My help text'
+
+        Note that the content will not following the changes of the dispatch commands.
+
+    3. For dynamic content:
+
+        >>> class Main(Dispatch):
+        ...     @classmethod
+        ...     def COMMAND_HELP_DOC(cls):
+        ...         return cls.build_command_usages()
+
+        With this approach, you can use the result of ``build_command_usages`` and add
+        the extra content you like.
+
     """
 
     COMMAND_HELP_DOC: str | Callable[[], str] | None = None
     """Command help text. Could be override as a method if its content is dynamic-generated."""
 
     @classmethod
+    def list_groups(cls) -> set[str]:
+        ret = set()
+        for attr in dir(cls):
+            attr_value = getattr(cls, attr)
+            info: DispatchCommand | None = getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)
+            if info is not None and info.group is not None:
+                ret.add(info.group)
+
+        return ret
+
+    @classmethod
     def list_commands(cls, group: str | DispatchGroup | BoundDispatchGroup | EllipsisType | None = ..., *,
-                      all: bool = False) -> list[DispatchCommand]:
+                      include_hidden: bool = False) -> list[DispatchCommand]:
         """list all :func:`~argclz.dispatch.annotations.dispatch` functions.
 
         :param group: dispatch group. Use ``None`` for default group, and use ``...`` for all groups.
-        :param all: including hidden commands
+        :param include_hidden: including hidden commands
         :return: list of DispatchCommand
         """
         if isinstance(group, (DispatchGroup, BoundDispatchGroup)):
@@ -366,8 +467,8 @@ class Dispatch:
             attr_value = getattr(cls, attr)
             info: DispatchCommand | None = getattr(attr_value, ARGCLZ_DISPATCH_COMMAND, None)
             if info is not None:
-                if group is ... or group == info.group:
-                    if all or not info.hidden:
+                if group == info.group or group is ...:
+                    if include_hidden or not info.hidden:
                         ret.append(info)
 
         return ret
@@ -439,7 +540,7 @@ class Dispatch:
         epilog.
 
         By default, ``None`` :attr:`~argclz.dispatch.Dispatch.COMMAND_HELP_DOC` value will
-        use the content of ``build_command_usages()``.
+        use the content from ``build_command_usages()``.
 
         To customize the command help text in a :class:`~argclz.dispatch.Dispatch` subclass,
         you can do
@@ -454,7 +555,7 @@ class Dispatch:
         ...     def COMMAND_HELP_DOC(cls):
         ...         return cls.build_command_usages()
 
-        :param group: for functions in the group.
+        :param group: for functions in this group.
         :param show_para: show parameters.
         :param width: text-wrap width.
         :param doc_indent: description indent.

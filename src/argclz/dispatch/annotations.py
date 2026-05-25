@@ -1,6 +1,11 @@
-from typing import Callable, TypeVar, overload, ParamSpec, TypeAlias
+from __future__ import annotations
+
+from typing import Callable, TypeVar, overload, ParamSpec, TypeAlias, TYPE_CHECKING
 
 from ..validator import Validator
+
+if TYPE_CHECKING:
+    from .core import DispatchGroup
 
 __all__ = [
     'dispatch',
@@ -13,9 +18,10 @@ F = TypeVar('F', bound=Callable)
 Method: TypeAlias = Callable[P, R]
 Decorator: TypeAlias = Callable[[Method], Method]
 
+
 def dispatch(command: str,
              *alias: str,
-             group: str | None = None,
+             group: str | DispatchGroup | None = None,
              order: float = 5,
              usage: str | None = None,
              hidden=False) -> Decorator:

@@ -2,7 +2,7 @@ import inspect
 import warnings
 from typing import Callable, TypeVar, Generic, get_origin, Literal
 
-from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand
+from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand, DispatchGroup
 from ..validator import Validator
 
 __all__ = ['DispatchCommandBuilder']
@@ -15,6 +15,7 @@ class DispatchCommandBuilder:
     """
     (internal) Do not use this class directly.
     """
+
     def __init__(self, func):
         self.func = func
         self.signature = inspect.signature(func, eval_str=True)
@@ -57,9 +58,12 @@ class DispatchCommandBuilder:
     def build(self, command: str,
               aliases: tuple[str, ...],
               order: float = 5,
-              group: str | None = None,
+              group: str | DispatchGroup | None = None,
               usage: str | None = None,
               hidden=False) -> DispatchCommand:
+        if isinstance(group, DispatchGroup):
+            group = group.group
+
         ret = DispatchCommand(group, command, aliases, order, usage, self.func, self.validators, hidden)
         setattr(self.func, ARGCLZ_DISPATCH_COMMAND, ret)
         return ret
@@ -69,6 +73,7 @@ class TypeCasterWithValidator(Generic[T]):
     """
     (internal) Do not use this class directly.
     """
+
     def __init__(self, caster: Callable[[str], T] | None,
                  validator: Callable[[T], bool] | None):
         self.caster = caster

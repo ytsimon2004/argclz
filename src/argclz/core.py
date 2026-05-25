@@ -81,7 +81,17 @@ class ArgumentParser(argparse.ArgumentParser):
 
 
 class AbstractParser(metaclass=abc.ABCMeta):
-    """Commandline parser."""
+    """Commandline parser.
+
+    **Example**
+
+    TODO
+
+    **Help Doc**
+
+    TODO
+
+    """
 
     USAGE: str | list[str] | None = None
     """parser usage."""
