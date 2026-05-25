@@ -129,13 +129,17 @@ class TestDispatch(AbstractDispatchTester):
 
         opt = Opt()
 
-        with self.assertRaises(DispatchCommandNotFound):
+        with self.assertRaises(DispatchCommandNotFound) as capture:
             opt.invoke_command('B')
+        self.assertIsNone(capture.exception.group)
+        self.assertEqual(capture.exception.command, 'B')
 
         opt.invoke_group_command('B', 'B')
 
-        with self.assertRaises(DispatchCommandNotFound):
+        with self.assertRaises(DispatchCommandNotFound) as capture:
             opt.invoke_group_command('B', 'A')
+        self.assertEqual(capture.exception.group, 'B')
+        self.assertEqual(capture.exception.command, 'A')
 
     def test_dispatch_command_alias(self):
         class Opt(SimpleDispatch):
@@ -638,6 +642,20 @@ class TestDispatchGroup(AbstractDispatchTester):
             class Opt:  # not a subclass of Dispatch
                 g = dispatch_group('A')
 
+    def test_dispatch_command_not_found(self):
+        class Opt(SimpleDispatch):
+            g = dispatch_group('B')
+
+            @g('B')
+            def run_b(self):
+                pass
+
+        opt = Opt()
+
+        with self.assertRaises(DispatchCommandNotFound) as capture:
+            opt.invoke_group_command(Opt.g, 'A')
+        self.assertEqual(capture.exception.group, 'B')
+        self.assertEqual(capture.exception.command, 'A')
 
 class PrintHelpTest(unittest.TestCase):
 
@@ -925,6 +943,95 @@ Commands:
 A (a)               text for A.
 
 A epilog text
+""")
+
+
+class UseCaseTest(unittest.TestCase):
+    def test_example_1(self):
+        # example adjusted from the 'Grouping' section, doc of class Dispatch.
+        class Main(AbstractParser, Dispatch):
+            DESCRIPTION = 'Description text'
+            EPILOG = 'Epilog text'
+
+            mode: Literal['A', 'B'] = argument('--mode', default='A', help='mode text')
+            mode_group = dispatch_group('mode')
+
+            command: str = pos_argument('CMD')
+            result: str = None
+
+            @classmethod
+            def COMMAND_HELP_DOC(cls):
+                command_text = cls.build_command_usages(None, doc_indent=16)
+                mode_list = cls.build_command_usages(cls.mode_group, header='Available Modes:', doc_indent=16)
+
+                return '\n\n'.join([
+                    command_text,
+                    mode_list
+                ])
+
+            @mode_group('A')
+            def get_mode_a(self):
+                """mode A text"""
+                return 'mode A'
+
+            @mode_group('B')
+            def get_mode_b(self):
+                """mode B text"""
+                return 'mode B'
+
+            @dispatch('run')
+            def run_command(self):
+                """command run text"""
+                try:
+                    mode = self.invoke_group_command(self.mode_group, self.mode)
+                    return f'run for {mode}'
+                except DispatchCommandNotFound:
+                    return 'run for unknown mode'
+
+            def run(self):
+                self.result = self.invoke_command(self.command)
+
+        with self.subTest('main'):
+            main = Main().main(['run'])
+            self.assertIsInstance(main, Main)
+            self.assertEqual(main.result, 'run for mode A')
+
+            main = Main().main(['run', '--mode=B'])
+            self.assertIsInstance(main, Main)
+            self.assertEqual(main.result, 'run for mode B')
+
+        with self.subTest('error main'):
+            with self.assertRaises(SystemExit):
+                Main().main(['run', '--mode=C'])
+
+        with self.subTest('error call'):
+            main = Main()
+            main.command = 'run'
+            main.mode = 'C'  # we do not use validator, so no error is raised here.
+            main.run()
+            self.assertEqual(main.result, 'run for unknown mode')
+
+        with self.subTest('help'):
+            self.assertEqual(print_help(Main, None, prog='run.py'), """\
+usage: run.py [-h] [--mode A|B] CMD
+
+Description text
+
+positional arguments:
+  CMD
+
+options:
+  -h, --help  show this help message and exit
+  --mode A|B  mode text (default: 'A')
+
+Commands:
+run             command run text
+
+Available Modes:
+A               mode A text
+B               mode B text
+
+Epilog text
 """)
 
 

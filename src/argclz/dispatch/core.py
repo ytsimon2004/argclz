@@ -524,7 +524,7 @@ class Dispatch:
         return info(self, *args, **kwargs)
 
     @classmethod
-    def build_command_usages(cls, group: str | None = None, *,
+    def build_command_usages(cls, group: str | DispatchGroup | BoundDispatchGroup | None = None, *,
                              show_para: bool = False,
                              width: int = 120,
                              doc_indent: int = 20,
