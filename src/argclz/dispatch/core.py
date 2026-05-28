@@ -527,6 +527,7 @@ class Dispatch:
     def build_command_usages(cls, group: str | DispatchGroup | BoundDispatchGroup | None = None, *,
                              show_para: bool = False,
                              width: int = 120,
+                             item_indent: int = 2,
                              doc_indent: int = 20,
                              header: str | None = "Commands:") -> str:
         """
@@ -558,6 +559,7 @@ class Dispatch:
         :param group: for functions in this group.
         :param show_para: show parameters.
         :param width: text-wrap width.
+        :param item_indent: indent of each dispatch command.
         :param doc_indent: description indent.
         :param header: the header of commands help section.
         :return: help document.
@@ -569,6 +571,9 @@ class Dispatch:
         commands = cls.list_commands(group)
         commands.sort(key=lambda it: it.order)
 
+        item_space = ' ' * item_indent
+        desp_space = ' ' * doc_indent
+
         for info in commands:
             info = CommandHelps.of(info)
 
@@ -576,16 +581,16 @@ class Dispatch:
             content = info.brief_doc()
 
             if len(header) < doc_indent:
-                content = header + ' ' * (doc_indent - len(header)) + content
+                content = item_space + header + ' ' * (doc_indent - len(header) - item_indent) + content
                 ret.extend(textwrap.wrap(content, width,
-                                         subsequent_indent=' ' * doc_indent,
+                                         subsequent_indent=desp_space,
                                          break_long_words=True,
                                          break_on_hyphens=True))
             else:
-                ret.append(header)
+                ret.append(item_space + header)
                 ret.extend(textwrap.wrap(content, width,
-                                         initial_indent=' ' * doc_indent,
-                                         subsequent_indent=' ' * doc_indent,
+                                         initial_indent=desp_space,
+                                         subsequent_indent=desp_space,
                                          break_long_words=True,
                                          break_on_hyphens=True))
 

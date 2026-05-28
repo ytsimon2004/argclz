@@ -35,11 +35,13 @@ refer to :func:`~argclz.core.argument()`
 
     MyArgs().main()  # [5]
 
-1. :class:`~argclz.core.AbstractParser` provides the base class that defines `.main()` and `.run()` methods,
+1. :class:`~argclz.core.AbstractParser` provides the base class that defines :meth:`~argclz.core.AbstractParser.main()`
+   and :meth:`~argclz.core.AbstractParser.run()` methods,
    and manages automatic argument parsing and attribute injection.
-2. When type annotation with ``bool``, the argument automatically becomes a flag, which inferred using ``action='store_true'``
+2. When type annotation with ``bool``, the argument automatically becomes a flag, which inferred a storing action (``action='store_true'``),
+   which is used in :meth:`~argparse.ArgumentParser.add_argument()`.
 3. :func:`~argclz.core.argument()` creates a command-line argument bound to this attribute.
-   Its parameters are passed to `argparse.ArgumentParser.add_argument()`.
+   Its parameters, including user provided and inferred, are passed to :meth:`~argparse.ArgumentParser.add_argument()`.
 4. The ``run()`` method is invoked after arguments are parsed and set on the instance.
    It serves as the main entry point for your script’s logic.
 5. This calls ``.main()``, which first parses command-line arguments
@@ -75,7 +77,8 @@ refer to :func:`~argclz.core.argument()`
 
 pos_argument
 -----------------------------------
-Create a positional (non-flag) command-line argument attribute
+
+Create a positional (non-flag) command-line argument.
 
 refer to :func:`~argclz.core.pos_argument()`
 
@@ -90,8 +93,8 @@ refer to :func:`~argclz.core.pos_argument()`
 
     MyArgs().main()
 
-1. This creates a required positional argument. The `'FILENAME'` string is used as the metavar
-shown in help messages and documentation, not the actual variable name.
+1. This creates a required positional argument. The ``FILENAME`` string is used as the ``metavar``
+   in :meth:`~argparse.ArgumentParser.add_argument()`.
 
 - **run the script with -h**
 
@@ -121,9 +124,9 @@ shown in help messages and documentation, not the actual variable name.
 
 var_argument
 -----------------------------------
-Create a variable-length positional argument, suitable for capturing multiple values into a list
 
-This is useful when your CLI tool expects an arbitrary number of values
+Create a variable-length positional argument, suitable for capturing multiple values into a list.
+This is useful when your CLI tool expects an arbitrary number of values.
 
 refer to :func:`~argclz.core.var_argument()`
 
@@ -134,9 +137,10 @@ refer to :func:`~argclz.core.var_argument()`
         items: list[str]   = var_argument('ITEMS', help='Items to process')
         #      ^^^^^^^^^[1]  ^^^^^^^^^^^^[2]
 
-1. ``list[str]`` tells the parser to expect multiple values and return them as a list of strings
-2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple inputs.
-   Internally, it sets ``nargs='*'`` and ``action='extend'`` to gather values into a list.
+1. ``list[str]`` tells the parser that it expects multiple values and collects them into a list.
+2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple values.
+   Internally, it sets ``nargs='*'`` and ``action='extend'`` in  :meth:`~argparse.ArgumentParser.add_argument()`
+   to gather values into a list.
 
 - **run the script with -h**
 
@@ -164,12 +168,12 @@ refer to :func:`~argclz.core.var_argument()`
   items = ['apple', 'banana', 'cherry']
 
 
-description
+Help Document
 -----------------------------------
 
 .. code-block:: python
 
-    class MyArgs(AbstractParser):
+    class MyArgs(AbstractParser): # [4]
 
         USAGE = 'my_script.py [OPTIONS] FILES...'       # [1]
         DESCRIPTION = 'Process one or more files.'      # [2]
@@ -181,6 +185,7 @@ description
    It is displayed in the help output after the usage line.
 3. ``EPILOG`` appears at the end of the help message. It’s useful for additional notes, links,
    or examples that don't belong in the main description.
+4. ``-h`` help argument is added automatically.
 
 - **run the script with -h**
 
