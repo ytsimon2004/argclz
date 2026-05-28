@@ -336,6 +336,22 @@ class TestArguments(unittest.TestCase):
         self.assertEqual(opt.get_a(), 'one underscore')
         self.assertEqual(opt.get__a(), 'two underscores')
 
+    def test_option_reuse(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        opt = parse_args(Opt(), ['-a=A', '-b=B'])
+        self.assertEqual(opt.a, 'A')
+        self.assertEqual(opt.b, 'B')
+        opt = parse_args(opt, ['-a=B'])
+        self.assertEqual(opt.a, 'B')
+        self.assertEqual(opt.b, None)
+
+
+
+
+
 
 class CopyArgsTest(unittest.TestCase):
     def test_copy_argument(self):

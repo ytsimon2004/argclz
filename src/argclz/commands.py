@@ -81,7 +81,7 @@ class SubCommand:
 
     def add_parser(self, sb, main='main'):
         """Add sub-commands into *sb*."""
-        pp = new_parser(self.sub_parser, reset=True)
+        pp = new_parser(self.sub_parser)
         pp.set_defaults(**{main: self.sub_parser})
 
         description = self.sub_parser.DESCRIPTION
