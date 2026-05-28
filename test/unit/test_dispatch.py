@@ -1,3 +1,5 @@
+import contextlib
+import io
 import unittest
 from typing import Any, Literal
 
@@ -361,7 +363,8 @@ class TestDispatch(AbstractDispatchTester):
 
         with self.assertRaises(ValueError) as capture:
             opt.main(['A', '0'])
-        print(capture.exception)
+        self.assertEqual(capture.exception.args[0],
+                         'command A argument "a" : not a positive value : 0')
 
     def test_dispatch_command_argument_casting_and_validator(self):
         class Opt(SimpleDispatch):
@@ -656,6 +659,7 @@ class TestDispatchGroup(AbstractDispatchTester):
             opt.invoke_group_command(Opt.g, 'A')
         self.assertEqual(capture.exception.group, 'B')
         self.assertEqual(capture.exception.command, 'A')
+
 
 class PrintHelpTest(unittest.TestCase):
 
@@ -1001,8 +1005,9 @@ class UseCaseTest(unittest.TestCase):
             self.assertEqual(main.result, 'run for mode B')
 
         with self.subTest('error main'):
-            with self.assertRaises(SystemExit):
-                Main().main(['run', '--mode=C'])
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    Main().main(['run', '--mode=C'])
 
         with self.subTest('error call'):
             main = Main()

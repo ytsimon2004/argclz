@@ -1,4 +1,8 @@
+import argparse
 import builtins
+import contextlib
+import io
+import re
 import unittest
 from typing import Literal
 from unittest import skipIf
@@ -6,7 +10,7 @@ from unittest.mock import patch
 
 from argclz import *
 from argclz.clone import Cloneable
-from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument
+from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser
 
 try:
     import polars as pl
@@ -247,13 +251,15 @@ class ForeachArgumentsTest(unittest.TestCase):
         self.assertEqual(args[1].attr, 'c')
         self.assertEqual(args[2].attr, 'd')
 
+
 class AbstractParserTest(unittest.TestCase):
     def test_exit_on_error(self):
         class Main(AbstractParser):
             a: str = argument('-a', default='default')
 
-        with self.assertRaises(SystemExit):
-            Main().main(['-b'])
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                Main().main(['-b'])
 
         with self.assertRaises(RuntimeError):
             Main().main(['-b'], system_exit=RuntimeError)
@@ -277,6 +283,43 @@ class AbstractParserTest(unittest.TestCase):
         ret = main.main(['-a=1'], parse_only=True)
         self.assertIs(ret, main)
         self.assertEqual(ret.a, 1)
+
+    def test_add_help(self):
+        class Main(AbstractParser):
+            a: int = argument('-a')
+
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            with self.assertRaises(SystemExit) as capture:
+                Main().main(['-h'])
+
+        self.assertEqual(capture.exception.args[0], 0)
+        self.assertEqual(re.sub(r'\w+\.py', 'run.py', output.getvalue()), """\
+usage: run.py [-h] [-a A]
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+""")
+
+    def test_add_h_argument(self):
+        class Main(AbstractParser):
+            h: int = argument('-h')
+
+        with self.assertRaises(argparse.ArgumentError):
+            Main().main(['-h=1'])
+
+    def test_add_h_argument_force(self):
+        class Main(AbstractParser):
+            h: int = argument('-h')
+
+            @classmethod
+            def new_parser(cls, **kwargs):
+                return new_parser(cls, **kwargs, add_help=False)
+
+        ret = Main().main(['-h=1'])
+        self.assertEqual(ret.h, 1)
 
 
 class TestArguments(unittest.TestCase):
@@ -347,10 +390,6 @@ class TestArguments(unittest.TestCase):
         opt = parse_args(opt, ['-a=B'])
         self.assertEqual(opt.a, 'B')
         self.assertEqual(opt.b, None)
-
-
-
-
 
 
 class CopyArgsTest(unittest.TestCase):

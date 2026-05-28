@@ -1,3 +1,5 @@
+import contextlib
+import io
 import unittest
 from typing import Literal
 
@@ -123,8 +125,9 @@ class ParserClassTest(unittest.TestCase):
         opt = Child().main(['-a=1'])
         self.assertEqual(opt.a, '1')
 
-        with self.assertRaises(SystemExit):
-            Child().main(['-a=3'])
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                Child().main(['-a=3'])
 
 
 class PrintHelpTest(unittest.TestCase):

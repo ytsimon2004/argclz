@@ -728,7 +728,7 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
 
     :param instance: any instance that contains ``argument``.
     :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
-    :return:
+    :return: an :class:``~argparse.ArgumentParser`` instance.
     """
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
         kwargs.setdefault('usage', _parser_usage(instance))
@@ -738,6 +738,8 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
     ap = ArgumentParser(**kwargs)
+    # TODO python 3.14 add keyword color=
+    # TODO python 3.14 add keyword suggest_on_error=
 
     groups: dict[str, list[Argument]] = collections.defaultdict(list)
 
@@ -938,6 +940,10 @@ def print_help(instance, file: TextIO | None = sys.stdout, prog: str | None = No
     if file is None:
         import io
         buf = file = io.StringIO()
+
+    if isinstance(instance, type) and issubclass(instance, AbstractParser):
+        # respect AbstractParser custom new_parser
+        instance = instance.new_parser(prog=prog)
 
     if not isinstance(instance, ArgumentParser):
         instance = new_parser(instance, prog=prog)
