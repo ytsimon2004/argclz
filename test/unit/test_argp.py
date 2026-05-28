@@ -280,14 +280,25 @@ class AbstractParserTest(unittest.TestCase):
 
 
 class TestArguments(unittest.TestCase):
+    def test_set_argument_repeat(self):
+        class Opt:
+            a: str = argument('-a')
+
+        with self.assertRaises(RuntimeError) as capture:
+            parse_args(Opt(), ['-a', '-a'])
+        self.assertEqual(capture.exception.args[0],
+                         'exit 2: argument -a: expected one argument')
+
     def test_required_argument(self):
         class Opt:
             a: str = argument('-a', required=True)
 
         self.assertEqual(parse_args(Opt(), ['-a=1']).a, '1')
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as capture:
             parse_args(Opt(), [])
+        self.assertEqual(capture.exception.args[0],
+                         'exit 2: the following arguments are required: -a')
 
     def test_alias_argument(self):
         class Opt:
@@ -299,6 +310,31 @@ class TestArguments(unittest.TestCase):
         self.assertEqual(parse_args(Opt(), ['-a=1']).a, '1')
         self.assertEqual(parse_args(Opt(), ['-b']).a, 'B')
         self.assertEqual(parse_args(Opt(), ['-c']).a, 'C')
+
+        with self.assertRaises(RuntimeError) as capture:
+            parse_args(Opt(), ['-b', '-c'])
+        self.assertEqual(capture.exception.args[0],
+                         'exit 2: argument -c: not allowed with argument -b')
+
+    def test_attribute_naming(self):
+        class Opt:
+            a: str = argument('-a')
+
+            def __init__(self):
+                self._a = 'one underscore'
+                self.__a = 'two underscores'
+
+            def get_a(self):
+                return self._a
+
+            def get__a(self):
+                return self.__a
+
+        # command-line argument should not affect other attributes
+        opt = parse_args(Opt(), ['-a=from_command_line'])
+        self.assertEqual(opt.a, 'from_command_line')
+        self.assertEqual(opt.get_a(), 'one underscore')
+        self.assertEqual(opt.get__a(), 'two underscores')
 
 
 class CopyArgsTest(unittest.TestCase):

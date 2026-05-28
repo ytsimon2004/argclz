@@ -52,6 +52,8 @@ Actions = Literal[
     'boolean'
 ]
 
+ARGCLZ_NAMESPACE = '__argclz_namespace__'
+
 
 class ArgumentParserInterrupt(RuntimeError):
     """(internal) Error raised when any error occurs during command-line parsing."""
@@ -323,7 +325,13 @@ class Argument(object):
                 self.__doc__ = self.help
             return self
         try:
-            return instance.__dict__[f'__{self.attr}']
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+        except AttributeError:
+            namespace = {}
+            setattr(instance, ARGCLZ_NAMESPACE, namespace)
+
+        try:
+            return namespace[self.attr]
         except KeyError:
             pass
 
@@ -342,13 +350,21 @@ class Argument(object):
                 if fail:
                     raise ValueError('validator fail')
 
-        instance.__dict__[f'__{self.attr}'] = value
+        try:
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+        except AttributeError:
+            namespace = {}
+            setattr(instance, ARGCLZ_NAMESPACE, namespace)
+
+        namespace[self.attr] = value
 
     def __delete__(self, instance):
         try:
-            del instance.__dict__[f'__{self.attr}']
-        except KeyError:
-            pass
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+            del namespace[self.attr]
+        except (AttributeError, KeyError):
+            namespace = {}
+            setattr(instance, ARGCLZ_NAMESPACE, namespace)
 
     def add_argument(self, ap: argparse._ActionsContainer, instance):
         """Add this into `argparse.ArgumentParser`.
@@ -715,6 +731,12 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
     :return:
     """
+    if instance is not None and not isinstance(instance, type) and reset:
+        try:
+            delattr(instance, ARGCLZ_NAMESPACE)
+        except AttributeError:
+            pass
+
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
         kwargs.setdefault('usage', _parser_usage(instance))
         kwargs.setdefault('description', _parser_description(instance))
@@ -733,9 +755,6 @@ def new_parser(instance: T | Type[T], reset=False, **kwargs) -> ArgumentParser:
     # setup non-grouped arguments
     mu_ex_groups: dict[str, argparse._MutuallyExclusiveGroup] = {}
     for arg in foreach_arguments(instance):
-        if instance is not None and not isinstance(instance, type) and reset:
-            arg.__delete__(instance)
-
         if arg.group is not None:
             groups[arg.group].append(arg)
             continue
@@ -895,6 +914,9 @@ def parse_args(instance: T, args: list[str] | None = None) -> T:
     :param args: A list of strings representing command-line arguments. If ``None``, uses ``sys.argv``
     :return: ``instance`` itself, with attributes populated
     """
+    if isinstance(instance, type):
+        raise TypeError('not an instance')
+
     ap = new_parser(instance, reset=True)
     ot = ap.parse_args(args)
     return set_options(instance, ot)
