@@ -177,7 +177,7 @@ class CommandParserClassTest(unittest.TestCase):
         self.assertIsInstance(r, P.P1)
         self.assertIsInstance(r.parent, P)
         self.assertEqual(r.parent, p)
-        self.assertEqual(r.parent.a, 2)  # XXX overwrite by P1 parser
+        self.assertEqual(r.parent.a, 2)  # argparse doesn't distinct between P.a and P1.a
         self.assertEqual(r.a, 2)
         self.assertEqual(result, r)
 

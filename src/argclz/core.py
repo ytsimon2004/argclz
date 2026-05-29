@@ -76,22 +76,22 @@ class ArgumentParser(argparse.ArgumentParser):
     """(internal) override ``argparse.ArgumentParser``."""
 
     def exit(self, status: int = 0, message: str | None = None):
+        # raise our exception instead of SystemExit
         raise ArgumentParserInterrupt(status, message)
 
     def error(self, message: str):
+        # raise our exception instead of SystemExit
         raise ArgumentParserInterrupt(2, message)
 
 
 class AbstractParser(metaclass=abc.ABCMeta):
     """Commandline parser.
 
-    **Example**
-
-    TODO
-
-    **Help Doc**
-
-    TODO
+    >>> class Main(AbstractParser):
+    ...     a: int = argument('-a')
+    ...     def run(self):
+    ...         pass
+    ... Main().main()
 
     """
 
@@ -116,7 +116,12 @@ class AbstractParser(metaclass=abc.ABCMeta):
     def new_parser(cls, **kwargs) -> ArgumentParser:
         """create an :class:`~argclz.core.ArgumentParser`.
 
-        :param kwargs: keyword parameters to ``argparse.ArgumentParser``
+        Subclass can overwrite this method to pass additional argument to
+        create an :class:`argparse.ArgumentParser`.
+
+        **Note** Using :func:`~argclz.core.new_parser` to create an :class:`argparse.ArgumentParser`.
+
+        :param kwargs: keyword parameters to :class:`argparse.ArgumentParser`
         :return: an ArgumentParser.
         """
         return new_parser(cls, **kwargs)
