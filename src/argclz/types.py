@@ -177,6 +177,7 @@ def union_type(*t: Callable[[str], T]):
     return _type
 
 
+# noinspection PyPep8Naming
 class dict_type:
     """Caster that accumulates key-value pairs from 'key=value' strings.
     """
@@ -320,6 +321,7 @@ def try_float_type(arg: str) -> float | str | None:
         return arg
 
 
+# noinspection PyPep8Naming
 class literal_type:
     """Caster enforcing membership in a set of string literals with optional prefix matching.
 

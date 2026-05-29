@@ -721,7 +721,21 @@ def as_argument(a) -> Argument:
     raise TypeError('not an argument')
 
 
+# noinspection PyPep8Naming
 class argument_group:
+    """
+    Argument group.
+
+    **Usage**
+
+    >>> class Example:
+    ...     GROUP = argument_group('Group', 'Description')
+    ...     a: str = argument('-a', group=GROUP)
+    ...     # or
+    ...     b: str = GROUP.argument('-b')
+
+
+    """
     __match_args__ = 'name', 'description', 'exclusive', 'required'
 
     def __init__(self, name: str = None, description: str = None, *,
