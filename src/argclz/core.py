@@ -321,9 +321,6 @@ class Argument(object):
         from ._types import complete_arg_kwargs
         complete_arg_kwargs(self)
 
-        if self.hidden:
-            self.kwargs['help'] = argparse.SUPPRESS
-
     def __get__(self, instance, owner=None):
         if instance is None:
             if owner is not None:  # ad-hoc for the document building
@@ -379,7 +376,10 @@ class Argument(object):
         :return:
         """
         try:
-            return ap.add_argument(*self.options, **self.kwargs, dest=self.attr)
+            kwargs = dict(self.kwargs)
+            help_text = kwargs.pop('help', None)
+            help_text = help_text if not self.hidden else argparse.SUPPRESS
+            return ap.add_argument(*self.options, **kwargs, help=help_text, dest=self.attr)
         except TypeError as e:
             if isinstance(instance, type):
                 name = instance.__name__
