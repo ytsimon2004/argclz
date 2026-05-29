@@ -1,12 +1,14 @@
 import unittest
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from argclz import *
 from argclz.core import parse_args
 
 
 class TestValidator(unittest.TestCase):
+    """This test case focus on lambda form of validator"""
+
     def test_validator(self):
         class Opt:
             a: str = argument('-a', validator=lambda it: len(it) > 0)
@@ -64,9 +66,47 @@ class TestValidator(unittest.TestCase):
         with self.assertRaises(ValueError):
             Opt().a = ''
 
+    def test_validator_message_literal_str(self):
+        class Opt:
+            a: str = argument('-a', validator(lambda _: False, 'fail message'))
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().a = ''
+        self.assertEqual(capture.exception.args[0],
+                         'fail message')
+
+    def test_validator_message_mod_format(self):
+        class Opt:
+            a: str = argument('-a', validator(lambda _: False, 'fail message : "%s"'))
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().a = 'bad'
+        self.assertEqual(capture.exception.args[0],
+                         'fail message : "bad"')
+
+    def test_validator_message_format(self):
+        class Opt:
+            a: str = argument('-a', validator(lambda _: False, 'fail message : "{}"'))
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().a = 'bad'
+        self.assertEqual(capture.exception.args[0],
+                         'fail message : "bad"')
+
+    def test_validator_message_callable(self):
+        class Opt:
+            a: str = argument('-a', validator(lambda _: False, lambda it: f'fail message : "{it}"'))
+
+        with self.assertRaises(ValueError) as capture:
+            Opt().a = 'bad'
+        self.assertEqual(capture.exception.args[0],
+                         'fail message : "bad"')
+
 
 class TestValidateBuilder(unittest.TestCase):
+    """This test case focus on validator builder"""
 
+    # noinspection PyTypeChecker
     def test_type_error(self):
         class Opt:
             a: str = argument('-a', validator.str)
@@ -75,6 +115,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = 1
 
+    # noinspection PyTypeChecker
     def test_validator_wrap_lambda(self):
         class Opt:
             a: str = argument('-a', validator(lambda it: isinstance(it, str)))
@@ -103,6 +144,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.c = '12345678'
 
+    # noinspection PyUnusedLocal
     def test_str_in_range_type_error(self):
         with self.assertRaises(TypeError):
             class Opt:
@@ -175,6 +217,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.c = 10
 
+    # noinspection PyUnusedLocal,PyRedeclaration
     def test_int_in_range_type_error(self):
         with self.assertRaises(TypeError):
             class Opt:
@@ -234,6 +277,7 @@ class TestValidateBuilder(unittest.TestCase):
         opt.b = 2.5
         opt.c = 2.1
 
+    # noinspection PyUnusedLocal,PyRedeclaration
     def test_float_in_range_type_error(self):
         class Opt:
             a: float = argument('-a', validator.float.in_range(2.0, None))
@@ -306,10 +350,12 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.c = []
 
+    # noinspection PyUnusedLocal,PyRedeclaration
     def test_list_in_range_type_error(self):
         with self.assertRaises(TypeError):
             class Opt:
                 a: list[str] = argument('-a', validator.list().length_in_range(2.0, None))
+
         with self.assertRaises(TypeError):
             class Opt:
                 a: list[str] = argument('-a', validator.list().length_in_range('2', None))
@@ -328,6 +374,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.b = []
 
+    # noinspection PyTypeChecker
     def test_list_element_type(self):
         class Opt:
             a: list[int] = argument('-a', validator.list(int))
@@ -339,35 +386,42 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = ['a']
 
+    # noinspection PyTypeChecker
     def test_list_type_append_element(self):
         class Opt:
             a: list[int] = argument('-a', action='append', validator=validator.list(int))
 
         opt = Opt()
-        opt.a = []
-        opt.a = [1, 2]
+        with self.subTest('setattr'):
+            opt.a = []
+            opt.a = [1, 2]
 
-        self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
-        self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
+            with self.assertRaises(ValueError):
+                opt.a = 1
 
-        with self.assertRaises(ValueError):
-            opt.a = 1
+        with self.subTest('parse_args'):
+            self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
+            self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
 
+    # noinspection PyTypeChecker
     def test_list_type_extend_element(self):
         class Opt:
             a: list[int] = argument('-a', action='extend', type=list_type(int), validator=validator.list(int))
 
         opt = Opt()
-        opt.a = []
-        opt.a = [1, 2]
 
-        self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
-        self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
-        self.assertListEqual(parse_args(Opt(), ['-a=1,2']).a, [1, 2])
-        self.assertListEqual(parse_args(Opt(), ['-a=1,2', '-a=3']).a, [1, 2, 3])
+        with self.subTest('setattr'):
+            opt.a = []
+            opt.a = [1, 2]
 
-        with self.assertRaises(ValueError):
-            opt.a = 1
+            with self.assertRaises(ValueError):
+                opt.a = 1
+
+        with self.subTest('parse_args'):
+            self.assertListEqual(parse_args(Opt(), ['-a=1']).a, [1])
+            self.assertListEqual(parse_args(Opt(), ['-a=1', '-a=2']).a, [1, 2])
+            self.assertListEqual(parse_args(Opt(), ['-a=1,2']).a, [1, 2])
+            self.assertListEqual(parse_args(Opt(), ['-a=1,2', '-a=3']).a, [1, 2, 3])
 
     def test_list_element_validating(self):
         class Opt:
@@ -386,6 +440,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'at index 1, not a non-negative value : -1')
 
+    # noinspection PyTypeChecker
     def test_tuple_length(self):
         class Opt:
             a: tuple[str, str] = argument('-a', validator.tuple(2))
@@ -405,6 +460,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = ('a', 'b', 'c')
 
+    # noinspection PyTypeChecker
     def test_tuple_at_least_length(self):
         class Opt:
             a: tuple[str, ...] = argument('-a', validator.tuple(2, ...))
@@ -450,6 +506,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.c = ()
 
+    # noinspection PyUnusedLocal,PyRedeclaration
     def test_tuple_in_range_error(self):
         class Opt:
             a: tuple[str, ...] = argument('-a', validator.tuple().length_in_range(2, 3))
@@ -471,6 +528,7 @@ class TestValidateBuilder(unittest.TestCase):
             class Opt:
                 a: tuple[str, ...] = argument('-a', validator.tuple(int, ...).length_in_range(2, 3))
 
+    # noinspection PyTypeChecker
     def test_tuple_element_type(self):
         class Opt:
             a: tuple[str, int, float] = argument(
@@ -576,6 +634,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'at index 2, str length over 2: "1234"')
 
+    # noinspection PyTypeChecker
     def test_tuple_n_element_validating(self):
         class Opt:
             a: tuple[str, int, float] = argument(
@@ -613,6 +672,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'at index 1, value out of range [0, 10]: 100')
 
+    # noinspection PyTypeChecker
     def test_tuple_element_validating_on_last(self):
         class Opt:
             a: tuple[Any, ...] = argument('-a', validator.tuple(...).on_item(-1, validator.int))
@@ -625,9 +685,158 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = ()
         with self.assertRaises(ValueError):
-            opt.a = ('a')
+            opt.a = ('a',)
         with self.assertRaises(ValueError):
             opt.a = (0, 'b')
+
+    # noinspection PyTypeChecker
+    def test_dict(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int))
+
+        opt = Opt()
+        opt.a = {}
+        opt.a = {'a': 1}
+        opt.a = {'a': 1, 'b': 2}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'a': '1'}
+        self.assertEqual(capture.exception.args[0],
+                         'wrong element type for key "a" : 1')
+
+    def test_dict_non_empty(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_empty(False))
+
+        opt = Opt()
+        opt.a = {'a': 1}
+        opt.a = {'a': 1, 'b': 2}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {}
+        self.assertEqual(capture.exception.args[0],
+                         'empty dict : {}')
+
+    def test_dict_on_restricted_keyset(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['A', 'B', 'C']))
+
+        opt = Opt()
+        opt.a = {}
+        opt.a = {'A': 1}
+        opt.a = {'A': 1, 'B': 2}
+        opt.a = {'A': 1, 'B': 2, 'C': 3}
+        opt.a = {'B': 2, 'C': 3}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'B': 2, 'D': 3}
+        self.assertEqual(capture.exception.args[0],
+                         'key "D" is not allowed')
+
+    def test_dict_on_key_completion(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['AAA', 'BBB', 'CCC'], complete=True))
+
+        opt = Opt()
+        opt.a = {}
+        self.assertDictEqual(opt.a, {})
+        opt.a = {'A': 1}
+        self.assertDictEqual(opt.a, {'AAA': 1})
+        opt.a = {'A': 1, 'B': 2}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
+        opt.a = {'A': 1, 'B': 2, 'C': 3}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+    def test_dict_on_key_completion_case_insensitive(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['AAA', 'BBB', 'CCC'], complete=True, case_sensitive=False))
+
+        opt = Opt()
+        opt.a = {}
+        self.assertDictEqual(opt.a, {})
+        opt.a = {'a': 1}
+        self.assertDictEqual(opt.a, {'AAA': 1})
+        opt.a = {'a': 1, 'b': 2}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
+        opt.a = {'a': 1, 'b': 2, 'c': 3}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+    # noinspection PyTypeChecker
+    def test_dict_on_key_with_literal_type(self):
+        class Opt:
+            MODE = Literal['AAA', 'BBB', 'CCC']
+            a: dict[MODE, int] = argument('-a', validator.dict(int).allow_keys(MODE, complete=True, case_sensitive=False))
+
+        opt = Opt()
+        opt.a = {}
+        self.assertDictEqual(opt.a, {})
+        opt.a = {'a': 1}
+        self.assertDictEqual(opt.a, {'AAA': 1})
+        opt.a = {'a': 1, 'b': 2}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
+        opt.a = {'a': 1, 'b': 2, 'c': 3}
+        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+    # noinspection PyUnusedLocal,PyRedeclaration
+    def test_dict_on_key_with_literal_type_but_contain_bad_key(self):
+        with self.assertRaises(ValueError):
+            class Opt:
+                MODE = Literal['AAA', 'BBB', 'CCC', None]  # non-None
+                a: dict[MODE, int] = argument('-a', validator.dict(int).allow_keys(MODE))
+
+        with self.assertRaises(ValueError):
+            class Opt:
+                MODE = Literal['AAA', 'BBB', 'CCC', 1]  # only str
+                a: dict[MODE, int] = argument('-a', validator.dict(int).allow_keys(MODE))
+
+    def test_dict_on_key_completion_but_duplicated(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['AAA', 'BBB', 'CCC'], complete=True))
+
+        opt = Opt()
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'A': 1, 'AA': 2, 'AAA': 3}
+        self.assertEqual(capture.exception.args[0],
+                         'duplicated key : "A" and "AAA"')
+
+    def test_dict_with_key_checking(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).on_key(lambda it: 'A' in it))
+
+        opt = Opt()
+        opt.a = {'A': 1}
+        opt.a = {'AA': 1}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'B': 1}
+        self.assertEqual(capture.exception.args[0],
+                         "at key B, validate fail : {'B': 1}")
+
+    def test_dict_with_key_checking_with_message(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).on_key(validator(lambda it: 'A' in it, 'does not contain A')))
+
+        opt = Opt()
+        opt.a = {'A': 1}
+        opt.a = {'AA': 1}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'B': 1}
+        self.assertEqual(capture.exception.args[0],
+                         'at key B, does not contain A')
+
+    def test_dict_with_value_checking(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).on_value(validator.int.positive()))
+
+        opt = Opt()
+        opt.a = {}
+        opt.a = {'A': 1}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'A': 1, 'B': -1}
+        self.assertEqual(capture.exception.args[0],
+                         'at key B, not a non-negative value : -1')
 
     def test_path_is_suffix(self):
         class Opt:
@@ -650,6 +859,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = Path('a_folder/123.txt.backup')
 
+    # noinspection PyTypeChecker
     def test_optional(self):
         class Opt:
             a: int = argument('-a', validator.int)
@@ -689,6 +899,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'str length out of range [0, 10]: "1111111111111"')
 
+    # noinspection PyTypeChecker
     def test_empty_any(self):
         class Opt:
             a: str = argument('-a', validator.any())
@@ -719,6 +930,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'str length out of range [0, 10]: "1111111111111"')
 
+    # noinspection PyTypeChecker
     def test_any_then_or(self):
         class Opt:
             a: int | str = argument('-a', (
@@ -730,6 +942,7 @@ class TestValidateBuilder(unittest.TestCase):
         opt.a = 3.0
         opt.a = '123'
 
+    # noinspection PyTypeChecker
     def test_or_then_any(self):
         class Opt:
             a: int | str = argument('-a', (
@@ -763,6 +976,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'not a non-negative value : -1')
 
+    # noinspection PyTypeChecker
     def test_empty_all(self):
         class Opt:
             a: str = argument('-a', validator.all())
@@ -792,6 +1006,7 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'not a non-negative value : -1')
 
+    # noinspection PyTypeChecker
     def test_all_then_and(self):
         class Opt:
             a: str = argument('-a', (
@@ -810,6 +1025,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = '01234'
 
+    # noinspection PyTypeChecker
     def test_and_then_all(self):
         class Opt:
             a: str = argument('-a', (
@@ -828,6 +1044,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.a = '01234'
 
+    # noinspection PyTypeChecker
     def test_tuple_union_length(self):
         class Opt:
             a: tuple[int, int] | tuple[int, int, int] = argument(
@@ -849,11 +1066,13 @@ class TestValidateBuilder(unittest.TestCase):
         # print(capture.exception.args)
         # length not match to 2 : (0, 1, 2, 3); length not match to 3 : (0, 1, 2, 3)
 
+    # noinspection PyUnusedLocal
     def test_list_type_but_validator(self):
         with self.assertRaises(TypeError) as capture:
             class Opt:
                 a: list[int] = argument('-a', validator.list(validator.int))
 
+    # noinspection PyTypeChecker
     def test_nested_list(self):
         class Opt:
             a: list[tuple[int, list[list[int]]]] = argument(
@@ -894,6 +1113,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = (1, 1, 1, -1)
 
+    # noinspection PyTypeChecker
     def test_tuple_fix_length(self):
         class Opt:
             a: tuple[int, int] = argument(
@@ -906,12 +1126,17 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError) as capture:
             opt.a = (0,)
+        self.assertEqual(capture.exception.args[0],
+                         'length not match to 2 : (0,)')
 
         with self.assertRaises(ValueError) as capture:
             opt.a = (0, 1, 2)
+        self.assertEqual(capture.exception.args[0],
+                         'length not match to 2 : (0, 1, 2)')
 
         opt.a = ('0', '1')
 
+    # noinspection PyTypeChecker
     def test_tuple_on_all_item(self):
         class Opt:
             a: tuple[int, int] = argument(
@@ -924,11 +1149,17 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('0', '1')
+        self.assertEqual(capture.exception.args[0],
+                         'at index 0, not instance of int : 0')
 
+    # noinspection PyUnusedLocal
     def test_tuple_type_but_validator(self):
         with self.assertRaises(TypeError) as capture:
             class Opt:
                 a: tuple[int, ...] = argument('-a', validator.tuple(validator.int))
+
+        message = str(capture.exception.args[0])
+        self.assertTrue(message.startswith('not a type'))
 
     def test_reuse_validator(self):
         class Opt:
