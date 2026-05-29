@@ -8,6 +8,7 @@ from .core import (
     var_argument,
     aliased_argument,
     as_argument,
+    argument_group,
     copy_argument,
     print_help
 )

@@ -79,8 +79,9 @@ options:
 
     def test_print_help_with_grouped_arguments(self):
         class Opt:
-            a: str = argument('-a', group='group A', help='text for A')
-            b: str = argument('-b', group='group A', help='text for B')
+            g = argument_group('group A', 'group text')
+            a: str = argument('-a', group=g, help='text for A')
+            b: str = argument('-b', group=g, help='text for B')
             c: str = argument('-c', group='group C', help='text for C')
 
         h = print_help(Opt, None, prog='run.py')
@@ -91,11 +92,38 @@ options:
   -h, --help  show this help message and exit
 
 group A:
+  group text
+
   -a A        text for A
   -b B        text for B
 
 group C:
   -c C        text for C
+""")
+
+    def test_print_help_with_unnamed_group(self):
+        class Opt:
+            g1 = argument_group()
+            g2 = argument_group()
+            a: str = argument('-a', group=g1, help='text for A')
+            b: str = argument('-b', group=g1, help='text for B')
+            c: str = argument('-c', group=g2, help='text for C')
+            d: str = argument('-d', group=g2, help='text for D')
+            e: str = argument('-e', help='text for E')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-e E] [-a A] [-b B] [-c C] [-d D]
+
+options:
+  -h, --help  show this help message and exit
+  -e E        text for E
+
+  -a A        text for A
+  -b B        text for B
+
+  -c C        text for C
+  -d D        text for D
 """)
 
     def test_print_help_with_order_grouped_arguments_with_predefined_list(self):
@@ -226,8 +254,9 @@ group C:
 
     def test_print_help_with_ex_grouped_arguments(self):
         class Opt:
-            a: str = argument('-a', ex_group='group A', help='text for A')
-            b: str = argument('-b', ex_group='group A', help='text for B')
+            ex_group = argument_group('Group A', 'Ex Group Text', exclusive=True)
+            a: str = ex_group.argument('-a', help='text for A')
+            b: str = ex_group.argument('-b', help='text for B')
             c: str = argument('-c', group='group C', help='text for C')
 
         h = print_help(Opt, None, prog='run.py')
@@ -236,6 +265,10 @@ usage: run.py [-h] [-a A | -b B] [-c C]
 
 options:
   -h, --help  show this help message and exit
+
+Group A:
+  Ex Group Text
+
   -a A        text for A
   -b B        text for B
 
@@ -243,25 +276,28 @@ group C:
   -c C        text for C
 """)
 
-    def test_print_help_with_named_ex_grouped_arguments(self):
+    def test_print_help_with_unnamed_ex_grouped_arguments(self):
         class Opt:
-            a: str = argument('-a', group='group A', ex_group='group A', help='text for A')
-            b: str = argument('-b', group='group A', ex_group='group A', help='text for B')
-            c: str = argument('-c', group='group C', help='text for C')
+            g1 = argument_group(exclusive=True)
+            g2 = argument_group()
+            a: str = argument('-a', group=g1, help='text for A')
+            b: str = argument('-b', group=g1, help='text for B')
+            c: str = argument('-c', group=g2, help='text for C')
+            d: str = argument('-d', group=g2, help='text for D')
+            e: str = argument('-e', help='text for E')
 
         h = print_help(Opt, None, prog='run.py')
         self.assertEqual(h, """\
-usage: run.py [-h] [-a A | -b B] [-c C]
+usage: run.py [-h] [-a A | -b B] [-e E] [-c C] [-d D]
 
 options:
   -h, --help  show this help message and exit
-
-group A:
   -a A        text for A
   -b B        text for B
+  -e E        text for E
 
-group C:
   -c C        text for C
+  -d D        text for D
 """)
 
     def test_print_help_with_usage(self):

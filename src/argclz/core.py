@@ -24,6 +24,7 @@ __all__ = [
     'var_argument',
     'aliased_argument',
     'as_argument',
+    'argument_group',
     # utilities
     'foreach_arguments',
     'with_defaults',
@@ -212,7 +213,7 @@ class Argument(object):
 
     def __init__(self, *options,
                  validator: Callable[[T], bool] | None = None,
-                 group: str | None = None,
+                 group: str | argument_group | None = None,
                  ex_group: str | None = None,
                  hidden: bool = False,
                  **kwargs):
@@ -221,7 +222,7 @@ class Argument(object):
         :param options: options
         :param validator: argument validator.
         :param group: argument group.
-        :param ex_group: mutually exclusive group.
+        :param ex_group: (Deprecated) mutually exclusive group.
         :param hidden: hide this argument from help document
         :param kwargs:
         """
@@ -238,10 +239,13 @@ class Argument(object):
         if isinstance(validator, Validator):
             validator = validator.freeze()
 
+        if ex_group is not None and group is None:
+            # Deprecated parameter
+            group = argument_group(ex_group, exclusive=True)
+
         self.attr = None
         self.attr_type = Any
         self.group = group
-        self.ex_group = ex_group
         self.validator = validator
         self.options = options
         self.hidden = hidden
@@ -427,8 +431,7 @@ class Argument(object):
         :return:
         """
         kw = dict(self._kwargs)  # use original kwargs
-        kw['group'] = self.group
-        kw['ex_group'] = self.ex_group
+        kw['group'] = self._copy_group(self.group)
         kw['validator'] = self.validator
         kw['hidden'] = self.hidden
         kw.update(kwargs)
@@ -457,6 +460,18 @@ class Argument(object):
 
             return cls(**kw)
 
+    @classmethod
+    def _copy_group(cls, group: str | argument_group | None):
+
+        match group:
+            case None | str():
+                return group
+            case argument_group(name, description, exclusive, required):
+                # argument_group  has internal attributes, so we create a new clone.
+                return argument_group(name, description, exclusive=exclusive, required=required)
+            case _:
+                raise TypeError()
+
     def _map_options(self, mapping: dict[str, str]) -> list[str]:
         ret = []
         for old_opt in self.options:
@@ -483,8 +498,7 @@ def argument(*options: str,
              required: bool = False,
              hidden: bool = False,
              help: str = ...,
-             group: str | None = None,
-             ex_group: str | None = None,
+             group: str | argument_group | None = None,
              metavar: str = ...) -> T:
     ...
 
@@ -499,7 +513,7 @@ def argument(*options, **kwargs) -> Any:
 
     **Type (caster)**
 
-    The parameter ``type`` usually can be infered via the annotation of target attribute,
+    The parameter ``type`` usually can be inferred via the annotation of target attribute,
     like the `a: str` in above example.
 
     There are some special rules to treat common type:
@@ -509,7 +523,7 @@ def argument(*options, **kwargs) -> Any:
     - **Container types**: ``list[T]`` annotations infer a repeated option with `append` (or `extend`) action, converting each input to type ``T``.
     - **Tuple types**: tuple annotations (e.g. ``tuple[int, ...]``) use a comma-separated parser to split and convert values into a tuple of ``T``.
 
-    If the default type infered does not fit your application, you can give it directly.
+    If the default type inferred does not fit your application, you can give it directly.
 
     **Validator**
 
@@ -536,7 +550,6 @@ def argument(*options, **kwargs) -> Any:
     :param hidden: hide this argument from help document.
     :param help: help document for this argument.
     :param group: group name of this argument.
-    :param ex_group: the mutually exclusive group name of this argument.
     :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
     """
     return Argument(*options, **kwargs)
@@ -660,7 +673,6 @@ def aliased_argument(options: str, *,
                      choices: Sequence[str] = ...,
                      help: str = ...,
                      group: str | None = None,
-                     ex_group: str | None = None,
                      metavar: str = ...) -> T:
     ...
 
@@ -695,7 +707,6 @@ def aliased_argument(*options: str, aliases: dict[str, T], **kwargs) -> Any:
     :param hidden: hide this argument from help document.
     :param help: help document for this argument.
     :param group: group name of this argument.
-    :param ex_group: the mutually exclusive group name of this argument.
     :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
     """
     return AliasArgument(*options, aliases=aliases, **kwargs)
@@ -706,6 +717,84 @@ def as_argument(a) -> Argument:
     if isinstance(a, Argument):
         return a
     raise TypeError('not an argument')
+
+
+class argument_group:
+    __match_args__ = 'name', 'description', 'exclusive', 'required'
+
+    def __init__(self, name: str = None, description: str = None, *,
+                 exclusive=False, required: bool = False):
+        """
+
+        :param name: The name of this group.
+        :param description: The description of this group
+        :param exclusive: mutually exclusive
+        :param required: Is this mutually exclusive group required?
+        """
+        self.name: str | None = name
+        self.description: str | None = description
+        self.exclusive = exclusive
+        self.required: bool = required
+        self._attr: str | None = None
+
+    def __set_name__(self, owner, name):
+        if self._attr is None:
+            self._attr = name
+
+    # noinspection PyOverloads
+    @overload  # this overload is used to show the actual keyword arguments.
+    def argument(self,
+                 *options: str,
+                 action: Actions = ...,
+                 nargs: int | Nargs = ...,
+                 const: T = ...,
+                 default: T = ...,
+                 type: Type | Callable[[str], T] = ...,
+                 validator: Callable[[T], bool] = ...,
+                 choices: Sequence[T] = ...,
+                 required: bool = False,
+                 hidden: bool = False,
+                 help: str = ...,
+                 metavar: str = ...) -> T:
+        ...
+
+    def argument(self,
+                 *options, **kwargs) -> Any:
+        r"""create an argument under this mutually exclusive group.
+
+        **Usage**
+
+        >>> class Example:
+        ...     g = mutually_exclusive_group()
+        ...     a: str = g.argument('-a')
+
+        :param options: options strings
+        :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
+        :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
+        :param const: Please see ``argparse.ArgumentParser.add_argument(const)`` for detailed.
+        :param default: default value of argument. Please see ``argparse.ArgumentParser.add_argument(default)`` for detailed.
+        :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
+        :param validator: value validator with signature ``(T) -> bool``.
+        :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
+        :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
+        :param hidden: hide this argument from help document.
+        :param help: help document for this argument.
+        :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
+        """
+        return Argument(*options, group=self, **kwargs)
+
+    def __eq__(self, other):
+        match other:
+            case str(name):
+                return self.name == name
+            case argument_group(name, description) as group:
+                return self.name == name and self.description == description and self._attr == group._attr \
+                    and self.exclusive == group.exclusive and (not self.exclusive or self.required == group.required)
+            case _:
+                return False
+
+    def __hash__(self):
+        return hash((self._attr, self.name, self.description))
 
 
 def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
@@ -746,53 +835,24 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     # TODO python 3.14 add keyword color=
     # TODO python 3.14 add keyword suggest_on_error=
 
-    groups: dict[str, list[Argument]] = collections.defaultdict(list)
+    groups: dict[argument_group, list[Argument]] = collections.defaultdict(list)
 
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
         sub.add_parser(ap)
 
     # setup non-grouped arguments
-    mu_ex_groups: dict[str, argparse._MutuallyExclusiveGroup] = {}
+    ex_groups: dict[argument_group, argparse._MutuallyExclusiveGroup] = {}
     for arg in foreach_arguments(instance):
-        if arg.group is not None:
-            groups[arg.group].append(arg)
-            continue
-        elif arg.ex_group is not None:
-            try:
-                tp = mu_ex_groups[arg.ex_group]
-            except KeyError:
-                # XXX current Python does not support add title and description into mutually exclusive group
-                #   so the message in ex_group is dropped.
-                mu_ex_groups[arg.ex_group] = ap.add_mutually_exclusive_group()
-                tp = mu_ex_groups[arg.ex_group]
-
-            if arg.required:
-                tp.required = True
-        else:
-            tp = ap
-
-        arg.add_argument(tp, instance)
+        if (tp := _init_group(ap, groups, ex_groups, arg)) is not None:
+            arg.add_argument(tp, instance)
 
     # setup grouped arguments
     for group, args in _iter_grouped_arguments_in_order(instance, groups):
-        pp = ap.add_argument_group(group)
-        mu_ex_groups_grp: dict[str, argparse._MutuallyExclusiveGroup] = {}
+        pp = ap.add_argument_group(group.name, group.description)
 
         for arg in args:
-            if arg.ex_group is not None:
-                try:
-                    tp = mu_ex_groups_grp[arg.ex_group]
-                except KeyError:
-                    mu_ex_groups_grp[arg.ex_group] = pp.add_mutually_exclusive_group()
-                    tp = mu_ex_groups_grp[arg.ex_group]
-
-                if arg.required:
-                    tp.required = True
-            else:
-                tp = pp
-
-            arg.add_argument(tp, instance)
+            arg.add_argument(pp, instance)
 
     return ap
 
@@ -841,36 +901,80 @@ def _parser_epilog(instance: AbstractParser | Type[AbstractParser]) -> str | Non
     return epilog
 
 
+def _init_group(parser: ArgumentParser,
+                groups: dict[argument_group, list[Argument]],
+                ex_groups: dict[argument_group, argparse._MutuallyExclusiveGroup],
+                arg: Argument):
+    match arg.group:
+        case None:
+            return parser
+
+        case str(group):
+            # groups is defaultdict, so we do not need to check key exist.
+            groups[argument_group(group)].append(arg)
+            return None
+
+        case argument_group(exclusive=False) as group:
+            # groups is defaultdict, so we do not need to check key exist.
+            groups[group].append(arg)
+            return None
+
+        case argument_group(None, None, _, required) as group:
+            try:
+                return ex_groups[group]
+            except KeyError:
+                ret = parser.add_mutually_exclusive_group(required=required)
+                ex_groups[group] = ret
+                return ret
+
+        case argument_group(name, description, _, required) as group:
+            try:
+                return ex_groups[group]
+            except KeyError:
+                ret = parser.add_argument_group(name, description).add_mutually_exclusive_group(required=required)
+                ex_groups[group] = ret
+                return ret
+
+        case _:
+            raise TypeError()
+
+
 def _iter_grouped_arguments_in_order(instance: T | Type[T],
-                                     groups: dict[str, list[Argument]]) -> Iterable[tuple[str, list[Argument]]]:
+                                     groups: dict[argument_group, list[Argument]]) -> Iterable[tuple[argument_group, list[Argument]]]:
     if not isinstance(instance, type):
         instance = type(instance)
 
     if not issubclass(instance, AbstractParser) or instance.ARGUMENT_GROUP_LIST is None:
         yield from groups.items()
+
     else:
+        name_map_group = {g.name: g for g in groups}
         argument_group_list = instance.ARGUMENT_GROUP_LIST
         if isinstance(argument_group_list, list):
-            for group in argument_group_list:
+            for name in argument_group_list:
                 try:
-                    yield group, groups[group]
+                    group = name_map_group[name]
                 except KeyError:
                     pass
+                else:
+                    yield group, groups[group]
 
             for group, args in groups.items():
-                if group not in argument_group_list:
+                if group.name not in argument_group_list:
                     yield group, args
 
         elif callable(argument_group_list):
             argument_group_list_func = argument_group_list
-            argument_group_list = list(groups)
+            argument_group_list = list(name_map_group)
             argument_group_list.sort(key=argument_group_list_func)
 
-            for group in argument_group_list:
+            for name in argument_group_list:
                 try:
-                    yield group, groups[group]
+                    group = name_map_group[name]
                 except KeyError:
                     pass
+                else:
+                    yield group, groups[group]
 
         else:
             raise TypeError('ARGUMENT_GROUP_LIST not a list')

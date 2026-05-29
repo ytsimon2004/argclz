@@ -295,7 +295,7 @@ class AbstractParserTest(unittest.TestCase):
                 Main().main(['-h'])
 
         self.assertEqual(capture.exception.args[0], 0)
-        self.assertEqual(re.sub(r'\w+\.py', 'run.py', output.getvalue()), """\
+        self.assertEqual(re.sub(r'usage: .* \[-h]', 'usage: run.py [-h]', output.getvalue()), """\
 usage: run.py [-h] [-a A]
 
 options:
@@ -390,6 +390,248 @@ class TestArguments(unittest.TestCase):
         opt = parse_args(opt, ['-a=B'])
         self.assertEqual(opt.a, 'B')
         self.assertEqual(opt.b, None)
+
+
+class GroupTest(unittest.TestCase):
+    # XXX Is help text the only way to test argument grouping?
+
+    # grouping doesn't affect paring behavior, so we do not need to test it.
+
+    def test_group_literal_str(self):
+        class Opt:
+            a: str = argument('-a', help='not in group')
+            b: str = argument('-b', group='Group', help='in group')
+            c: str = argument('-c', group='Group', help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_group_argument_group(self):
+        class Opt:
+            g = argument_group('Group', 'Group Description')
+            a: str = argument('-a', help='not in group')
+            b: str = argument('-b', group=g, help='in group')
+            c: str = argument('-c', group=g, help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  Group Description
+
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_argument_group_argument(self):
+        class Opt:
+            g = argument_group('Group', 'Group Description')
+            a: str = argument('-a', help='not in group')
+            b: str = g.argument('-b', help='in group')
+            c: str = g.argument('-c', help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  Group Description
+
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_unnamed_group_are_distinct(self):
+        class Opt:
+            g1 = argument_group()
+            g2 = argument_group()
+            a: str = argument('-a', group=g1)
+            b: str = argument('-b', group=g1)
+            c: str = argument('-c', group=g2)
+            d: str = argument('-d', group=g2)
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B] [-c C] [-d D]
+
+options:
+  -h, --help  show this help message and exit
+
+  -a A
+  -b B
+
+  -c C
+  -d D
+""")
+
+    def test_ex_group_argument_group(self):
+        class Opt:
+            g = argument_group('Group', 'Group Description', exclusive=True)
+            a: str = argument('-a', help='not in group')
+            b: str = argument('-b', group=g, help='in group')
+            c: str = argument('-c', group=g, help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B | -c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  Group Description
+
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_ex_argument_group_argument(self):
+        class Opt:
+            g = argument_group('Group', 'Group Description', exclusive=True)
+            a: str = argument('-a', help='not in group')
+            b: str = g.argument('-b', help='in group')
+            c: str = g.argument('-c', help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B | -c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  Group Description
+
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_ex_argument_group_argument_required(self):
+        class Opt:
+            g = argument_group('Group', 'Group Description', exclusive=True, required=True)
+            a: str = argument('-a', help='not in group')
+            b: str = g.argument('-b', help='in group')
+            c: str = g.argument('-c', help='in group')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] (-b B | -c C)
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  Group Description
+
+  -b B        in group
+  -c C        in group
+""")
+
+    def test_ex_group(self):
+        class Opt:
+            g = argument_group(exclusive=True)
+            a: bool = argument('-a')
+            b: bool = argument('-b', group=g)
+            c: bool = argument('-c', group=g)
+
+        with self.subTest('normal case'):
+            opt = parse_args(Opt(), ['-a', '-b'])
+            self.assertTrue(opt.a)
+            self.assertTrue(opt.b)
+            self.assertFalse(opt.c)
+
+            opt = parse_args(Opt(), ['-c'])
+            self.assertFalse(opt.a)
+            self.assertFalse(opt.b)
+            self.assertTrue(opt.c)
+
+        with self.subTest('error case'):
+            with self.assertRaises(RuntimeError) as capture:
+                parse_args(Opt(), ['-b', '-c'])
+            self.assertEqual(capture.exception.args[0],
+                             'exit 2: argument -c: not allowed with argument -b')
+
+    def test_ex_group_required(self):
+        class Opt:
+            g = argument_group(exclusive=True, required=True)
+            a: bool = argument('-a')
+            b: bool = argument('-b', group=g)
+            c: bool = argument('-c', group=g)
+
+        with self.subTest('normal case'):
+            opt = parse_args(Opt(), ['-a', '-b'])
+            self.assertTrue(opt.a)
+            self.assertTrue(opt.b)
+            self.assertFalse(opt.c)
+
+            opt = parse_args(Opt(), ['-c'])
+            self.assertFalse(opt.a)
+            self.assertFalse(opt.b)
+            self.assertTrue(opt.c)
+
+        with self.subTest('error case'):
+            with self.assertRaises(RuntimeError) as capture:
+                parse_args(Opt(), ['-a'])
+            self.assertEqual(capture.exception.args[0],
+                             'exit 2: one of the arguments -b -c is required')
+
+    def test_unnamed_ex_group_are_distinct(self):
+        class Opt:
+            g1 = argument_group(exclusive=True)
+            g2 = argument_group(exclusive=True)
+            a: str = argument('-a', group=g1)
+            b: str = argument('-b', group=g1)
+            c: str = argument('-c', group=g2)
+            d: str = argument('-d', group=g2)
+
+        with self.subTest('parsing success'):
+            opt = parse_args(Opt(), ['-aT', '-cT'])
+            self.assertEqual(opt.a, 'T')
+            self.assertEqual(opt.b, None)
+            self.assertEqual(opt.c, 'T')
+            self.assertEqual(opt.d, None)
+
+        with self.subTest('parsing fail'):
+            with self.assertRaises(RuntimeError):
+                parse_args(Opt(), ['-aT', '-bT'])
+            with self.assertRaises(RuntimeError):
+                parse_args(Opt(), ['-cT', '-dT'])
+
+        with self.subTest('help text'):
+            # show distinct in usage
+            h = print_help(Opt, None, prog='run.py')
+            self.assertEqual(h, """\
+usage: run.py [-h] [-a A | -b B] [-c C | -d D]
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+  -b B
+  -c C
+  -d D
+""")
 
 
 class CopyArgsTest(unittest.TestCase):
