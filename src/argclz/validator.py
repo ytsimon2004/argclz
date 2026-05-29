@@ -634,12 +634,14 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         super().__init__()
         self._element_type = element_type
         self._key_type: literal_type | None = None
+        self._drop_key = False
         self._allow_empty = True
 
     def freeze(self) -> Self:
         ret = super().freeze()
         ret._element_type = self._element_type
         ret._key_type = self._key_type
+        ret._drop_key = self._drop_key
         ret._allow_empty = self._allow_empty
         return ret
 
@@ -648,20 +650,49 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         self._allow_empty = allow
         return self
 
-    def allow_keys(self, keys: list[str], *,
+    def allow_keys(self, keys: list[str] | None = None, *,
                    complete: bool = False,
-                   case_sensitive: bool = True) -> Self:
+                   case_sensitive: bool = True,
+                   drop_key: bool = False) -> Self:
+        """
+        Set an allowing key for this dict.
+
+        When *complete* or *case_sensitive* is ``True``, this validator will remap the key
+        based on the *key*. When *drop_key* is ``True``, this validator will drop the unexpected
+        keys, which they are not in the *keys*. **IMPORTANT** All above will modify the original
+        value without defense copying.
+
+        :param keys: a list of str or a :class:`typing.Literal`.
+            Use ``None`` to keep previous allowing keyset (to overwrite other settings).
+        :param complete: complete the key
+        :param case_sensitive:
+        :param drop_key: drop the unexpected keys (not in the *keys*)
+        :return:
+        """
         from .types import literal_type
+
+        if keys is None:
+            if self._key_type is None:
+                raise ValueError('keys not set')
+            keys = self._key_type.candidate
+            if keys is None:
+                raise ValueError('keys not set')
+
+        if len(keys) == 0:
+            raise ValueError('empty keys')
+
         key_type = literal_type(keys, complete=complete, case_sensitive=case_sensitive)
         if key_type.optional:
             raise ValueError('None key')  # some bad key
 
         if self._key_type is None:
             self._key_type = key_type
+            self._drop_key = drop_key
             return self
         else:
             ret = self.freeze()
             ret._key_type = key_type
+            ret._drop_key = drop_key
             return ret
 
     def on_key(self, validator: Callable[[str], bool]) -> Self:
@@ -688,7 +719,10 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                 try:
                     n = key_type(k)
                 except ValueError as e:
-                    raise ValidatorFailError(f'key "{k}" is not allowed') from e
+                    if self._drop_key:
+                        value.pop(k)
+                    else:
+                        raise ValidatorFailError(f'key "{k}" is not allowed') from e
                 else:
                     assert n is not None
                     if n != k:

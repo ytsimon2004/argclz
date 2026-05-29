@@ -733,19 +733,57 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'key "D" is not allowed')
 
+    # noinspection PyUnusedLocal
+    def test_dict_on_empty_allow_keyset(self):
+        with self.assertRaises(ValueError):
+            class Opt:
+                a: dict[str, int] = argument('-a', validator.dict(int).allow_keys([]))
+
+    def test_dict_on_restricted_keyset_dropping(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['A', 'B', 'C'], drop_key=True))
+
+        opt = Opt()
+
+        with self.subTest('normal case'):
+            opt.a = {}
+            opt.a = {'A': 1, 'B': 2}
+            opt.a = {'B': 2, 'D': 3}
+            self.assertDictEqual(opt.a, {'B': 2})
+
+        with self.subTest('modify case'):
+            ori = {'B': 2, 'D': 3}
+            opt.a = ori
+            self.assertDictEqual(opt.a, {'B': 2})
+            self.assertDictEqual(ori, {'B': 2})  # ori is also modified
+            # XXX this behavior may surprise to the user
+            # but if ori came from parsing result, then it does not matter.
+
     def test_dict_on_key_completion(self):
         class Opt:
             a: dict[str, int] = argument('-a', validator.dict(int).allow_keys(['AAA', 'BBB', 'CCC'], complete=True))
 
         opt = Opt()
-        opt.a = {}
-        self.assertDictEqual(opt.a, {})
-        opt.a = {'A': 1}
-        self.assertDictEqual(opt.a, {'AAA': 1})
-        opt.a = {'A': 1, 'B': 2}
-        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
-        opt.a = {'A': 1, 'B': 2, 'C': 3}
-        self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+        with self.subTest('normal case'):
+            opt.a = {}
+            self.assertDictEqual(opt.a, {})
+            opt.a = {'A': 1}
+            self.assertDictEqual(opt.a, {'AAA': 1})
+            opt.a = {'A': 1, 'B': 2}
+            self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
+            opt.a = {'A': 1, 'B': 2, 'C': 3}
+            self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+        with self.subTest('modify case'):
+            ori = {'A': 1, 'B': 2, 'C': 3}
+            opt.a = ori
+
+            expect = {'AAA': 1, 'BBB': 2, 'CCC': 3}
+            self.assertDictEqual(opt.a, expect)
+            self.assertDictEqual(ori, expect)  # ori is also modified
+            # XXX this behavior may surprise to the user
+            # but if ori came from parsing result, then it does not matter.
 
     def test_dict_on_key_completion_case_insensitive(self):
         class Opt:
@@ -760,6 +798,17 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2})
         opt.a = {'a': 1, 'b': 2, 'c': 3}
         self.assertDictEqual(opt.a, {'AAA': 1, 'BBB': 2, 'CCC': 3})
+
+    def test_dict_on_key_setting_chain(self):
+        class Opt:
+            a: dict[str, int] = argument(
+                '-a', validator.dict(int) \
+                    .allow_keys(['AAA', 'BBB', 'CCC'])
+                    .allow_keys(complete=True))
+
+        opt = Opt()
+        opt.a = {'A': 1}
+        self.assertDictEqual(opt.a, {'AAA': 1})
 
     # noinspection PyTypeChecker
     def test_dict_on_key_with_literal_type(self):
