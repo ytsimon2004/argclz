@@ -667,6 +667,25 @@ class CopyArgsTest(unittest.TestCase):
         ano = copy_argument(Opt(), opt)
         self.assertEqual(ano.a, '2')
 
+    def test_copy_argument_partial_updating(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+        opt = parse_args(Opt(), [])
+        self.assertEqual(opt.a, None)
+        self.assertEqual(opt.b, None)
+
+        ano = copy_argument(opt, None, a='2')
+        self.assertIs(opt, ano)
+        self.assertEqual(ano.a, '2')
+        self.assertEqual(ano.b, None)
+
+        ret = copy_argument(opt, ano, b='B')
+        self.assertIs(ret, ano)
+        self.assertEqual(ret.a, '2')
+        self.assertEqual(ret.b, 'B')
+
     def test_copy_from_dict(self):
         class Opt:
             a: str = argument('-a')
@@ -847,6 +866,40 @@ class CopyArgsTest(unittest.TestCase):
             ano = copy_argument(Opt.Sub(), ret)
             self.assertIsInstance(ano, Opt.Sub)
             self.assertEqual(ano.b, '10')
+
+    def test_copy_argument_used_as_option_extending(self):
+        class Main(AbstractParser):
+            a: str = argument('-a')
+            b: str = argument('-b')
+            c: str = argument('-c')  # protected
+            d: dict[str, str] = argument('-d', type=dict_type(str))
+
+            def run(self):
+                if len(self.d):
+                    d = dict(self.d)
+                    d.pop('c', None)  # c is protected
+                    copy_argument(self, None, **d)
+
+        with self.subTest('no copy_argument'):
+            ret = Main().main(['-aA', '-bB', '-cC'])
+            self.assertEqual(ret.a, 'A')
+            self.assertEqual(ret.b, 'B')
+            self.assertEqual(ret.c, 'C')
+            self.assertDictEqual(ret.d, {})
+
+        with self.subTest('parse_only'):
+            ret = Main().main(['-da=A', '-db=B', '-dc=C'], parse_only=True)
+            self.assertEqual(ret.a, None)
+            self.assertEqual(ret.b, None)
+            self.assertEqual(ret.c, None)
+            self.assertDictEqual(ret.d, {'a': 'A', 'b': 'B', 'c': 'C'})
+
+        with self.subTest('with copy_argument'):
+            ret = Main().main(['-da=A', '-db=B', '-dc=C'])
+            self.assertEqual(ret.a, 'A')
+            self.assertEqual(ret.b, 'B')
+            self.assertEqual(ret.c, None)
+            self.assertDictEqual(ret.d, {'a': 'A', 'b': 'B', 'c': 'C'})
 
 
 class WithOptionsTest(unittest.TestCase):

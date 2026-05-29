@@ -296,6 +296,109 @@ group A:
   -a A        text for A
 """)
 
+    def test_use_parent_group_literal_str(self):
+        class Parent(AbstractParser):
+            GROUP = 'Parent Group'
+            a: str = argument('-a', group=GROUP)
+
+        class Child(Parent):
+            b: str = argument('-b', group=Parent.GROUP)
+
+        h = print_help(Child, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+
+Parent Group:
+  -a A
+  -b B
+""")
+
+    def test_use_parent_group(self):
+        class Parent(AbstractParser):
+            GROUP = argument_group('Parent Group', 'Group Description')
+            a: str = argument('-a', group=GROUP)
+
+        class Child(Parent):
+            b: str = argument('-b', group=Parent.GROUP)
+
+        h = print_help(Child, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+
+Parent Group:
+  Group Description
+
+  -a A
+  -b B
+""")
+
+    def test_use_parent_ex_group(self):
+        class Parent(AbstractParser):
+            GROUP = argument_group('Parent Group', 'Group Description', exclusive=True)
+            a: str = argument('-a', group=GROUP)
+
+        class Child(Parent):
+            b: str = argument('-b', group=Parent.GROUP)
+
+        h = print_help(Child, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A | -b B]
+
+options:
+  -h, --help  show this help message and exit
+
+Parent Group:
+  Group Description
+
+  -a A
+  -b B
+""")
+
+    def test_use_parent_group_modified(self):
+        class Parent(AbstractParser):
+            GROUP = argument_group('Parent Group', 'Group Description')
+            a: str = argument('-a', group=GROUP)
+
+        class Child(Parent):
+            # change group description
+            GROUP = argument_group('Child Group', 'Group Description from Child')
+            # then we need to update all arguments under this group.
+            a: str = as_argument(Parent.a).with_options(group=GROUP)
+            b: str = argument('-b', group=GROUP)
+
+        # Parent arguments should not be affected.
+        h = print_help(Parent, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A]
+
+options:
+  -h, --help  show this help message and exit
+
+Parent Group:
+  Group Description
+
+  -a A
+""")
+
+        h = print_help(Child, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+
+Child Group:
+  Group Description from Child
+
+  -a A
+  -b B
+""")
 
 if __name__ == '__main__':
     unittest.main()

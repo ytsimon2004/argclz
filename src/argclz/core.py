@@ -408,7 +408,7 @@ class Argument(object):
                      required: bool = None,
                      hidden: bool = None,
                      help: str = None,
-                     group: str = None,
+                     group: str | argument_group | None = None,
                      metavar: str = None) -> Self:
         pass
 
@@ -674,7 +674,7 @@ def aliased_argument(options: str, *,
                      validator: Callable[[T], bool] | None = None,
                      choices: Sequence[str] = ...,
                      help: str = ...,
-                     group: str | None = None,
+                     group: str | argument_group | None = None,
                      metavar: str = ...) -> T:
     ...
 
@@ -811,6 +811,7 @@ class argument_group:
 
     def __hash__(self):
         return hash((self._attr, self.name, self.description))
+
 
 def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
     """iterating all argument attributes in instance.
