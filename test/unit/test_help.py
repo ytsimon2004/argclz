@@ -252,6 +252,66 @@ group C:
   -c C        text for C
 """)
 
+    def test_print_help_with_order_contain_argument_group(self):
+        class Opt(AbstractParser):
+            GROUP_A = argument_group('group A')
+            GROUP_B = 'group B'
+            GROUP_C = argument_group('group C')
+
+            ARGUMENT_GROUP_LIST = [
+                GROUP_C, GROUP_A, GROUP_B,
+            ]
+
+            a: str = argument('-a', group=GROUP_A, help='text for A')
+            b: str = argument('-b', group=GROUP_B, help='text for B')
+            c: str = argument('-c', group=GROUP_C, help='text for C')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-c C] [-a A] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+
+group C:
+  -c C        text for C
+
+group A:
+  -a A        text for A
+
+group B:
+  -b B        text for B
+""")
+
+    def test_print_help_with_order_contain_unnamed_argument_group(self):
+        class Opt(AbstractParser):
+            GROUP_A = argument_group()
+            GROUP_B = 'group B'
+            GROUP_C = argument_group()
+
+            ARGUMENT_GROUP_LIST = [
+                GROUP_A, GROUP_C, GROUP_B,
+            ]
+
+            a: str = argument('-a', group=GROUP_A, help='text for A')
+            b: str = argument('-b', group=GROUP_B, help='text for B')
+            c: str = argument('-c', group=GROUP_C, help='text for C')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-c C] [-b B]
+
+options:
+  -h, --help  show this help message and exit
+
+  -a A        text for A
+
+  -c C        text for C
+
+group B:
+  -b B        text for B
+""")
+
     def test_print_help_with_ex_grouped_arguments(self):
         class Opt:
             ex_group = argument_group('Group A', 'Ex Group Text', exclusive=True)

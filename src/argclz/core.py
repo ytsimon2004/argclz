@@ -103,7 +103,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
     DESCRIPTION: str | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
 
-    ARGUMENT_GROUP_LIST: list[str] | Callable[[str], int] | None = None
+    ARGUMENT_GROUP_LIST: list[str | argument_group] | Callable[[str], int] | None = None
     """argument group list"""
 
     EPILOG: str | Callable[[], str] | None = None
@@ -798,7 +798,6 @@ class argument_group:
     def __hash__(self):
         return hash((self._attr, self.name, self.description))
 
-
 def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
     """iterating all argument attributes in instance.
 
@@ -950,20 +949,29 @@ def _iter_grouped_arguments_in_order(instance: T | Type[T],
         yield from groups.items()
 
     else:
+        ## we do not use groups any after this function call, so we allow to modify it during for-loop
+        # groups = dict(groups)
         name_map_group = {g.name: g for g in groups}
         argument_group_list = instance.ARGUMENT_GROUP_LIST
+
         if isinstance(argument_group_list, list):
             for name in argument_group_list:
-                try:
-                    group = name_map_group[name]
-                except KeyError:
-                    pass
+                if isinstance(name, str):
+                    try:
+                        group = name_map_group[name]
+                    except KeyError:
+                        continue
+                elif isinstance(name, argument_group):
+                    group = name
                 else:
-                    yield group, groups[group]
+                    raise TypeError()
+
+                yield group, groups.pop(group)
 
             for group, args in groups.items():
-                if group.name not in argument_group_list:
-                    yield group, args
+                ## we `groups.pop` the group, and left the remaining arguments, so we do not need to do the checking.
+                # if group not in argument_group_list and group.name not in argument_group_list:
+                yield group, args
 
         elif callable(argument_group_list):
             argument_group_list_func = argument_group_list
