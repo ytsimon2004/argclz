@@ -633,6 +633,29 @@ options:
   -d D
 """)
 
+    def test_back_compatible_ex_group(self):
+        # argument(ex_group) is deprecated now, but it is not removed yet.
+        with self.assertWarns(DeprecationWarning) as capture:
+            class Opt:
+                a: str = argument('-a', help='not in group')
+                b: str = argument('-b', ex_group='Group', help='in group')
+                c: str = argument('-c', ex_group='Group', help='in group')
+
+            h = print_help(Opt, None, prog='run.py')
+
+        self.assertEqual(capture.warnings[0].message.args[0], 'ex_group is deprecated')
+        self.assertEqual(h, """\
+usage: run.py [-h] [-a A] [-b B | -c C]
+
+options:
+  -h, --help  show this help message and exit
+  -a A        not in group
+
+Group:
+  -b B        in group
+  -c C        in group
+""")
+
 
 class CopyArgsTest(unittest.TestCase):
     def test_copy_argument(self):

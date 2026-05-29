@@ -4,6 +4,7 @@ import abc
 import argparse
 import collections
 import sys
+import warnings
 from collections.abc import Sequence, Iterable, Callable
 from typing import TYPE_CHECKING, Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO
 
@@ -241,6 +242,7 @@ class Argument(object):
 
         if ex_group is not None and group is None:
             # Deprecated parameter
+            warnings.warn('ex_group is deprecated', DeprecationWarning)
             group = argument_group(ex_group, exclusive=True)
 
         self.attr = None
