@@ -6,7 +6,7 @@ import collections
 import sys
 import warnings
 from collections.abc import Sequence, Iterable, Callable
-from typing import TYPE_CHECKING, Type, TypeVar, Literal, overload, Any, get_type_hints, TextIO
+from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload, get_type_hints, cast
 
 from typing_extensions import Self
 
@@ -97,10 +97,10 @@ class AbstractParser(metaclass=abc.ABCMeta):
 
     """
 
-    USAGE: str | list[str] | None = None
+    USAGE: str | list[str] | Callable[[], str] | None = None
     """parser usage."""
 
-    DESCRIPTION: str | None = None
+    DESCRIPTION: str | Callable[[], str] | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
 
     ARGUMENT_GROUP_LIST: list[str | argument_group] | Callable[[str], int] | None = None
@@ -230,12 +230,12 @@ class Argument(object):
         from .validator import Validator
         if len(options) > 0 and isinstance(options[-1], Validator):
             if validator is not None:
-                raise RuntimeError('multiple validators in both last position and keyword arguments.')
+                raise ValueError('multiple validators in both last position and keyword arguments.')
             validator = options[-1]
             options = options[:-1]
 
         if not all([it.startswith('-') for it in options]):
-            raise RuntimeError(f'options should startswith "-". {options}')
+            raise ValueError(f'options should startswith "-". {options}')
 
         if isinstance(validator, Validator):
             validator = validator.freeze()
@@ -332,6 +332,7 @@ class Argument(object):
             if owner is not None:  # ad-hoc for the document building
                 self.__doc__ = self.help
             return self
+
         try:
             namespace = getattr(instance, ARGCLZ_NAMESPACE)
         except AttributeError:
@@ -371,8 +372,7 @@ class Argument(object):
             namespace = getattr(instance, ARGCLZ_NAMESPACE)
             del namespace[self.attr]
         except (AttributeError, KeyError):
-            namespace = {}
-            setattr(instance, ARGCLZ_NAMESPACE, namespace)
+            pass
 
     def add_argument(self, ap: argparse._ActionsContainer, instance):
         """Add this into `argparse.ArgumentParser`.
@@ -833,13 +833,66 @@ def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
                     yield arg
 
 
+# noinspection PyOverloads
+@overload  # this overload is used to show the actual keyword arguments.
+def new_parser(instance: T | Type[T], *,
+               prog: str = None,
+               usage: str = None,
+               description: str = None,
+               epilog: str = None,
+               # parents: list[argparse.ArgumentParser] = (),
+               formatter_class: Type[argparse.HelpFormatter] = argparse.HelpFormatter,
+               # prefix_chars: str = '-',
+               fromfile_prefix_chars: str = None,
+               # argument_default=None,
+               # conflict_handler: Literal['error', 'resolve'] = 'error',
+               add_help=True,
+               allow_abbrev=True,
+               # exit_on_error=True,
+               # suggest_on_error=False,
+               # color=True
+               ) -> argparse.ArgumentParser:
+    # TODO python 3.14 add keyword color and suggest_on_error
+    pass
+
+
 def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
-    """Create ``ArgumentParser`` for instance.
+    """Create :class:`~argparse.ArgumentParser` for *instance*.
+
+    **Keywords pass to ArgumentParser**
+
+    * ``prog`` program name
+    * ``usage`` program usage. Use :attr:`AbstractParser.USAGE` if *instance* is an ``AbstractParser``.
+    * ``description`` program description. Use :attr:`AbstractParser.DESCRIPTION` if *instance* is an ``AbstractParser``.
+    * ``epilog`` program epilog. Use :attr:`AbstractParser.EPILOG` if *instance* is an ``AbstractParser``.
+    * ``formatter_class`` help text formatter. Use :class:`argparse.RawTextHelpFormatter` if *instance* is an ``AbstractParser``.
+    * ``fromfile_prefix_chars`` a char to prefix a filename in command line to read the content from.
+    * ``add_help`` add ``-h`` options
+    * ``allow_abbrev``
+
+    There are unsupported keywords: ``parents``, ``prefix_chars``, ``exit_on_error``, ``argument_default`` and
+    ``conflict_handler``. A ``ValueError`` will be raised if any unsupported keywords shown.
 
     :param instance: any instance that contains ``argument``.
     :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
-    :return: an :class:``~argparse.ArgumentParser`` instance.
+    :return: an :class:`~argparse.ArgumentParser`
     """
+    for unsupported in ('parents', 'prefix_chars', 'argument_default', 'exit_on_error', 'conflict_handler'):
+        # Reason of unsupported keywords
+        # parents, conflict_handler: we use class-based as parser, so parent parser means parent class.
+        #   we use `as_argument` and `with_options` to address argument overwritten issue.
+        #   They make argument overwritten more explict.
+        # prefix_chars: we do option string checking during `argument` creation phase, so
+        #   we can not defer checking to `new_parser` phase, because `argument` phase comes
+        #   first then `new_parser` phase, which different from `argparse` that create `ArgumentParser` first
+        #   then `add_argument`. Additionally, `new_parser` is not always called, but `argument` is.
+        # exit_on_error: we override ArgumentParser class to raise ArgumentParserInterrupt instead of
+        #   SystemExit when any parsing error occurs. It allows us more control on parsing and post-parsing flow.
+        # argument_default: we use class-based as parser, and we do not want user get `AttributeError`
+        #   when access attribute if corresponding argument do not show, so all attributes have `None` as default.
+        if unsupported in kwargs:
+            raise ValueError(f'unsupported keyword : {unsupported}')
+
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
         kwargs.setdefault('usage', _parser_usage(instance))
         kwargs.setdefault('description', _parser_description(instance))
@@ -848,8 +901,6 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
     ap = ArgumentParser(**kwargs)
-    # TODO python 3.14 add keyword color=
-    # TODO python 3.14 add keyword suggest_on_error=
 
     groups: dict[argument_group, list[Argument]] = collections.defaultdict(list)
 
@@ -875,6 +926,8 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
 
 def _parser_usage(instance: AbstractParser | Type[AbstractParser]) -> str | None:
     usage = instance.USAGE
+    if callable(usage):
+        usage = usage()
     if isinstance(usage, list):
         usage = '\n       '.join(usage)
     return usage
@@ -883,14 +936,14 @@ def _parser_usage(instance: AbstractParser | Type[AbstractParser]) -> str | None
 def _parser_description(instance: AbstractParser | Type[AbstractParser]) -> str | None:
     description = instance.DESCRIPTION
     if callable(description):
-        description = description()
+        description = cast(str, description())
     return description
 
 
 def _parser_epilog(instance: AbstractParser | Type[AbstractParser]) -> str | None:
     epilog = instance.EPILOG
     if callable(epilog):
-        epilog = epilog()
+        epilog = cast(str, epilog())
 
     assert epilog is None or isinstance(epilog, str)
 
@@ -935,7 +988,7 @@ def _init_group(parser: ArgumentParser,
             groups[group].append(arg)
             return None
 
-        case argument_group(None, None, _, required) as group:
+        case argument_group(None, None, _, required) as group:  # unnamed mu-ex-group
             try:
                 return ex_groups[group]
             except KeyError:

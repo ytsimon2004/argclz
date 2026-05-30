@@ -678,10 +678,9 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
             if keys is None:
                 raise ValueError('keys not set')
 
-        if len(keys) == 0:
-            raise ValueError('empty keys')
-
         key_type = literal_type(keys, complete=complete, case_sensitive=case_sensitive)
+        if key_type.candidate is None or len(key_type.candidate) == 0:
+            raise ValueError('empty keys')
         if key_type.optional:
             raise ValueError('None key')  # some bad key
 

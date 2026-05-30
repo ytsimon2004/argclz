@@ -3,6 +3,7 @@ import builtins
 import contextlib
 import io
 import re
+import tempfile
 import unittest
 from typing import Literal
 from unittest import skipIf
@@ -10,7 +11,7 @@ from unittest.mock import patch
 
 from argclz import *
 from argclz.clone import Cloneable
-from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser
+from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser, set_options
 
 try:
     import polars as pl
@@ -252,6 +253,110 @@ class ForeachArgumentsTest(unittest.TestCase):
         self.assertEqual(args[2].attr, 'd')
 
 
+class NewParserTest(unittest.TestCase):
+    def test_new_parser_on_plain_class(self):
+        class Opt:
+            a: str = argument('-a')
+
+        with self.subTest('prog'):
+            ap = new_parser(Opt, prog='run.py')
+            h = print_help(ap, None)
+            self.assertEqual(h, """\
+usage: run.py [-h] [-a A]
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+""")
+
+        with self.subTest('usage'):
+            ap = new_parser(Opt, usage='python run.py [-h] [-a A]')
+            h = print_help(ap, None)
+            self.assertEqual(h, """\
+usage: python run.py [-h] [-a A]
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+""")
+
+        with self.subTest('description'):
+            ap = new_parser(Opt, prog='run.py', description='description text')
+            h = print_help(ap, None)
+            self.assertEqual(h, """\
+usage: run.py [-h] [-a A]
+
+description text
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+""")
+
+        with self.subTest('epilog'):
+            ap = new_parser(Opt, prog='run.py', epilog='epilog text')
+            h = print_help(ap, None)
+            self.assertEqual(h, """\
+usage: run.py [-h] [-a A]
+
+options:
+  -h, --help  show this help message and exit
+  -a A
+
+epilog text
+""")
+
+    def test_new_parser_from_file_prefix(self):
+        class Opt:
+            a: str = argument('-a')
+
+        with tempfile.NamedTemporaryFile('w+', dir='.', delete_on_close=False) as tf:
+            print('-a', 'TEXT', sep='\n', file=tf)
+            tf.close()
+
+            opt = Opt()
+            ap = new_parser(opt, fromfile_prefix_chars='@')
+            set_options(opt, ap.parse_args([f'@{tf.name}']))
+
+            self.assertEqual(opt.a, 'TEXT')
+
+    def test_new_parser_allow_abbrev(self):
+        class Opt:
+            a: str = argument('--a-long-option-name')
+
+        opt = Opt()
+
+        with self.subTest('allow'):
+            ap = new_parser(opt, allow_abbrev=True)
+            set_options(opt, ap.parse_args(['--a-long', 'TEXT']))
+            self.assertEqual(opt.a, 'TEXT')
+
+        with self.subTest('not allow'):
+            ap = new_parser(opt, allow_abbrev=False)
+            with self.assertRaises(RuntimeError):
+                ap.parse_args(['--a-long', 'TEXT'])
+
+    # noinspection PyArgumentList
+    def test_new_parser_unsupported_keywords(self):
+        class Opt:
+            a: str = argument('-a')
+
+        with self.assertRaises(ValueError):
+            new_parser(Opt, parents=[])
+
+        with self.assertRaises(ValueError):
+            new_parser(Opt, prefix_chars='/')
+
+        with self.assertRaises(ValueError):
+            new_parser(Opt, argument_default=object())
+
+        with self.assertRaises(ValueError):
+            new_parser(Opt, exit_on_error=False)
+
+        with self.assertRaises(ValueError):
+            new_parser(Opt, conflict_handler='error')
+
+
 class AbstractParserTest(unittest.TestCase):
     def test_exit_on_error(self):
         class Main(AbstractParser):
@@ -323,6 +428,12 @@ options:
 
 
 class TestArguments(unittest.TestCase):
+    # noinspection PyUnusedLocal
+    def test_option_wrong_prefix(self):
+        with self.assertRaises(ValueError):
+            class Opt:
+                a: str = argument('@a')
+
     def test_set_argument_repeat(self):
         class Opt:
             a: str = argument('-a')

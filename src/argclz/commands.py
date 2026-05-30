@@ -3,7 +3,15 @@ import inspect
 import sys
 from typing import Type, TypeVar, overload, Any
 
-from .core import AbstractParser, new_parser, ArgumentParser, set_options, ArgumentParserInterrupt
+# noinspection PyProtectedMember
+from .core import (
+    AbstractParser,
+    ArgumentParser,
+    ArgumentParserInterrupt,
+    new_parser,
+    set_options,
+    ARGCLZ_NAMESPACE,
+)
 
 __all__ = [
     'sub_command_group',
@@ -35,19 +43,32 @@ class SubCommandGroup:
             return self
 
         try:
-            return instance.__dict__[f'__{self.attr}']
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+        except AttributeError:
+            namespace = {}
+            setattr(instance, ARGCLZ_NAMESPACE, namespace)
+
+        try:
+            return namespace[self.attr]
         except KeyError:
             pass
 
         raise AttributeError(self.attr)
 
     def __set__(self, instance, value):
-        instance.__dict__[f'__{self.attr}'] = value
+        try:
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+        except AttributeError:
+            namespace = {}
+            setattr(instance, ARGCLZ_NAMESPACE, namespace)
+
+        namespace[self.attr] = value
 
     def __delete__(self, instance):
         try:
-            del instance.__dict__[f'__{self.attr}']
-        except KeyError:
+            namespace = getattr(instance, ARGCLZ_NAMESPACE)
+            del namespace[self.attr]
+        except (AttributeError, KeyError):
             pass
 
     def add_parser(self, ap: argparse.ArgumentParser):
@@ -69,7 +90,6 @@ class SubCommandGroup:
                 if not isinstance(sub_parser, type):
                     sub_parser = type(sub_parser)
                 raise TypeError(f'{sub_parser.__name__} is not an AbstractParser')
-
 
         return _sub_command
 
@@ -214,8 +234,9 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
     :param usage: Optional usage string to override the auto-generated help
     :param description: Optional description for the main parser
+    :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
     :param system_exit: exit when commandline parsed fail.
-    :return: The parser instance that handled the command (or an :class:`ArgumentParsingResult` if ``parse_only`` or ``system_exit=False``)
+    :return: parser itself. If it has sub command, return sub parser when used.
     """
     if isinstance(parsers, ArgumentParser):
         parser = parsers
