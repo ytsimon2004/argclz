@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 __all__ = ['caster_by_annotation', 'complete_arg_kwargs']
 
 T = TypeVar('T')
-
+NONE = type(None)
 
 def caster_by_annotation(a_name: str, a_type):
     a_type_ori = get_origin(a_type)
@@ -23,7 +23,7 @@ def caster_by_annotation(a_name: str, a_type):
 
     elif a_type_ori == Union or a_type_ori == UnionType:
         a_type_args = get_args(a_type)
-        if len(a_type_args) == 2 and get_origin(a_type_args[0]) is Literal and a_type_args[1] == type(None):
+        if len(a_type_args) == 2 and get_origin(a_type_args[0]) is Literal and a_type_args[1] == NONE:
             from .types import literal_type
             return literal_type((*get_args(a_type_args[0]), None))
 
@@ -97,8 +97,7 @@ def _complete_arg_kwargs_for_bool(self: Argument):
 def _complete_arg_kwargs_for_value(self: Argument):
     a_type_ori = get_origin(self.attr_type)
     if a_type_ori == Union or a_type_ori == UnionType:
-        a_type_args = get_args(self.attr_type)
-        if len(a_type_args) == 2 and a_type_args[1] == type(None):
+        if any([it == NONE for it in get_args(self.attr_type)]):
             self.kwargs.setdefault('default', None)
 
     assert self.attr is not None

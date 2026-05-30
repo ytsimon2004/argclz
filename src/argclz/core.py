@@ -888,8 +888,8 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
         #   then `add_argument`. Additionally, `new_parser` is not always called, but `argument` is.
         # exit_on_error: we override ArgumentParser class to raise ArgumentParserInterrupt instead of
         #   SystemExit when any parsing error occurs. It allows us more control on parsing and post-parsing flow.
-        # argument_default: we use class-based as parser, and we do not want user get `AttributeError`
-        #   when access attribute if corresponding argument do not show, so all attributes have `None` as default.
+        # argument_default: we do some inferring on default value based on attribute type. To make consistent,
+        #   we keep use ``None`` as default value.
         if unsupported in kwargs:
             raise ValueError(f'unsupported keyword : {unsupported}')
 

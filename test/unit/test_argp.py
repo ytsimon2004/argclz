@@ -51,6 +51,19 @@ class WithDefaultTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             _ = opt.a
 
+    def test_optional(self):
+        with self.subTest('optional'):
+            class O2:
+                a: str | None = argument('-a')
+
+            self.assertIsNone(with_defaults(O2()).a)
+
+        with self.subTest('union None'):
+            class O3:
+                a: str | int | None = argument('-a')
+
+            self.assertIsNone(with_defaults(O3()).a)
+
     def test_default_str(self):
         class Opt:
             a: str = argument('-a', default='default')
@@ -425,6 +438,13 @@ options:
 
         ret = Main().main(['-h=1'])
         self.assertEqual(ret.h, 1)
+
+    def test_parer_with_empty_args(self):
+        class Main(AbstractParser):
+            h: int = argument('-a')
+
+        ret = Main().main([])
+        self.assertEqual(ret.h, None)
 
 
 class TestArguments(unittest.TestCase):
