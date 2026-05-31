@@ -245,7 +245,7 @@ class Argument(object):
             warnings.warn('ex_group is deprecated', DeprecationWarning)
             group = argument_group(ex_group, exclusive=True)
 
-        if (choices := kwargs.pop('choices', None)) is not None:
+        if (choices := kwargs.get('choices', None)) is not None:
             kwargs['choices'] = tuple(choices)
 
         self.attr = None
