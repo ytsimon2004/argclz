@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from argclz import *
 from argclz.clone import Cloneable
-from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser, set_options
+from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser, set_options, ArgumentParser
 
 try:
     import polars as pl
@@ -319,6 +319,21 @@ options:
 epilog text
 """)
 
+    def test_new_parser_on_abstract_parser(self):
+        called = []
+
+        class Main(AbstractParser):
+            a: str = argument('-a', help='help text')
+
+            @classmethod
+            def new_parser(cls, **kwargs) -> ArgumentParser:
+                called.append('yes')
+                return new_parser(cls, **kwargs)
+
+        self.assertListEqual(called, [])
+        _ = parse_args(Main(), [])
+        self.assertListEqual(called, ['yes'])
+
     def test_new_parser_from_file_prefix(self):
         class Opt:
             a: str = argument('-a')
@@ -371,6 +386,44 @@ epilog text
 
 
 class AbstractParserTest(unittest.TestCase):
+    def test_parser_init(self):
+        class Main(AbstractParser):
+            a: str = argument('-a')
+            b: str = argument('-b', default=None)
+            c: str = argument('-c', default='default')
+
+        main = Main()
+        with self.assertRaises(AttributeError):
+            _ = main.a
+        self.assertIsNone(main.b)
+        self.assertEqual(main.c, 'default')
+
+    def test_parser_init_type(self):
+        class Main(AbstractParser):
+            a: int = argument('-a')
+            b: bool = argument('-b')
+            b2: bool = argument('-b2', action='store_true')
+            b3: bool = argument('-b3', action='store_false')
+            c: list[str] = argument('-c', action='append')
+            d: list[str] = argument('-d', action='extend')
+            e: list[str] = argument('-e', action='append_const')
+
+        main = Main()
+
+        with self.subTest('AttributeError'):
+            with self.assertRaises(AttributeError):
+                _ = main.a
+
+        with self.subTest('bool'):
+            self.assertFalse(main.b)
+            self.assertFalse(main.b2)
+            self.assertTrue(main.b3)
+
+        with self.subTest('list'):
+            self.assertListEqual(main.c, [])
+            self.assertListEqual(main.d, [])
+            self.assertListEqual(main.e, [])
+
     def test_exit_on_error(self):
         class Main(AbstractParser):
             a: str = argument('-a', default='default')
@@ -446,6 +499,24 @@ options:
         ret = Main().main([])
         self.assertEqual(ret.h, None)
 
+    def test_duplicate_argument_attr(self):
+        # we have no way to detect this improper setup
+        class Main(AbstractParser):
+            a: int = argument('-a1')
+            a: int = argument('-a2')
+
+        Main.new_parser()
+
+    def test_duplicate_argument_options(self):
+        # we have no way to detect this improper setup during class declaration
+        class Main(AbstractParser):
+            a1: int = argument('-a')
+            a2: int = argument('-a')
+
+        with self.assertRaises(argparse.ArgumentError) as capture:
+            Main.new_parser()
+        self.assertEqual(str(capture.exception),
+                         'argument -a: conflicting option string: -a')
 
 class TestArguments(unittest.TestCase):
     # noinspection PyUnusedLocal

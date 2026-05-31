@@ -32,7 +32,8 @@ __all__ = [
     'set_options',
     'copy_argument',
     'print_help',
-    'as_dict'
+    'as_dict',
+    'ArgumentParserInterrupt'
 ]
 
 T = TypeVar('T')
@@ -143,12 +144,10 @@ class AbstractParser(metaclass=abc.ABCMeta):
         try:
             result = parser.parse_args(args)
         except ArgumentParserInterrupt as e:
-            exit_status = e.status
-            exit_message = e.message
+            error = e
             result = None
         else:
-            exit_status = None
-            exit_message = None
+            error = None
             set_options(self, result)
 
         from .commands import init_sub_command
@@ -159,16 +158,16 @@ class AbstractParser(metaclass=abc.ABCMeta):
         if parse_only:
             return pp
 
-        if exit_status is not None:
+        if error is not None:
             if system_exit is SystemExit:
-                if exit_status != 0:
+                if error.status != 0:
                     parser.print_usage(sys.stderr)
-                    print(exit_message, file=sys.stderr)
-                sys.exit(exit_status)
+                    print(error.message, file=sys.stderr)
+                sys.exit(error.status)
             elif isinstance(system_exit, type) and issubclass(system_exit, BaseException):
-                raise system_exit(exit_status)
+                raise system_exit(error.message) from error
             else:
-                sys.exit(exit_status)
+                sys.exit(error.status)
 
         pp.run()
 
@@ -256,6 +255,7 @@ class Argument(object):
 
     @property
     def default(self):
+        """The default value of the argument."""
         try:
             return self.kwargs['default']
         except KeyError:
@@ -271,6 +271,7 @@ class Argument(object):
 
     @property
     def const(self):
+        """The const value of argument value."""
         try:
             return self.kwargs['const']
         except KeyError:
@@ -283,18 +284,27 @@ class Argument(object):
 
     @property
     def metavar(self) -> str | None:
+        """The name of the argument value."""
         return self.kwargs.get('metavar', None)
 
     @property
+    def nargs(self) -> int | str | None:
+        """The number of argument value needed."""
+        return self.kwargs.get('nargs', None)
+
+    @property
     def choices(self) -> tuple[Any, ...] | None:
+        """The allowed value set."""
         return self.kwargs.get('choices', None)
 
     @property
     def required(self) -> bool:
+        """Is argument required?"""
         return self.kwargs.get('required', False)
 
     @property
     def type(self) -> Type | Callable[[str], T]:
+        """Argument type."""
         try:
             return self.kwargs['type']
         except KeyError:
@@ -315,6 +325,7 @@ class Argument(object):
 
     @property
     def help(self) -> str | None:
+        """argument help text"""
         return self.kwargs.get('help', None)
 
     def __set_name__(self, owner: Type, name: str):
@@ -374,12 +385,13 @@ class Argument(object):
         except (AttributeError, KeyError):
             pass
 
-    def add_argument(self, ap: argparse._ActionsContainer, instance):
+    def _add_argument(self, ap: argparse._ActionsContainer, instance) -> argparse.Action:
         """Add this into `argparse.ArgumentParser`.
 
-        :param ap:
-        :param instance:
-        :return:
+        :param ap: the instance of :class:`~argparse.ArgumentParser` or Argument group from
+            either :meth:`~argparse.ArgumentParser.add_argument` or :meth:`~argparse.ArgumentParser.add_mutually_exclusive_group`.
+        :param instance: :class:`argclz.core.AbstractParser`
+        :return: :class:`argparse.Action`
         """
         try:
             kwargs = dict(self.kwargs)
@@ -414,6 +426,16 @@ class Argument(object):
 
     def with_options(self, *options, **kwargs) -> Self:
         """Modify or update keyword parameter and return a new argument.
+
+        To make type hinter happy, using :func:`as_argument` to cast class attribute,
+        which its type indicate value type, to :class:`Argument` instead.
+
+        >>> class Parent(AbstractParser):
+        ...     a: str = argument('-a')
+        ... class Main(Parent):
+        ...     a: str = as_argument(Parent.a).with_options(...)
+        ...     #  ^^^   ^^^^^^^^^^^^^^^^^^^^^ interpret as Argument rather than str
+        ...     #  |_ It still need type hint in Main
 
         option flags update rule:
 
@@ -643,9 +665,9 @@ class AliasArgument(Argument):
         super().__init__(*options, **kwargs)
         self.aliases = aliases
 
-    def add_argument(self, ap: argparse._ActionsContainer, instance):
+    def _add_argument(self, ap: argparse._ActionsContainer, instance) -> argparse.Action:
         gp = ap.add_mutually_exclusive_group(required=self.required)
-        result = super().add_argument(gp, instance)
+        result = super()._add_argument(gp, instance)
 
         assert len(self.options) > 0
         primary = self.options[0]
@@ -912,14 +934,16 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     ex_groups: dict[argument_group, argparse._MutuallyExclusiveGroup] = {}
     for arg in foreach_arguments(instance):
         if (tp := _init_group(ap, groups, ex_groups, arg)) is not None:
-            arg.add_argument(tp, instance)
+            # noinspection PyProtectedMember
+            arg._add_argument(tp, instance)
 
     # setup grouped arguments
     for group, args in _iter_grouped_arguments_in_order(instance, groups):
         pp = ap.add_argument_group(group.name, group.description)
 
         for arg in args:
-            arg.add_argument(pp, instance)
+            # noinspection PyProtectedMember
+            arg._add_argument(pp, instance)
 
     return ap
 
@@ -1090,16 +1114,23 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
 
 
 def parse_args(instance: T, args: list[str] | None = None) -> T:
-    """Parse the command-list arguments and apply the parsed values to the given instance
+    """Parse the command-list arguments and apply the parsed values to the given instance.
 
     :param instance: any instance that contains ``argument``.
     :param args: A list of strings representing command-line arguments. If ``None``, uses ``sys.argv``
     :return: ``instance`` itself, with attributes populated
+    :raise ArgumentParserInterrupt: error during parsing, including command-line argument resolution,
+        argument type casting and validation.
     """
     if isinstance(instance, type):
         raise TypeError('not an instance')
 
-    ap = new_parser(instance)
+    if isinstance(instance, AbstractParser):
+        # respect AbstractParser custom new_parser
+        ap = instance.new_parser()
+    else:
+        ap = new_parser(instance)
+
     ot = ap.parse_args(args)
     return set_options(instance, ot)
 

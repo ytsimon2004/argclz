@@ -247,12 +247,10 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     try:
         result = parser.parse_args(args)
     except ArgumentParserInterrupt as e:
-        exit_status = e.status
-        exit_message = e.message
+        error = e
         pp = None
     else:
-        exit_status = None
-        exit_message = None
+        error = None
 
         pp = getattr(result, 'main', None)
         if isinstance(pp, type):
@@ -264,16 +262,16 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     if parse_only:
         return pp
 
-    if exit_status is not None:
+    if error is not None:
         if system_exit is SystemExit:
-            if exit_status != 0:
+            if error.status != 0:
                 parser.print_usage(sys.stderr)
-                print(exit_message, file=sys.stderr)
-            sys.exit(exit_status)
+                print(error.message, file=sys.stderr)
+            sys.exit(error.status)
         elif issubclass(system_exit, BaseException):
-            raise system_exit(exit_status)
+            raise system_exit(error.message) from error
         else:
-            sys.exit(exit_status)
+            sys.exit(error.status)
 
     if pp is not None:
         pp.run()

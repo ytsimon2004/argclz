@@ -83,15 +83,13 @@ def _complete_arg_kwargs_for_bool(self: Argument):
             self.kwargs['action'] = 'store'
         else:
             self.kwargs.setdefault('action', 'store_true')
-            self.kwargs.setdefault('default', False)
+            self.kwargs.setdefault('default', self.kwargs['action'] != 'store_true')
 
     elif self.kwargs['default']:
         self.kwargs.setdefault('action', 'store_false')
-        self.kwargs.setdefault('default', True)
 
     else:
         self.kwargs.setdefault('action', 'store_true')
-        self.kwargs.setdefault('default', False)
 
 
 def _complete_arg_kwargs_for_value(self: Argument):
