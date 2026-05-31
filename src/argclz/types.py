@@ -69,10 +69,11 @@ def bool_type(value: str) -> bool:
         raise ValueError()
 
 
-def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
+def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: str = ','):
     """Create a caster that splits a comma-separated string into a tuple of typed values.
 
     :param value_type: converter functions for each tuple position; use ``...`` to repeat last
+    :param split: value splitter
     :return: a function that converts a comma-separated string into a typed tuple
     """
     if len(value_type) == 0:
@@ -91,7 +92,7 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType):
 
         if len(arg):
             last_type: Type[T] | Callable[[str], T] | None = None
-            for i, a in enumerate(arg.split(',')):
+            for i, a in enumerate(arg.split(split)):
                 if last_type is not None:
                     ret.append(last_type(a))
                 else:

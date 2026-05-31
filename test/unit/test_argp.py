@@ -518,6 +518,7 @@ options:
         self.assertEqual(str(capture.exception),
                          'argument -a: conflicting option string: -a')
 
+
 class TestArguments(unittest.TestCase):
     # noinspection PyUnusedLocal
     def test_option_wrong_prefix(self):
@@ -592,6 +593,44 @@ class TestArguments(unittest.TestCase):
         opt = parse_args(opt, ['-a=B'])
         self.assertEqual(opt.a, 'B')
         self.assertEqual(opt.b, None)
+
+    def test_argument_with_default_value(self):
+        class Opt:
+            a: str = argument('-a').with_default('DEFAULT')
+
+        with self.subTest('attribute'):
+            arg = as_argument(Opt.a)
+            self.assertEqual(arg.default, 'DEFAULT')
+
+            with self.assertRaises(ValueError):
+                _ = arg.const
+
+        with self.subTest('parsing'):
+            opt = parse_args(Opt(), [])
+            self.assertEqual(opt.a, 'DEFAULT')
+            opt = parse_args(Opt(), ['-a=TEXT'])
+            self.assertEqual(opt.a, 'TEXT')
+
+            with self.assertRaises(RuntimeError):
+                parse_args(Opt(), ['-a'])
+
+    def test_argument_with_omit_value(self):
+        class Opt:
+            a: str = argument('-a').with_default('DEFAULT', 'VALUE')
+
+        with self.subTest('attribute'):
+            arg = as_argument(Opt.a)
+            self.assertEqual(arg.default, 'DEFAULT')
+            self.assertEqual(arg.const, 'VALUE')
+            self.assertEqual(arg.nargs, '?')
+
+        with self.subTest('parsing'):
+            opt = parse_args(Opt(), [])
+            self.assertEqual(opt.a, 'DEFAULT')
+            opt = parse_args(Opt(), ['-a'])
+            self.assertEqual(opt.a, 'VALUE')
+            opt = parse_args(Opt(), ['-a=TEXT'])
+            self.assertEqual(opt.a, 'TEXT')
 
 
 class GroupTest(unittest.TestCase):

@@ -56,6 +56,7 @@ Actions = Literal[
 ]
 
 ARGCLZ_NAMESPACE = '__argclz_namespace__'
+missing = object()
 
 
 class ArgumentParserInterrupt(RuntimeError):
@@ -244,6 +245,9 @@ class Argument(object):
             warnings.warn('ex_group is deprecated', DeprecationWarning)
             group = argument_group(ex_group, exclusive=True)
 
+        if (choices := kwargs.pop('choices', None)) is not None:
+            kwargs['choices'] = tuple(choices)
+
         self.attr = None
         self.attr_type = Any
         self.group = group
@@ -404,6 +408,29 @@ class Argument(object):
             else:
                 name = type(instance).__name__
             raise RuntimeError(f'{name}.{self.attr} : ' + repr(e)) from e
+
+    def with_default(self, value, omit_value=missing) -> Self:
+        """
+        Set the default value. This method help to build optional value arg,
+        which its value can be omitted.
+
+        Set argument's default, const and nargs.
+
+        :param value:
+        :param omit_value:
+        :return:
+        """
+        if omit_value is missing:
+            return self.with_options(
+                default=value,
+                const=...
+            )
+        else:
+            return self.with_options(
+                default=value,
+                const=omit_value,
+                nargs='?'
+            )
 
     # noinspection PyOverloads
     @overload  # this overload is used to show the actual keyword arguments.

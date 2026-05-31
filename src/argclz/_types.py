@@ -104,7 +104,12 @@ def _complete_arg_kwargs_for_value(self: Argument):
 
 def _complete_arg_kwargs_for_collection(self: Argument):
     origin = get_origin(self.attr_type)
-    assert origin is not None
+    if origin is None:
+        if self.attr_type in (tuple, list):
+            origin = self.attr_type
+        else:
+            raise RuntimeError(f'bad type : {self.attr_type}')
+
     self.kwargs.setdefault('default', origin())
 
     a_type_arg = get_args(self.attr_type)  # Coll[T]
