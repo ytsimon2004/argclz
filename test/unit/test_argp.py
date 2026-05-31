@@ -5,7 +5,8 @@ import io
 import re
 import tempfile
 import unittest
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Any
 from unittest import skipIf
 from unittest.mock import patch
 
@@ -520,6 +521,216 @@ options:
 
 
 class TestArguments(unittest.TestCase):
+    def test_argument_default(self):
+        class Opt:
+            a: str = argument('-a', default='DEFAULT')
+            b: str = argument('-b')
+
+        self.assertEqual(as_argument(Opt.a).default, 'DEFAULT')
+
+        with self.assertRaises(ValueError):
+            _ = as_argument(Opt.b).default
+
+    def test_argument_default_inferred(self):
+        class Opt:
+            b: bool = argument('-b')
+            b1: bool = argument('-b1', action='store_true')
+            b2: bool = argument('-b2', action='store_false')
+            c1: list[str] = argument('-c1', action='append')
+            c2: list[str] = argument('-c2', action='extend')
+            c3: list[str] = argument('-c3', action='append_const')
+
+        self.assertFalse(as_argument(Opt.b).default)
+        self.assertFalse(as_argument(Opt.b1).default)
+        self.assertTrue(as_argument(Opt.b2).default)
+
+        self.assertListEqual(as_argument(Opt.c1).default, [])
+        self.assertListEqual(as_argument(Opt.c2).default, [])
+        self.assertListEqual(as_argument(Opt.c3).default, [])
+
+    def test_argument_const(self):
+        class Opt:
+            a: str = argument('-a', const='VALUE')
+            b: str = argument('-b')
+
+        self.assertEqual(as_argument(Opt.a).const, 'VALUE')
+
+        with self.assertRaises(ValueError):
+            _ = as_argument(Opt.b).const
+
+    def test_argument_const_inferred(self):
+        class Opt:
+            b1: bool = argument('-a', action='store_true')
+            b2: bool = argument('-a', action='store_false')
+
+        self.assertTrue(as_argument(Opt.b1).const)
+        self.assertFalse(as_argument(Opt.b2).const)
+
+    def test_argument_metavar(self):
+        class Opt:
+            a: str = argument('-a', metavar='VALUE')
+            b: str = argument('-b')
+
+        self.assertEqual(as_argument(Opt.a).metavar, 'VALUE')
+        self.assertIsNone(as_argument(Opt.b).metavar)
+
+    def test_argument_nargs(self):
+        class Opt:
+            a: str = argument('-a', nargs=1)
+            b: str = argument('-b', nargs='?')
+            c: str = argument('-c')
+
+        self.assertEqual(as_argument(Opt.a).nargs, 1)
+        self.assertEqual(as_argument(Opt.b).nargs, '?')
+        self.assertIsNone(as_argument(Opt.c).nargs)
+
+    def test_argument_choices(self):
+        class Opt:
+            a: str = argument('-a', choices=('A', 'B'))
+            b: str = argument('-b', choices=['A', 'B'])
+            c: str = argument('-c')
+
+        self.assertEqual(as_argument(Opt.a).choices, ('A', 'B'))
+        self.assertEqual(as_argument(Opt.b).choices, ('A', 'B'))
+        self.assertIsNone(as_argument(Opt.c).choices)
+
+    def test_argument_required(self):
+        class Opt:
+            a: str = argument('-a', required=True)
+            b: str = argument('-b')
+
+        self.assertTrue(as_argument(Opt.a).required)
+        self.assertFalse(as_argument(Opt.b).required)
+
+    def test_argument_help(self):
+        class Opt:
+            a: str = argument('-a', help='HELP')
+            b: str = argument('-b', help='{DEFAULT}', default='TEXT')
+            c: str = argument('-c')
+
+        self.assertEqual(as_argument(Opt.a).help, 'HELP')
+        self.assertEqual(as_argument(Opt.b).help, "'TEXT'")
+        self.assertIsNone(as_argument(Opt.c).help)
+
+    def test_argument_type(self):
+        def e_type(a: str):
+            raise NotImplementedError
+
+        class FType:
+            pass
+
+        class Opt:
+            a: str = argument('-a')
+            b: int = argument('-b')
+            c: float = argument('-c')
+            d: bool = argument('-d')
+            e: Any = argument('-e', type=e_type)
+            f: FType = argument('-f')
+            g: list[str] = argument('-g')
+            p: Path = argument('-p')
+
+        with self.subTest('value type'):
+            self.assertIs(as_argument(Opt.a).type, str)
+            self.assertIs(as_argument(Opt.b).type, int)
+            self.assertIs(as_argument(Opt.c).type, float)
+
+        with self.subTest('simple type'):
+            from argclz.types import bool_type
+            self.assertIs(as_argument(Opt.d).type, bool_type)
+
+        with self.subTest('user given'):
+            self.assertIs(as_argument(Opt.e).type, e_type)
+
+        with self.subTest('class case'):
+            self.assertIs(as_argument(Opt.f).type, FType)
+            self.assertIs(as_argument(Opt.p).type, Path)
+
+        with self.subTest('collection case'):
+            self.assertIs(as_argument(Opt.g).type, str)
+
+    def test_argument_type_tuple(self):
+        # we do not interpret Opt.a case as same as Opt.b case,
+        # because tuple_type does the value parsing (value splitting)
+        class Opt:
+            a: tuple[str, ...] = argument('-a')
+            b: tuple[str, ...] = argument('-b', type=tuple_type(str, ...))
+            c: tuple[str, str, str] = argument('-c', nargs=3, type=str)
+
+        with self.subTest('tuple'):
+            self.assertIs(as_argument(Opt.a).type, tuple)
+            opt = parse_args(Opt(), ['-a=TEXT'])
+            self.assertTupleEqual(opt.a, ('T', 'E', 'X', 'T'))
+
+        with self.subTest('tuple_type'):
+            self.assertIsNot(as_argument(Opt.b).type, tuple)
+            opt = parse_args(Opt(), ['-b=TEXT'])
+            self.assertTupleEqual(opt.b, ('TEXT',))
+            opt = parse_args(Opt(), ['-b=T1,T2,T3'])
+            self.assertTupleEqual(opt.b, ('T1', 'T2', 'T3'))
+
+        with self.subTest('type=str'):
+            opt = parse_args(Opt(), ['-c', 'T1', 'T2', 'T3'])
+            # noinspection PyTypeChecker
+            self.assertListEqual(opt.c, ['T1', 'T2', 'T3'])  # not a tuple
+
+    def test_argument_type_list(self):
+        class Opt:
+            a: list[str] = argument('-a')
+            b: list[str] = argument('-b', nargs='+')
+            c: list[str] = argument('-c', nargs='+', action='extend')
+            d: list[str] = var_argument('...')  # positional arguments
+
+        with self.subTest('list'):
+            self.assertIs(as_argument(Opt.a).type, str)
+            self.assertEqual(as_argument(Opt.a).kwargs['action'], 'append')
+
+            opt = parse_args(Opt(), ['-a=TEXT'])
+            self.assertListEqual(opt.a, ['TEXT'])
+
+        with self.subTest('nargs append'):
+            self.assertIs(as_argument(Opt.b).type, str)
+            self.assertEqual(as_argument(Opt.b).kwargs['action'], 'append')
+            self.assertEqual(as_argument(Opt.b).nargs, '+')
+
+            opt = parse_args(Opt(), ['-b', 'T1', 'T2', 'T3'])
+            self.assertListEqual(opt.b, [['T1', 'T2', 'T3']])
+
+        with self.subTest('nargs extend'):
+            self.assertIs(as_argument(Opt.c).type, str)
+            self.assertEqual(as_argument(Opt.c).kwargs['action'], 'extend')
+            self.assertEqual(as_argument(Opt.c).nargs, '+')
+
+            opt = parse_args(Opt(), ['-c', 'T1', 'T2', 'T3'])
+            self.assertListEqual(opt.c, ['T1', 'T2', 'T3'])
+
+        with self.subTest('var_argument'):
+            self.assertIs(as_argument(Opt.d).type, str)
+            self.assertEqual(as_argument(Opt.d).kwargs['action'], 'extend')
+            self.assertEqual(as_argument(Opt.d).nargs, '*')
+
+            opt = parse_args(Opt(), ['T1', 'T2', 'T3'])
+            self.assertListEqual(opt.d, ['T1', 'T2', 'T3'])
+
+    def test_argument_type_dict(self):
+        class Opt:
+            a: dict[str, str] = argument('-a')
+            b: dict[str, str] = argument('-b', type=dict_type(str))
+
+        with self.subTest('dict'):
+            self.assertIs(as_argument(Opt.a).type, dict)
+
+            with self.assertRaises(RuntimeError) as capture:
+                parse_args(Opt(), ['-aK=TEXT'])
+            self.assertEqual(capture.exception.args[0],
+                             "exit 2: argument -a: invalid dict value: 'K=TEXT'")
+
+        with self.subTest('dict_type'):
+            self.assertIsNot(as_argument(Opt.b).type, dict)
+            self.assertIsInstance(as_argument(Opt.b).type, dict_type)  # abstract leak
+
+            opt = parse_args(Opt(), ['-bK=TEXT'])
+            self.assertDictEqual(opt.b, {'K': 'TEXT'})
+
     # noinspection PyUnusedLocal
     def test_option_wrong_prefix(self):
         with self.assertRaises(ValueError):
