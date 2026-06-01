@@ -843,6 +843,90 @@ class TestArguments(unittest.TestCase):
             self.assertEqual(opt.a, 'TEXT')
 
 
+class ArgumentDescriptorTest(unittest.TestCase):
+    def test_replace_descriptor(self):
+        namespace = {}
+
+        class Descriptor:
+            def __get_arg__(self, instance, name: str):
+                try:
+                    return namespace[name]
+                except KeyError:
+                    pass
+
+                raise AttributeError(name)
+
+            def __set_arg__(self, instance, name: str, value):
+                namespace[name] = value
+
+            def __del_arg__(self, instance, name: str):
+                try:
+                    del namespace[name]
+                except (AttributeError, KeyError):
+                    pass
+
+        class Opt:
+            a: str = argument('-a', descriptor=Descriptor)
+
+        opt = parse_args(Opt(), ['-a=test'])
+        self.assertEqual(opt.a, 'test')
+        self.assertDictEqual(namespace, {'a': 'test'})
+
+    def test_use_case(self):
+        # It is idea proof case that shows we can do more things on the end of argument parsing.
+        # In the same case but without this approach, we might need to write hidden attribute and
+        # property, etc. The benefit of using descriptor class is that class is reusable.
+        class Descriptor:
+            def __init__(self):
+                self._file: str | None = None
+                self._content: str | None = None
+
+            def __get_arg__(self, instance, name: str):
+                if self._file is None:
+                    return None
+
+                if self._content is None:
+                    self._content = Path(self._file).read_text()
+
+                return self._content
+
+            def __set_arg__(self, instance, name: str, value):
+                self._file = value
+
+            def __del_arg__(self, instance, name: str):
+                self._file = None
+
+        class Opt:
+            a: str = argument('-a', descriptor=Descriptor())
+
+            # equivalent without descriptor
+            _b: str = argument('-b')
+            _b_content: str = None
+
+            @property
+            def b(self) -> str | None:
+                if self._b is None:
+                    return None
+
+                if self._b_content is None:
+                    self._b_content = Path(self._b).read_text()
+
+                return self._b_content
+
+        def read_text(self: Path):
+            if self.name == '123.txt':
+                return '321'
+            else:
+                raise FileNotFoundError()
+
+        with patch.object(Path, 'read_text', new=read_text):
+            opt = parse_args(Opt(), ['-a=123.txt'])
+            self.assertEqual(opt.a, '321')
+
+            opt = parse_args(Opt(), ['-b=123.txt'])
+            self.assertEqual(opt.b, '321')
+
+
 class GroupTest(unittest.TestCase):
     # XXX Is help text the only way to test argument grouping?
 

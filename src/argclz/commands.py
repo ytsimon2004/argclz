@@ -3,6 +3,7 @@ import inspect
 import sys
 from typing import Type, TypeVar, overload, Any
 
+from ._desp import ARGCLZ_NAMESPACE
 # noinspection PyProtectedMember
 from .core import (
     AbstractParser,
@@ -10,7 +11,6 @@ from .core import (
     ArgumentParserInterrupt,
     new_parser,
     set_options,
-    ARGCLZ_NAMESPACE,
 )
 
 __all__ = [

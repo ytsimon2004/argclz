@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload,
 
 from typing_extensions import Self
 
+from ._desp import ArgumentDescriptor, DefaultArgumentDescriptor
+
 if TYPE_CHECKING:
     from .validator import Validator
 
@@ -55,7 +57,6 @@ Actions = Literal[
     'boolean'
 ]
 
-ARGCLZ_NAMESPACE = '__argclz_namespace__'
 missing = object()
 
 
@@ -217,6 +218,7 @@ class Argument(object):
                  group: str | argument_group | None = None,
                  ex_group: str | None = None,
                  hidden: bool = False,
+                 descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = DefaultArgumentDescriptor,
                  **kwargs):
         """
 
@@ -256,6 +258,11 @@ class Argument(object):
         self.hidden = hidden
         self._kwargs = kwargs  # original kwargs
         self.kwargs = dict(kwargs)
+
+        self.descriptor = descriptor
+        if isinstance(descriptor, type):
+            descriptor = descriptor()
+        self._descriptor = descriptor
 
     @property
     def default(self):
@@ -348,18 +355,7 @@ class Argument(object):
                 self.__doc__ = self.help
             return self
 
-        try:
-            namespace = getattr(instance, ARGCLZ_NAMESPACE)
-        except AttributeError:
-            namespace = {}
-            setattr(instance, ARGCLZ_NAMESPACE, namespace)
-
-        try:
-            return namespace[self.attr]
-        except KeyError:
-            pass
-
-        raise AttributeError(self.attr)
+        return self._descriptor.__get_arg__(instance, self.attr)
 
     def __set__(self, instance, value):
         if (validator := self.validator) is not None:
@@ -383,20 +379,10 @@ class Argument(object):
                 if fail:
                     raise ValueError('validator fail')
 
-        try:
-            namespace = getattr(instance, ARGCLZ_NAMESPACE)
-        except AttributeError:
-            namespace = {}
-            setattr(instance, ARGCLZ_NAMESPACE, namespace)
-
-        namespace[self.attr] = value
+        self._descriptor.__set_arg__(instance, self.attr, value)
 
     def __delete__(self, instance):
-        try:
-            namespace = getattr(instance, ARGCLZ_NAMESPACE)
-            del namespace[self.attr]
-        except (AttributeError, KeyError):
-            pass
+        self._descriptor.__del_arg__(instance, self.attr)
 
     def _add_argument(self, ap: argparse._ActionsContainer, instance) -> argparse.Action:
         """Add this into `argparse.ArgumentParser`.
@@ -494,6 +480,7 @@ class Argument(object):
         kw['group'] = self._copy_group(self.group)
         kw['validator'] = self.validator
         kw['hidden'] = self.hidden
+        kw['descriptor'] = self.descriptor
         kw.update(kwargs)
 
         for k in list(kw.keys()):
@@ -557,6 +544,7 @@ def argument(*options: str,
              choices: Sequence[T] = ...,
              required: bool = False,
              hidden: bool = False,
+             descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = ...,
              help: str = ...,
              group: str | argument_group | None = None,
              metavar: str = ...) -> T:
@@ -626,6 +614,7 @@ def pos_argument(option: str,
                  type: Type | Callable[[str], T] = ...,
                  choices: Sequence[str] = ...,
                  required: bool = False,
+                 descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = ...,
                  help: str = ...) -> T:
     ...
 
@@ -663,6 +652,7 @@ def var_argument(option: str,
                  nargs: Nargs = ...,
                  action: Actions = ...,
                  type: Type | Callable[[str], T] = ...,
+                 descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = ...,
                  help: str = ...) -> list[T]:
     ...
 
