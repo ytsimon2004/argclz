@@ -455,7 +455,11 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
 
         if isinstance(value, float) and self._round:
             raise ValidatorChangeValueRequest(int(value))
+
         if not isinstance(value, int):
+            if (np := check_import('numpy')) is not None and isinstance(value, np.integer):
+                raise ValidatorChangeValueRequest(int(value))
+
             raise ValidatorFailOnTypeError(f'not an int : {value}')
 
         return self._call_validators(value)
@@ -535,6 +539,9 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             raise ValidatorChangeValueRequest(float(value))
 
         if not isinstance(value, float):
+            if (np := check_import('numpy')) is not None and isinstance(value, np.floating):
+                raise ValidatorChangeValueRequest(float(value))
+
             raise ValidatorFailOnTypeError(f'not a float : {value}')
 
         if value != value:  # is NaN
@@ -1092,3 +1099,10 @@ class AndValidatorBuilder(Validator):
 
 def element_isinstance(e, t) -> bool:
     return isinstance(t, type) and isinstance(e, t)
+
+
+def check_import(name: str):
+    try:
+        return __import__(name)
+    except ImportError:
+        return None

@@ -6,6 +6,11 @@ from unittest.mock import patch
 from argclz import *
 from argclz.core import parse_args
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 
 class TestValidator(unittest.TestCase):
     """This test case focus on lambda form of validator"""
@@ -238,6 +243,18 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'not an int : 2.2')
 
+    @unittest.skipIf(np is None, reason='no numpy installed')
+    def test_numpy_int(self):
+        class Opt:
+            a: int = argument('-a', validator.int)
+
+        opt = Opt()
+        value = np.int16(16)
+        self.assertNotIsInstance(value, int)
+        opt.a = value
+        self.assertIsInstance(opt.a, int)
+        self.assertEqual(opt.a, 16)
+
     def test_str_upper_case(self):
         class Opt:
             a: str = argument('-a', validator.str.upper(transform=True))
@@ -391,6 +408,18 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             opt.a = -10
+
+    @unittest.skipIf(np is None, reason='no numpy installed')
+    def test_numpy_float(self):
+        class Opt:
+            a: int = argument('-a', validator.float)
+
+        opt = Opt()
+        value = np.float32(3.14)
+        self.assertNotIsInstance(value, float)
+        opt.a = value
+        self.assertIsInstance(opt.a, float)
+        self.assertEqual(round(opt.a, 2), 3.14)
 
     def test_list_in_range(self):
         class Opt:

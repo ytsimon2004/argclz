@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Literal, Any
-from unittest import skipIf
 from unittest.mock import patch
 
 from argclz import *
@@ -186,7 +185,7 @@ class AsDictTest(unittest.TestCase):
             self.assertDictEqual(as_dict(ret), {'b': '10'})
             self.assertDictEqual(as_dict(main), {'a': 'Opt default', 'sub_command': Opt.Sub})
 
-    @skipIf(pl is None, reason='no polars installed')
+    @unittest.skipIf(pl is None, reason='no polars installed')
     def test_polars_data_frame_from_as_dict(self):
         from polars.testing import assert_frame_equal
         class Opt:
@@ -1180,7 +1179,7 @@ class CopyArgsTest(unittest.TestCase):
         self.assertEqual(ano.a, 'A')
         self.assertEqual(ano.b, 'C')
 
-    @skipIf(pl is None, reason='no polars installed')
+    @unittest.skipIf(pl is None, reason='no polars installed')
     def test_set_from_polars_data_frame(self):
         class Opt:
             a: int = argument('-a')
@@ -1251,7 +1250,7 @@ class CopyArgsTest(unittest.TestCase):
         ano = Opt(opt)
         self.assertEqual(ano.a, '2')
 
-    @skipIf(pl is None, reason='no polars installed')
+    @unittest.skipIf(pl is None, reason='no polars installed')
     def test_cloneable_from_dataframe(self):
         class Opt(Cloneable):
             a: str = argument('-a')
