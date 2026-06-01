@@ -421,6 +421,14 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertIsInstance(opt.a, float)
         self.assertEqual(round(opt.a, 2), 3.14)
 
+    def test_list_type(self):
+        class Opt:
+            a: list[int] = argument('-a')
+            b: list[int] = argument('-b', validator.list(int))
+
+        self.assertIs(as_argument(Opt.a).type, int)
+        self.assertIs(as_argument(Opt.b).type, int)
+
     def test_list_in_range(self):
         class Opt:
             a: list[str] = argument('-a', validator.list().length_in_range(2, None))
@@ -564,6 +572,18 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertListEqual(opt.a, ['A', 'B', 'C'])
         opt.a = ['a', 'b', 'c']
         self.assertListEqual(opt.a, ['A', 'B', 'C'])
+
+    def test_tuple_type(self):
+        class Opt:
+            a: tuple[int, int] = argument('-a')
+            b: tuple[int, int] = argument('-b', validator.tuple(int, int))
+
+        self.assertIs(as_argument(Opt.a).type, tuple)
+
+        f = as_argument(Opt.b).type
+        self.assertNotEqual(f, tuple)
+        self.assertTrue(str(f).startswith('<function tuple_type.<locals>._type at '))
+        self.assertTupleEqual(f('1,2'), (1, 2))
 
     # noinspection PyTypeChecker
     def test_tuple_length(self):
@@ -889,6 +909,18 @@ class TestValidateBuilder(unittest.TestCase):
             opt.a = {'a': '1'}
         self.assertEqual(capture.exception.args[0],
                          'wrong element type for key "a" : 1')
+
+    def test_dict_type(self):
+        class Opt:
+            a: dict[str, int] = argument('-a')
+            b: dict[str, int] = argument('-b', validator.dict(int))
+
+        self.assertIs(as_argument(Opt.a).type, dict)
+
+        f = as_argument(Opt.b).type
+        self.assertNotEqual(f, dict)
+        self.assertIsInstance(f, dict_type)
+        self.assertDictEqual(f('a=1'), {'a': 1})
 
     def test_dict_non_empty(self):
         class Opt:

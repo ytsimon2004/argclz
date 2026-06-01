@@ -48,6 +48,13 @@ def complete_arg_kwargs(self: Argument):
     from .types import dict_type
 
     if 'type' not in self.kwargs:
+        if self.validator is not None:
+            from .validator import Validator
+            if isinstance(self.validator, Validator):
+                tc = self.validator.type_caster()
+                if tc is not None:
+                    self.kwargs['type'] = tc
+
         # complete bool argument for action and default
         if self.attr_type == bool:
             _complete_arg_kwargs_for_bool(self)
@@ -63,7 +70,7 @@ def complete_arg_kwargs(self: Argument):
         elif self.kwargs['action'] in ('append', 'append_const', 'extend'):  # collection type
             _complete_arg_kwargs_for_collection(self)
 
-    elif isinstance(self.kwargs['type'], dict_type):
+    if isinstance(self.kwargs.get('type', None), dict_type):
         # TODO raise error when action is set?
         self.kwargs['action'] = dict_type.Action
 
@@ -99,7 +106,8 @@ def _complete_arg_kwargs_for_value(self: Argument):
             self.kwargs.setdefault('default', None)
 
     assert self.attr is not None
-    self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
+    if 'type' not in self.kwargs:
+        self.kwargs['type'] = caster_by_annotation(self.attr, self.attr_type)
 
 
 def _complete_arg_kwargs_for_collection(self: Argument):

@@ -68,7 +68,8 @@ class Validator:
         """(internal use) return a copy of itself."""
         return self
 
-    # TODO add feature? auto-casting, for example: (str|Path)->Path
+    def type_caster(self) -> Callable[[str], Any] | None:
+        return None
 
 
 class LambdaValidator(Validator, Generic[T]):
@@ -283,6 +284,14 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         ret._validators = [it.freeze() for it in self._validators]
         ret._allow_none = self._allow_none
         return ret
+
+    def type_caster(self) -> Callable[[str], T] | None:
+        # We return None instead of _value_type,
+        # because other functions are able to handle simple case,
+        # and its subclasses have duty to handle complex case.
+        # We do not want to guess where 'type' is introduced.
+        return None
+        # return self._value_type
 
     @overload
     def _add(self, validator: LambdaValidator[T]) -> None:
@@ -582,6 +591,13 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         ret._auto_casting = self._auto_casting
         return ret
 
+    def type_caster(self) -> Callable[[str], T] | None:
+        if self._element_type is not None:
+            from .types import list_type
+            return list_type(self._element_type)
+        else:
+            return None
+
     def length_in_range(self, a: int | None, b: int | None, /) -> Self:
         """Enforce a length range for lists"""
         match (a, b):
@@ -663,6 +679,13 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
         ret = super().freeze(self._element_type)
         ret._auto_casting = self._auto_casting
         return ret
+
+    def type_caster(self) -> Callable[[str], T] | None:
+        from .types import tuple_type
+        if self._element_type == (...,):
+            return None
+        else:
+            return tuple_type(*self._element_type)
 
     def length_in_range(self, a: int | None, b: int | None, /) -> Self:
         """Enforce a length range for tuple.
@@ -754,6 +777,10 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         ret._drop_key = self._drop_key
         ret._allow_empty = self._allow_empty
         return ret
+
+    def type_caster(self) -> Callable[[str], T] | None:
+        from .types import dict_type
+        return dict_type(self._element_type)
 
     def allow_empty(self, allow: bool = True) -> Self:
         """Allow or disallow empty lists"""
