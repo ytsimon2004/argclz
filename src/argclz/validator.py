@@ -867,7 +867,7 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
 
     def is_exists(self) -> Self:  # TODO rename to must_existed?
         """Check if path exists"""
-        self._add(lambda it: it.exists(), f'path does not exist: %s')
+        self._add(lambda it: it.exists(), f'path is not exist: %s')
         return self
 
     def is_file(self) -> Self:

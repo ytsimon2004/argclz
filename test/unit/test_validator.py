@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from typing import Any, Literal
+from unittest.mock import patch
 
 from argclz import *
 from argclz.core import parse_args
@@ -1059,6 +1060,49 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             opt.a = Path('a_folder/123.txt.backup')
+
+    def test_path_file_system(self):
+        class Opt:
+            p: Path = argument('-f', validator.path.is_exists())
+            f: Path = argument('-f', validator.path.is_file())
+            d: Path = argument('-d', validator.path.is_dir())
+
+        def exists(self):
+            return self.name == "123.txt"
+
+        def is_file(self):
+            return self.name == "123.txt"
+
+        def is_dir(self):
+            return self.name == "123"
+
+        opt = Opt()
+        with self.subTest('is_exists'):
+            with patch.object(Path, 'exists', new=exists):
+                opt.p = Path('123.txt')
+
+                with self.assertRaises(ValueError) as capture:
+                    opt.p = Path('456.txt')
+                self.assertEqual(capture.exception.args[0],
+                                 'path is not exist: 456.txt')
+
+        with self.subTest('is_file'):
+            with patch.object(Path, 'is_file', new=is_file):
+                opt.f = Path('123.txt')
+
+                with self.assertRaises(ValueError) as capture:
+                    opt.f = Path('456.txt')
+                self.assertEqual(capture.exception.args[0],
+                                 'path is not a file: 456.txt')
+
+        with self.subTest('is_dir'):
+            with patch.object(Path, 'is_dir', new=is_dir):
+                opt.d = Path('123/')
+
+                with self.assertRaises(ValueError) as capture:
+                    opt.d = Path('456/')
+                self.assertEqual(capture.exception.args[0],
+                                 'path is not a directory: 456')
 
     # noinspection PyTypeChecker
     def test_path_casting(self):
