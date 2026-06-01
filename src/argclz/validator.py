@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import EllipsisType
-from typing import Any, TypeVar, Generic, final, overload, Collection, cast, TYPE_CHECKING
+from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
 
 from typing_extensions import Self
 
@@ -27,6 +27,11 @@ class ValidatorFailOnTypeError(ValidatorFailError):
     It is used for :meth:`~argclz.validator.ValidatorBuilder.any()` to exclude some error message.
     """
     pass
+
+
+class ValidatorChangeValueRequest(ValidatorFailError):
+    def __init__(self, value):
+        self.value = value
 
 
 class ValidatorFailOnIndexError(ValidatorFailError):
@@ -147,6 +152,10 @@ class ValidatorBuilder:
         return FloatValidatorBuilder()
 
     @overload
+    def tuple(self, size: int, element_type: type[T]) -> TupleValidatorBuilder:
+        pass
+
+    @overload
     def tuple(self, *element_type: int | EllipsisType) -> TupleValidatorBuilder:
         pass
 
@@ -162,6 +171,7 @@ class ValidatorBuilder:
         overloading element_type example:
 
         * ``2``: 2-length tuple
+        * ``2, type`: 2-length type-tuple
         * ``type1, type2``: 2-length tuple with type1 at pos 0 and type2 at pos 1.
         * ``type1, None``: 2-length tuple with type1 at pos 0 and any type at pos 1.
         * ``type1, ...``: at-least-1-length tuple with type1 from pos 0 to remaining pos.
@@ -344,17 +354,70 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
         self._add(lambda it: any([text in it for text in texts]), f'str does not contain one of {texts}: "%s"')
         return self
 
-    def one_of(self, options: Collection[str]) -> StrValidatorBuilder:
+    def one_of(self, options: Sequence[str]) -> StrValidatorBuilder:
         """Check if string is one of the allow options"""
         self._add(lambda it: it in options, f'str not in allowed set {options}: "%s"')
         return self
 
+    def upper(self, transform: bool = True) -> StrValidatorBuilder:
+        """
+        Check the string is in UPPER case.
+
+        :param transform: transform the string into UPPER case instead of raising ValueError.
+        :return:
+        """
+
+        def to_upper(value: str) -> bool:
+            u = value.upper()
+            if u == value:
+                return True
+
+            if transform:
+                raise ValidatorChangeValueRequest(u)
+            else:
+                return False
+
+        self._add(to_upper, 'not in UPPER case : "%s"')
+        return self
+
+    def lower(self, transform: bool = True) -> StrValidatorBuilder:
+        """
+        Check the string is in lower case.
+
+        :param transform: transform the string into lower case instead of raising ValueError.
+        :return:
+        """
+
+        def to_lower(value: str) -> bool:
+            u = value.lower()
+            if u == value:
+                return True
+
+            if transform:
+                raise ValidatorChangeValueRequest(u)
+            else:
+                return False
+
+        self._add(to_lower, 'not in lower case : "%s"')
+        return self
+
 
 class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
-    """a int validator"""
+    """An int validator"""
 
     def __init__(self):
         super().__init__(int)
+        self._round = False
+
+    def round(self, value: bool = True) -> Self:
+        """Round the input"""
+        self._round = value
+        return self
+
+    def freeze(self) -> Self:
+        ret = super().freeze()
+        ret._round = self._round
+        return ret
 
     def in_range(self, a: int | None, b: int | None, /) -> IntValidatorBuilder:
         """Enforce a numeric range for int values"""
@@ -386,17 +449,33 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
             self._add(lambda it: it < 0, 'not a negative value : %d')
         return self
 
+    def __call__(self, value: Any) -> bool:
+        if self._check_none(value):
+            return True
+
+        if isinstance(value, float) and self._round:
+            raise ValidatorChangeValueRequest(int(value))
+        if not isinstance(value, int):
+            raise ValidatorFailOnTypeError(f'not an int : {value}')
+
+        return self._call_validators(value)
+
 
 class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
     """a float validator"""
 
     def __init__(self):
         super().__init__((int, float))
-        self.__allow_nan = False
+        self._allow_nan = False
+
+    def allow_nan(self, allow: bool = True) -> Self:
+        """Allow or disallow NaN (not a number) as a valid float"""
+        self._allow_nan = allow
+        return self
 
     def freeze(self) -> Self:
         ret = super().freeze()
-        ret.__allow_nan = self.__allow_nan
+        ret._allow_nan = self._allow_nan
         return ret
 
     def in_range(self, a: float | None, b: float | None, /) -> Self:
@@ -432,11 +511,6 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
                 raise TypeError()
         return self
 
-    def allow_nan(self, allow: bool = True) -> Self:
-        """Allow or disallow NaN (not a number) as a valid float"""
-        self.__allow_nan = allow
-        return self
-
     def positive(self, include_zero=True) -> Self:
         """Check if a float value is positive or non-negative"""
         if include_zero:
@@ -454,16 +528,22 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
         return self
 
     def __call__(self, value: Any) -> bool:
-        if not super().__call__(value):
-            return False
+        if self._check_none(value):
+            return True
+
+        if isinstance(value, int):
+            raise ValidatorChangeValueRequest(float(value))
+
+        if not isinstance(value, float):
+            raise ValidatorFailOnTypeError(f'not a float : {value}')
 
         if value != value:  # is NaN
-            if self.__allow_nan:
+            if self._allow_nan:
                 return True
             else:
                 raise ValidatorFailError('NaN')
 
-        return True
+        return self._call_validators(value)
 
 
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
@@ -476,11 +556,23 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         super().__init__()
         self._element_type = element_type
         self._allow_empty = True
+        self._auto_casting = False
+
+    def allow_empty(self, allow: bool = True) -> Self:
+        """Allow or disallow empty lists"""
+        self._allow_empty = allow
+        return self
+
+    def auto_casting(self, value: bool = True) -> Self:
+        """Allow the validator try to cast input into tuple first."""
+        self._auto_casting = value
+        return self
 
     def freeze(self) -> Self:
         ret = super().freeze()
         ret._element_type = self._element_type
         ret._allow_empty = self._allow_empty
+        ret._auto_casting = self._auto_casting
         return ret
 
     def length_in_range(self, a: int | None, b: int | None, /) -> Self:
@@ -500,11 +592,6 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
         return self
 
-    def allow_empty(self, allow: bool = True) -> Self:
-        """Allow or disallow empty lists"""
-        self._allow_empty = allow
-        return self
-
     def on_item(self, validator: Callable[[Any], bool]) -> Self:
         """Apply an additional validator to each item in the list
 
@@ -517,8 +604,11 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         if self._check_none(value):
             return True
 
-        if not isinstance(value, (tuple, list)):
-            raise ValidatorFailOnTypeError(f'not a list : {value}')
+        if not isinstance(value, list):
+            if self._auto_casting:
+                raise ValidatorChangeValueRequest(list(value))
+            else:
+                raise ValidatorFailOnTypeError(f'not a list : {value}')
 
         if not self._allow_empty and len(value) == 0:
             raise ValidatorFailError(f'empty list : {value}')
@@ -543,6 +633,8 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
                 modified_element_type = (...,)
             case (int(length), ):  # exact length
                 modified_element_type = (None,) * length
+            case (int(length), type() as t):
+                modified_element_type = (t,) * length
             case (int(length), e) if e is ...:  # at least length
                 modified_element_type = (None,) * length + (...,)
             case _:
@@ -553,9 +645,17 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
                 raise TypeError('not a type ' + str(element_type))
 
         self._element_type: tuple[Any, ...] = modified_element_type
+        self._auto_casting = False
+
+    def auto_casting(self, value: bool = True) -> Self:
+        """Allow the validator try to cast input into tuple first."""
+        self._auto_casting = value
+        return self
 
     def freeze(self) -> Self:
-        return super().freeze(self._element_type)
+        ret = super().freeze(self._element_type)
+        ret._auto_casting = self._auto_casting
+        return ret
 
     def length_in_range(self, a: int | None, b: int | None, /) -> Self:
         """Enforce a length range for tuple.
@@ -595,7 +695,10 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
             return True
 
         if not isinstance(value, tuple):
-            raise ValidatorFailOnTypeError(f'not a tuple : {value}')
+            if self._auto_casting:
+                raise ValidatorChangeValueRequest(tuple(value))
+            else:
+                raise ValidatorFailOnTypeError(f'not a tuple : {value}')
 
         if len(element_type := self._element_type) > 0:
             if element_type[-1] is ...:
@@ -659,8 +762,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
         When *complete* or *case_sensitive* is ``True``, this validator will remap the key
         based on the *key*. When *drop_key* is ``True``, this validator will drop the unexpected
-        keys, which they are not in the *keys*. **IMPORTANT** All above will modify the original
-        value without defense copying.
+        keys, which they are not in the *keys*.
 
         :param keys: a list of str or a :class:`typing.Literal`.
             Use ``None`` to keep previous allowing keyset (to overwrite other settings).
@@ -714,12 +816,15 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
         # check and remap keys
         if (key_type := self._key_type) is not None:
+            backup = None
             for k in list(value):
                 try:
                     n = key_type(k)
                 except ValueError as e:
                     if self._drop_key:
-                        value.pop(k)
+                        if backup is None:
+                            backup = dict(value)
+                        backup.pop(k)
                     else:
                         raise ValidatorFailError(f'key "{k}" is not allowed') from e
                 else:
@@ -727,7 +832,13 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                     if n != k:
                         if n in value:
                             raise ValidatorFailError(f'duplicated key : "{k}" and "{n}"')
-                        value[n] = value.pop(k)
+                        if backup is None:
+                            backup = dict(value)
+                        backup.pop(k)
+                        backup[n] = value[k]
+
+            if backup is not None:
+                raise ValidatorChangeValueRequest(backup)
 
         if (element_type := self._element_type) is not None:
             for k, element in value.items():
@@ -769,14 +880,35 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
         self._add(lambda it: it.is_dir(), f'path is not a directory: %s')
         return self
 
+    def __call__(self, value: Any) -> bool:
+        if self._check_none(value):
+            return True
+
+        if not isinstance(value, Path):
+            raise ValidatorChangeValueRequest(Path(value))
+
+        return self._call_validators(value)
+
 
 class ListItemValidatorBuilder(LambdaValidator):
     def __call__(self, value: Any) -> bool:
-        assert isinstance(value, (tuple, list))
+        assert isinstance(value, list)
 
-        for i, element in enumerate(value):
+        backup = None
+
+        for i in range(len(value)):
+            element = value[i]
+
             try:
-                fail = not super().__call__(element)
+                try:
+                    fail = not super().__call__(element)
+                except ValidatorChangeValueRequest as e:
+                    if backup is None:
+                        backup = list(value)
+                    backup[i] = e.value
+                    # skip this index, it will try again after we raise ValidatorChangeValueRequest
+                    continue
+
             except ValidatorFailOnIndexError as e:
                 raise ValidatorFailOnIndexError((i, *e.index), e.message) from e
             except BaseException as e:
@@ -784,6 +916,10 @@ class ListItemValidatorBuilder(LambdaValidator):
             else:
                 if fail:
                     raise ValidatorFailOnIndexError(i, f'validate fail : {value}')
+
+        if backup:
+            raise ValidatorChangeValueRequest(backup)
+
         return True
 
     def freeze(self) -> Self:
@@ -800,20 +936,28 @@ class TupleItemValidatorBuilder(LambdaValidator):
 
     def __call__(self, value: Any) -> bool:
         assert isinstance(value, tuple)
+
         if self._item is None:
-            for index in range(len(value)):
-                if not self.__call_on_index__(index, value):
-                    return False
-            return True
-
+            index_seq = range(len(value))
         elif isinstance(self._item, int):
-            return self.__call_on_index__(self._item, value)
-
+            index_seq = [self._item]
         else:
-            for index in self._item:
+            index_seq = self._item
+
+        backup = None
+        for index in index_seq:
+            try:
                 if not self.__call_on_index__(index, value):
                     return False
-            return True
+            except ValidatorChangeValueRequest as e:
+                if backup is None:
+                    backup = list(value)
+                backup[index] = e.value
+
+        if backup is not None:
+            raise ValidatorChangeValueRequest(tuple(backup))
+
+        return True
 
     def __call_on_index__(self, index: int, value: Any) -> bool:
         try:
@@ -823,6 +967,8 @@ class TupleItemValidatorBuilder(LambdaValidator):
 
         try:
             return super().__call__(element)
+        except ValidatorChangeValueRequest:
+            raise
         except ValidatorFailOnIndexError as e:
             raise ValidatorFailOnIndexError((index, *e.index), e.message) from e
         except BaseException as e:
@@ -892,6 +1038,8 @@ class OrValidatorBuilder(Validator):
             try:
                 if validator(value):
                     return True
+            except ValidatorChangeValueRequest:
+                raise
             except ValidatorFailOnTypeError:
                 pass
             except BaseException as e:
