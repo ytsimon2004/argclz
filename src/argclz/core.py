@@ -140,6 +140,9 @@ class AbstractParser(metaclass=abc.ABCMeta):
         :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
         :param system_exit: error raised when commandline parsed fail. default raise ``SystemExit``.
         :return: parser itself. If it has sub command, return sub parser when used.
+        :raise argparse.ArgumentError: error during parser initialization.
+        :raise SystemExit: error during parsing. It can be changed by using *system_exit* parameter.
+        :raise: any error during :meth:`AbstractParser.run`, if *parse_only* is ``False``.
         """
         parser = self.new_parser()
 
@@ -872,7 +875,7 @@ def new_parser(instance: T | Type[T], *,
                description: str = None,
                epilog: str = None,
                # parents: list[argparse.ArgumentParser] = (),
-               formatter_class: Type[argparse.HelpFormatter] = argparse.HelpFormatter,
+               formatter_class: Type[argparse.HelpFormatter] = ...,
                # prefix_chars: str = '-',
                fromfile_prefix_chars: str = None,
                # argument_default=None,
@@ -937,7 +940,8 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
 
     from .commands import get_sub_command_group
     if (sub := get_sub_command_group(instance)) is not None:
-        sub.add_parser(ap)
+        # noinspection PyProtectedMember
+        sub._add_parser(ap)
 
     # setup non-grouped arguments
     ex_groups: dict[argument_group, argparse._MutuallyExclusiveGroup] = {}

@@ -8,7 +8,6 @@ from .core import (
     AbstractParser,
     ArgumentParser,
     ArgumentParserInterrupt,
-    new_parser,
     set_options,
 )
 from .desp import ARGCLZ_NAMESPACE
@@ -29,6 +28,18 @@ class SubCommandGroup:
         self.attr = None
         self.kwargs = kwargs
         self.sub_parsers: dict[str, SubCommand] = {}
+
+    @property
+    def title(self) -> str | None:
+        return self.kwargs.get('title', None)
+
+    @property
+    def description(self) -> str | None:
+        return self.kwargs.get('description', None)
+
+    @property
+    def required(self) -> bool:
+        return self.kwargs.get('required', False)
 
     def __set_name__(self, owner, name):
         if (prev := getattr(owner, ARGCLZ_SUB_COMMANDS, None)) is not None:
@@ -71,20 +82,37 @@ class SubCommandGroup:
         except (AttributeError, KeyError):
             pass
 
-    def add_parser(self, ap: argparse.ArgumentParser):
+    def _add_parser(self, ap: argparse.ArgumentParser):
         """Add sub-commands into *ap*."""
         sb = ap.add_subparsers(**self.kwargs)
         assert self.attr is not None
         for command in self.sub_parsers.values():
-            command.add_parser(sb, main=self.attr)
+            # noinspection PyProtectedMember
+            command._add_parser(ap, sb, main=self.attr)
 
-    def __call__(self, command: str):
+    # noinspection PyOverloads
+    @overload  # this overload is used to show the actual keyword arguments.
+    def __call__(self,
+                 command: str, *,
+                 prog: str = None,
+                 usage: str = None,
+                 description: str = None,
+                 epilog: str = None,
+                 formatter_class: Type[argparse.HelpFormatter] = ...,
+                 fromfile_prefix_chars: str = None,
+                 add_help=True,
+                 allow_abbrev=True,
+                 ) -> argparse.ArgumentParser:
+        # TODO python 3.14 add keyword color and suggest_on_error
+        pass
+
+    def __call__(self, command: str, **kwargs):
         def _sub_command(sub_parser: AbstractParser | Type[AbstractParser]):
             if isinstance(sub_parser, AbstractParser) or (isinstance(sub_parser, type) and issubclass(sub_parser, AbstractParser)):
                 if command in self.sub_parsers:
                     raise RuntimeError(f'sub-command "{command}" has been used.')
 
-                self.sub_parsers[command] = SubCommand(command, sub_parser)
+                self.sub_parsers[command] = SubCommand(command, sub_parser, kwargs)
                 return sub_parser
             else:
                 if not isinstance(sub_parser, type):
@@ -95,31 +123,40 @@ class SubCommandGroup:
 
 
 class SubCommand:
-    def __init__(self, command: str, sub_parser: AbstractParser | Type[AbstractParser]):
+    def __init__(self, command: str, sub_parser: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any] = None):
         self.command = command
         self.sub_parser = sub_parser
+        self.kwargs = kwargs or {}
 
-    def add_parser(self, sb, main='main'):
+    def _add_parser(self, ap: ArgumentParser, sb, main='main'):
         """Add sub-commands into *sb*."""
-        pp = new_parser(self.sub_parser)
+        kwargs = dict(self.kwargs)
+        kwargs.setdefault('fromfile_prefix_chars', ap.fromfile_prefix_chars)
+        kwargs.setdefault('allow_abbrev', ap.allow_abbrev)
+        kwargs.setdefault('add_help', ap.add_help)
+        pp = self.sub_parser.new_parser(**kwargs)
         pp.set_defaults(**{main: self.sub_parser})
 
-        description = self.sub_parser.DESCRIPTION
-        if callable(description):
-            description = description()
+        kwargs.pop('usage', None)
+        kwargs.pop('epilog', None)
+        kwargs.pop('description', None)
+        kwargs.pop('add_help', None)
+        kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
+        assert 'parents' not in kwargs
 
-        sb.add_parser(self.command, help=description, parents=[pp], add_help=False)
+        sb.add_parser(
+            self.command,
+            help=pp.description,
+            usage=pp.usage,
+            epilog=pp.epilog,
+            description=pp.description,
+            parents=[pp],
+            add_help=False,
+            **kwargs
+        )
 
 
-# noinspection PyOverloads
-@overload  # this overload is used to show the actual keyword arguments.
-def sub_command_group(*, title: str = ...,
-                      description: str = ...,
-                      required: bool = ...):
-    pass
-
-
-def sub_command_group(**kwargs):
+def sub_command_group(title: str = None, description: str = None, *, required: bool = False, **kwargs):
     """
     Create a sub-commands group.
 
@@ -145,7 +182,14 @@ def sub_command_group(**kwargs):
 
     where the parameter ``parent`` refer to its outer ``AbstractParser`` (e.g. ``Example`` in above example).
 
-    **parsing**
+    **Parser properties**
+
+    The subparser will be created via Sub command class's :meth:`~argclz.core.AbstractParser.new_parser`.
+    Additionally, sub-parser's properties will inherit from parent parser's properties, including
+    ``add_help``, ``fromfile_prefix_chars`` and ``allow_abbrev``. Unless user want sub-parser specific behavior that
+    is different from parent parser, user has to override sub-parser's :meth:`~argclz.core.AbstractParser.new_parser`.
+
+    **Command line parsing**
 
     When :meth:`~argclz.core.AbstractParser.main` is invoked and sub command is called,
     the method will return instance of the corresponding sub command and the command group
@@ -157,8 +201,12 @@ def sub_command_group(**kwargs):
     ... assert isinstance(ret, Example.SubCommand)
     ... assert main.command_group is Example.SubCommand
 
+    :param title: group title
+    :param description: group description
+    :param required: is sub command required?
+    :param kwargs: other keyword parameters pass to :meth:`~argclz.core.AbstractParser.new_parser`.
     """
-    return SubCommandGroup(**kwargs)
+    return SubCommandGroup(title=title, description=description, required=required, **kwargs)
 
 
 def get_sub_command_group(instance) -> SubCommandGroup | None:
@@ -216,7 +264,8 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
     group = SubCommandGroup(title='commands')
     group.attr = 'main'
     group.sub_parsers = {cmd: SubCommand(cmd, pp) for cmd, pp in parsers.items()}
-    group.add_parser(ap)
+    # noinspection PyProtectedMember
+    group._add_parser(ap)
 
     return ap
 

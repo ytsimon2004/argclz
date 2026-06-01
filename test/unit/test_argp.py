@@ -478,6 +478,9 @@ options:
         class Main(AbstractParser):
             h: int = argument('-h')
 
+        # conflict with ArgumentParser(add_help)
+        # The error is raised during parser initialization phase rather parsing phase,
+        # so argparse.ArgumentError is raised.
         with self.assertRaises(argparse.ArgumentError):
             Main().main(['-h=1'])
 
@@ -841,6 +844,15 @@ class TestArguments(unittest.TestCase):
             self.assertEqual(opt.a, 'VALUE')
             opt = parse_args(Opt(), ['-a=TEXT'])
             self.assertEqual(opt.a, 'TEXT')
+
+    def test_unknown_argument(self):
+        class Opt:
+            a: str = argument('-a', default='default')
+
+        with self.assertRaises(RuntimeError) as capture:
+            parse_args(Opt(), ['-b'])
+        self.assertEqual(capture.exception.args[0],
+                         'exit 2: unrecognized arguments: -b')
 
 
 class ArgumentDescriptorTest(unittest.TestCase):

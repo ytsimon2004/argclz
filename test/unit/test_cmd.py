@@ -1,8 +1,11 @@
+import contextlib
+import io
+import re
 import unittest
 
 from argclz import *
 from argclz.commands import parse_command_args, new_command_parser, get_sub_command_group
-from argclz.core import print_help
+from argclz.core import print_help, new_parser, parse_args
 
 
 class CommandParserTest(unittest.TestCase):
@@ -128,6 +131,21 @@ class CommandParserClassTest(unittest.TestCase):
             self.assertIsNone(main.sub_command)
             self.assertIsInstance(ret, P)
             self.assertIsNone(result)  # because parse_only=True
+
+    def test_sub_command_unknown_argument(self):
+        class P(AbstractParser):
+            a: str = argument('-a')
+
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                b: str = argument('-b')
+
+        with self.assertRaises(RuntimeError) as capture:
+            parse_args(P(), ['a', '-c'])
+        self.assertEqual(capture.exception.args[0],
+                         'exit 2: unrecognized arguments: -c')
 
     def test_sub_command_init_with_parent(self):
         result = None
@@ -274,6 +292,38 @@ class CommandParserClassTest(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'sub-command "a" has been used.')
 
+    def test_sub_parser_inherit_parent_parser_kwargs(self):
+        # there are two properties, fromfile_prefix_chars and allow_abbrev,
+        # will be inherited from parent parser.
+        # Here we only test allow_abbrev only.
+        enable_allow_abbrev = True
+
+        class Parent(AbstractParser):
+            a: str = argument('--a-long-name-option')
+
+            sub_command = sub_command_group()
+
+            @sub_command('a')
+            class Sub(AbstractParser):
+                o: str = argument('--other-long-name-option')
+
+            @classmethod
+            def new_parser(cls, **kwargs):
+                return new_parser(cls, **kwargs, allow_abbrev=enable_allow_abbrev)
+
+        with self.subTest('enable'):
+            enable_allow_abbrev = True
+            ret = Parent().main(['a', '--other=TEXT'], system_exit=RuntimeError)
+            self.assertIsInstance(ret, Parent.Sub)
+            self.assertEqual(ret.o, 'TEXT')
+
+        with self.subTest('disable'):
+            enable_allow_abbrev = False
+            with self.assertRaises(RuntimeError) as capture:
+                Parent().main(['a', '--other=TEXT'], system_exit=RuntimeError)
+            self.assertEqual(capture.exception.args[0],
+                             'unrecognized arguments: --other=TEXT')
+
 
 class UtilMethodTest(unittest.TestCase):
     def test_get_sub_command_group(self):
@@ -368,6 +418,68 @@ title:
     b         sub command b
 
 epilog
+""")
+
+    def test_sub_cmd_print_help(self):
+        class P(AbstractParser):
+            DESCRIPTION = 'parent description'
+            EPILOG = 'parent epilog'
+
+            sub_command = sub_command_group(title='title', description='commands description')
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                DESCRIPTION = 'sub command a'
+                EPILOG = 'sub command a epilog'
+                a: str = argument('-a', default='default P1', help='sub command a -a help')
+
+            @sub_command('b')
+            class P2(AbstractParser):
+                DESCRIPTION = 'sub command b'
+                EPILOG = 'sub command b epilog'
+                a: str = argument('-a', default='default P2', help='sub command b -a help')
+
+        def get_buffer_value(output):
+            return re.sub(r'usage: .*\.py', 'usage: run.py', output.getvalue())
+
+        with self.subTest('parent case'):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                P().main(['-h'], parse_only=True)
+
+                self.assertEqual(get_buffer_value(buf), """\
+usage: run.py [-h] {a,b} ...
+
+parent description
+
+options:
+  -h, --help  show this help message and exit
+
+title:
+  commands description
+
+  {a,b}
+    a         sub command a
+    b         sub command b
+
+parent epilog
+""")
+
+        with self.subTest('subcmd case'):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                P().main(['a', '-h'], parse_only=True)
+
+                self.assertEqual(get_buffer_value(buf), """\
+usage: run.py a [-h] [-a A]
+
+sub command a
+
+options:
+  -h, --help  show this help message and exit
+  -a A        sub command a -a help (default: 'default P1')
+
+sub command a epilog
 """)
 
 
