@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from argclz import *
 from argclz.clone import Cloneable
-from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser, set_options, ArgumentParser
+from argclz.core import foreach_arguments, with_defaults, as_dict, parse_args, copy_argument, new_parser, set_options, ArgumentParser, Argument
 
 try:
     import polars as pl
@@ -868,6 +868,8 @@ class ArgumentDescriptorTest(unittest.TestCase):
         class Opt:
             a: str = argument('-a', descriptor=Descriptor)
 
+        self.assertIsInstance(as_argument(Opt.a).descriptor, Descriptor)
+
         opt = parse_args(Opt(), ['-a=test'])
         self.assertEqual(opt.a, 'test')
         self.assertDictEqual(namespace, {'a': 'test'})
@@ -876,42 +878,67 @@ class ArgumentDescriptorTest(unittest.TestCase):
         # It is idea proof case that shows we can do more things on the end of argument parsing.
         # In the same case but without this approach, we might need to write hidden attribute and
         # property, etc. The benefit of using descriptor class is that class is reusable.
-        class Descriptor:
-            def __init__(self):
-                self._file: str | None = None
-                self._content: str | None = None
+        from argclz.desp import DefaultArgumentDescriptor
 
+        class Descriptor(DefaultArgumentDescriptor):
             def __get_arg__(self, instance, name: str):
-                if self._file is None:
+                file = super().__get_arg__(instance, name)
+                if file is None:
                     return None
 
-                if self._content is None:
-                    self._content = Path(self._file).read_text()
+                content_attr = f'__{name}_content'
+                try:
+                    content = super().__get_arg__(instance, content_attr)
+                except AttributeError:
+                    content = Path(file).read_text()
+                    self.__set_arg__(instance, content_attr, content)
 
-                return self._content
+                return content
 
-            def __set_arg__(self, instance, name: str, value):
-                self._file = value
+            @classmethod
+            def clear_content(cls, instance, arg: Argument | Any):
+                # Use Any on *arg* type to avoid using as_argument() on caller side
+                # It skips hinter complain and additional import.
+                # However, we still need type checking.
+                if not isinstance(arg, Argument):
+                    raise TypeError('not an argument')
 
-            def __del_arg__(self, instance, name: str):
-                self._file = None
+                descriptor = arg.descriptor
+                if not isinstance(descriptor, Descriptor):
+                    raise RuntimeError('argument does have correct descriptor')
+
+                content_attr = f'__{arg.attr}_content'
+                descriptor.__set_arg__(instance, content_attr, None)
+
+        # a convenient function
+        def file_argument(*options, **kwargs) -> str:
+            return argument(*options, **kwargs, descriptor=Descriptor())
 
         class Opt:
-            a: str = argument('-a', descriptor=Descriptor())
+            a: str = file_argument('-a')
+
+            def clear_a_content(self):
+                Descriptor.clear_content(self, Opt.a)
 
             # equivalent without descriptor
             _b: str = argument('-b')
-            _b_content: str = None
+            _b_content: str | None
 
             @property
             def b(self) -> str | None:
                 if self._b is None:
                     return None
 
-                if self._b_content is None:
-                    self._b_content = Path(self._b).read_text()
+                try:
+                    content = self._b_content
+                except AttributeError:
+                    content = Path(self._b).read_text()
+                    self._b_content = content
 
-                return self._b_content
+                return content
+
+            def clear_b_content(self):
+                self._b_content = None
 
         def read_text(self: Path):
             if self.name == '123.txt':
@@ -922,9 +949,13 @@ class ArgumentDescriptorTest(unittest.TestCase):
         with patch.object(Path, 'read_text', new=read_text):
             opt = parse_args(Opt(), ['-a=123.txt'])
             self.assertEqual(opt.a, '321')
+            opt.clear_a_content()
+            self.assertIsNone(opt.a)
 
             opt = parse_args(Opt(), ['-b=123.txt'])
             self.assertEqual(opt.b, '321')
+            opt.clear_b_content()
+            self.assertIsNone(opt.b)
 
 
 class GroupTest(unittest.TestCase):

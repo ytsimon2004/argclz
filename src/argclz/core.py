@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload,
 
 from typing_extensions import Self
 
-from ._desp import ArgumentDescriptor, DefaultArgumentDescriptor
+from .desp import ArgumentDescriptor, DefaultArgumentDescriptor
 
 if TYPE_CHECKING:
     from .validator import Validator
@@ -259,10 +259,10 @@ class Argument(object):
         self._kwargs = kwargs  # original kwargs
         self.kwargs = dict(kwargs)
 
-        self.descriptor = descriptor
+        self._descriptor = descriptor  # original kwargs
         if isinstance(descriptor, type):
             descriptor = descriptor()
-        self._descriptor = descriptor
+        self.descriptor: ArgumentDescriptor = descriptor
 
     @property
     def default(self):
@@ -355,17 +355,17 @@ class Argument(object):
                 self.__doc__ = self.help
             return self
 
-        return self._descriptor.__get_arg__(instance, self.attr)
+        return self.descriptor.__get_arg__(instance, self.attr)
 
     def __set__(self, instance, value):
         if (validator := self.validator) is not None:
             from .validator import argument_validating
             value = argument_validating(value, validator)
 
-        self._descriptor.__set_arg__(instance, self.attr, value)
+        self.descriptor.__set_arg__(instance, self.attr, value)
 
     def __delete__(self, instance):
-        self._descriptor.__del_arg__(instance, self.attr)
+        self.descriptor.__del_arg__(instance, self.attr)
 
     def _add_argument(self, ap: argparse._ActionsContainer, instance) -> argparse.Action:
         """Add this into `argparse.ArgumentParser`.
@@ -463,7 +463,7 @@ class Argument(object):
         kw['group'] = self._copy_group(self.group)
         kw['validator'] = self.validator
         kw['hidden'] = self.hidden
-        kw['descriptor'] = self.descriptor
+        kw['descriptor'] = self._descriptor
         kw.update(kwargs)
 
         for k in list(kw.keys()):
