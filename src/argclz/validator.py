@@ -14,11 +14,44 @@ if TYPE_CHECKING:
 T = TypeVar('T')
 
 
+def argument_validating(value: T, validator: Callable[[T], bool]) -> T:
+    """
+    Top level argument value validating function.
+
+    :param value: input value
+    :param validator: validator.
+    :return: validated input.
+    :raise ValueError: when validation fail.
+    """
+    try:
+        fail = True
+
+        while True:
+            try:
+                fail = not validator(value)
+                break
+            except ValidatorChangeValueRequest as request:
+                value = request.value
+                continue
+
+    except ValidatorFailError:
+        raise
+    except BaseException as e:
+        raise ValueError('validation failed') from e
+    else:
+        if fail:
+            raise ValueError('validation failed')
+
+    return value
+
+
 class ValidatorFailError(ValueError):
     """
     A special ValueError used in this module.
     """
-    pass
+
+    def __init__(self, message: str = 'validation failed'):
+        super().__init__(message)
 
 
 class ValidatorFailOnTypeError(ValidatorFailError):
@@ -26,16 +59,44 @@ class ValidatorFailOnTypeError(ValidatorFailError):
     A special ValidatorFailError that is raised when type validation failure.
     It is used for :meth:`~argclz.validator.ValidatorBuilder.any()` to exclude some error message.
     """
-    pass
+
+    def __init__(self, value, expected_type, message: str = None):
+        self.value = value
+        self.expected_type = expected_type
+        if message is None:
+            name = expected_type.__name__ if isinstance(expected_type, type) else str(expected_type)
+            message = f'not {name}: {value}'
+        super().__init__(message)
+
+    def on_index(self, index: int | str | tuple[int | str, ...]):
+        return ValidatorFailOnIndexError(index, self.args[0])
 
 
 class ValidatorChangeValueRequest(ValidatorFailError):
+    """
+    A special ValidatorFailError that is used to change the input value.
+    It is handled by :func:`argument_validating`.
+    """
+
     def __init__(self, value):
+        """
+        :param value: new input value
+        """
         self.value = value
 
 
 class ValidatorFailOnIndexError(ValidatorFailError):
-    def __init__(self, index: int | str | tuple[int | str, ...], raw_message: str):
+    """
+    A special ValidatorFailError that carries the position information,
+    likes index in sequence, and key in dictionary.
+    """
+
+    def __init__(self, index: int | str | tuple[int | str, ...], raw_message='validation failed'):
+        """
+
+        :param index: index or key, use tuple to indicate a nested index.
+        :param raw_message: root cause message
+        """
         if isinstance(index, int):
             index = (index,)
         self.index = index
@@ -61,6 +122,7 @@ class Validator:
         :param value: type-casted value.
         :return: True if *value* pass the validation.
         :raise ValueError: when *value* does not pass the validation.
+            It gives fail reason.
         """
         return True
 
@@ -96,7 +158,7 @@ class LambdaValidator(Validator, Generic[T]):
             raise
         except BaseException as e:
             if self._message is None:
-                raise ValidatorFailError('validate failure') from e
+                raise ValidatorFailError() from e
             else:
                 raise ValidatorFailError(self.__message(value)) from e
         else:
@@ -258,9 +320,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
 
         # noinspection PyTypeHints
         if self._value_type is not None and not isinstance(value, self._value_type):
-            vt = self._value_type
-            vt_name = vt.__name__ if isinstance(vt, type) else str(vt)
-            raise ValidatorFailOnTypeError(f'not instance of {vt_name} : {value}')
+            raise ValidatorFailOnTypeError(value, self._value_type)
 
         return self._call_validators(value)
 
@@ -269,7 +329,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
             if self._allow_none:
                 return True
             else:
-                raise ValidatorFailError('None')
+                raise ValidatorFailError('None value')
         return False
 
     def _call_validators(self, value):
@@ -469,7 +529,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
             if (np := check_import('numpy')) is not None and isinstance(value, np.integer):
                 raise ValidatorChangeValueRequest(int(value))
 
-            raise ValidatorFailOnTypeError(f'not an int : {value}')
+            raise ValidatorFailOnTypeError(value, int)
 
         return self._call_validators(value)
 
@@ -551,7 +611,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             if (np := check_import('numpy')) is not None and isinstance(value, np.floating):
                 raise ValidatorChangeValueRequest(float(value))
 
-            raise ValidatorFailOnTypeError(f'not a float : {value}')
+            raise ValidatorFailOnTypeError(value, float)
 
         if value != value:  # is NaN
             if self._allow_nan:
@@ -631,7 +691,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
             if self._auto_casting:
                 raise ValidatorChangeValueRequest(list(value))
             else:
-                raise ValidatorFailOnTypeError(f'not a list : {value}')
+                raise ValidatorFailOnTypeError(value, list)
 
         if not self._allow_empty and len(value) == 0:
             raise ValidatorFailError(f'empty list : {value}')
@@ -639,7 +699,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         if (element_type := self._element_type) is not None:
             for i, element in enumerate(value):
                 if not element_isinstance(element, element_type):
-                    raise ValidatorFailError(f'wrong element type at {i} : {element}')
+                    raise ValidatorFailOnTypeError(element, element_type).on_index(i)
 
         return self._call_validators(value)
 
@@ -665,7 +725,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
         for et in modified_element_type:
             if et is not None and et is not ... and not isinstance(et, type):
-                raise TypeError('not a type ' + str(element_type))
+                raise TypeError('not a type: ' + str(element_type))
 
         self._element_type: tuple[Any, ...] = modified_element_type
         self._auto_casting = False
@@ -728,23 +788,23 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
             if self._auto_casting:
                 raise ValidatorChangeValueRequest(tuple(value))
             else:
-                raise ValidatorFailOnTypeError(f'not a tuple : {value}')
+                raise ValidatorFailOnTypeError(value, tuple)
 
         if len(element_type := self._element_type) > 0:
             if element_type[-1] is ...:
                 at_least_length = len(element_type) - 1
                 if len(value) < at_least_length:
-                    raise ValidatorFailError(f'length less than {at_least_length} : {value}')
+                    raise ValidatorFailError(f'length less than {at_least_length}: {value}')
 
                 for i, e, t in zip(range(at_least_length), value, element_type):
                     if t is not None and not element_isinstance(e, t):
-                        raise ValidatorFailError(f'wrong element type at {i} : {e}')
+                        raise ValidatorFailOnTypeError(e, element_type).on_index(i)
 
                 if at_least_length > 0:
                     if (last_element_type := element_type[at_least_length - 1]) is not None:
                         for i, e in zip(range(at_least_length, len(value)), value[at_least_length:]):
                             if not element_isinstance(e, last_element_type):
-                                raise ValidatorFailError(f'wrong element type at {i} : {e}')
+                                raise ValidatorFailOnTypeError(e, last_element_type).on_index(i)
 
             else:
                 if len(value) != len(element_type):
@@ -752,7 +812,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
                 for i, e, t in zip(range(len(element_type)), value, element_type):
                     if t is not None and not element_isinstance(e, t):
-                        raise ValidatorFailError(f'wrong element type at {i} : {e}')
+                        raise ValidatorFailOnTypeError(e, t).on_index(i)
 
         return self._call_validators(value)
 
@@ -762,7 +822,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
     def __init__(self, element_type: type[T] | None = None):
         if element_type is not None and not isinstance(element_type, type):
-            raise TypeError('not a type ' + str(element_type))
+            raise TypeError('not a type: ' + str(element_type))
 
         super().__init__()
         self._element_type = element_type
@@ -843,10 +903,10 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
             return True
 
         if not isinstance(value, dict):
-            raise ValidatorFailOnTypeError(f'not a dict : {value}')
+            raise ValidatorFailOnTypeError(value, dict)
 
         if not self._allow_empty and len(value) == 0:
-            raise ValidatorFailError(f'empty dict : {value}')
+            raise ValidatorFailError(f'empty dict: {value}')
 
         # check and remap keys
         if (key_type := self._key_type) is not None:
@@ -865,7 +925,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                     assert n is not None
                     if n != k:
                         if n in value:
-                            raise ValidatorFailError(f'duplicated key : "{k}" and "{n}"')
+                            raise ValidatorFailError(f'duplicated key: "{k}" and "{n}"')
                         if backup is None:
                             backup = dict(value)
                         backup.pop(k)
@@ -877,7 +937,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         if (element_type := self._element_type) is not None:
             for k, element in value.items():
                 if not element_isinstance(element, element_type):
-                    raise ValidatorFailError(f'wrong element type for key "{k}" : {element}')
+                    raise ValidatorFailOnTypeError(element, element_type).on_index(k)
 
         return self._call_validators(value)
 
@@ -901,7 +961,7 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
 
     def is_exists(self) -> Self:  # TODO rename to must_existed?
         """Check if path exists"""
-        self._add(lambda it: it.exists(), f'path is not exist: %s')
+        self._add(lambda it: it.exists(), f'path does not exist: %s')
         return self
 
     def is_file(self) -> Self:
@@ -949,7 +1009,7 @@ class ListItemValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(i, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(i, f'validate fail : {value}')
+                    raise ValidatorFailOnIndexError(i, f'validation failed: {value}')
 
         if backup:
             raise ValidatorChangeValueRequest(backup)
@@ -1027,7 +1087,7 @@ class DictKeyValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(k, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(k, f'validate fail : {value}')
+                    raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
         return True
 
     def freeze(self) -> Self:
@@ -1049,7 +1109,7 @@ class DictItemValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(k, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(k, f'validate fail : {value}')
+                    raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
         return True
 
     def freeze(self) -> Self:

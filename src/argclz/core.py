@@ -359,25 +359,8 @@ class Argument(object):
 
     def __set__(self, instance, value):
         if (validator := self.validator) is not None:
-            from .validator import Validator, ValidatorFailError, ValidatorChangeValueRequest
-            try:
-                fail = True
-
-                while True:
-                    try:
-                        fail = not validator(value)
-                        break
-                    except ValidatorChangeValueRequest as request:
-                        value = request.value
-                        continue
-
-            except ValidatorFailError:
-                raise
-            except BaseException as e:
-                raise ValueError('validator fail') from e
-            else:
-                if fail:
-                    raise ValueError('validator fail')
+            from .validator import argument_validating
+            value = argument_validating(value, validator)
 
         self._descriptor.__set_arg__(instance, self.attr, value)
 

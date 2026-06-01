@@ -241,7 +241,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.b = 2.2
         self.assertEqual(capture.exception.args[0],
-                         'not an int : 2.2')
+                         'not int: 2.2')
 
     @unittest.skipIf(np is None, reason='no numpy installed')
     def test_numpy_int(self):
@@ -554,7 +554,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.b = ('A', 'B')
         self.assertEqual(capture.exception.args[0],
-                         "not a list : ('A', 'B')")
+                         "not list: ('A', 'B')")
 
         ## set does not preserve ordering?
         # opt.a = {'A', 'B'}
@@ -872,7 +872,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.b = ['A', 'B']
         self.assertEqual(capture.exception.args[0],
-                         "not a tuple : ['A', 'B']")
+                         "not tuple: ['A', 'B']")
 
         ## set does not preserve ordering?
         # opt.a = {'A', 'B'}
@@ -908,7 +908,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'a': '1'}
         self.assertEqual(capture.exception.args[0],
-                         'wrong element type for key "a" : 1')
+                         'at key a, not int: 1')
 
     def test_dict_type(self):
         class Opt:
@@ -933,7 +933,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {}
         self.assertEqual(capture.exception.args[0],
-                         'empty dict : {}')
+                         'empty dict: {}')
 
     def test_dict_on_restricted_keyset(self):
         class Opt:
@@ -1060,7 +1060,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'A': 1, 'AA': 2, 'AAA': 3}
         self.assertEqual(capture.exception.args[0],
-                         'duplicated key : "A" and "AAA"')
+                         'duplicated key: "A" and "AAA"')
 
     def test_dict_with_key_checking(self):
         class Opt:
@@ -1073,7 +1073,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'B': 1}
         self.assertEqual(capture.exception.args[0],
-                         "at key B, validate fail : {'B': 1}")
+                         "at key B, validation failed: {'B': 1}")
 
     def test_dict_with_key_checking_with_message(self):
         class Opt:
@@ -1145,7 +1145,7 @@ class TestValidateBuilder(unittest.TestCase):
                 with self.assertRaises(ValueError) as capture:
                     opt.p = Path('456.txt')
                 self.assertEqual(capture.exception.args[0],
-                                 'path is not exist: 456.txt')
+                                 'path does not exist: 456.txt')
 
         with self.subTest('is_file'):
             with patch.object(Path, 'is_file', new=is_file):
@@ -1420,11 +1420,11 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = [([[0]])]
         self.assertEqual(capture.exception.args[0],
-                         'at index 0, not a tuple : [[0]]')
+                         'at index 0, not tuple: [[0]]')
         with self.assertRaises(ValueError) as capture:
             opt.a = [(0, [0])]
         self.assertEqual(capture.exception.args[0],
-                         'at index (0, 1, 0), not a list : 0')
+                         'at index (0, 1, 0), not list: 0')
 
     def test_tuple_on_multiple_item(self):
         class Opt:
@@ -1481,7 +1481,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('0', '1')
         self.assertEqual(capture.exception.args[0],
-                         'at index 0, not an int : 0')
+                         'at index 0, not int: 0')
 
     # noinspection PyUnusedLocal
     def test_tuple_type_but_validator(self):
