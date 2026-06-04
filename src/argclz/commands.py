@@ -3,6 +3,7 @@ import inspect
 import sys
 from typing import Type, TypeVar, overload, Any
 
+from . import i18n
 # noinspection PyProtectedMember
 from .core import (
     AbstractParser,
@@ -84,7 +85,11 @@ class SubCommandGroup:
 
     def _add_parser(self, ap: argparse.ArgumentParser):
         """Add sub-commands into *ap*."""
-        sb = ap.add_subparsers(**self.kwargs)
+        kwargs = dict(self.kwargs)
+        kwargs['title'] = i18n.gettext(kwargs.pop('title', None))
+        kwargs['description'] = i18n.gettext(kwargs.pop('description', None))
+
+        sb = ap.add_subparsers(**kwargs)
         assert self.attr is not None
         for command in self.sub_parsers.values():
             # noinspection PyProtectedMember
@@ -255,13 +260,13 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
     :return:
     """
     ap = ArgumentParser(
-        usage=usage,
-        description=description,
+        usage=i18n.gettext(usage),
+        description=i18n.gettext(description),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         **kwargs
     )
 
-    group = SubCommandGroup(title='commands')
+    group = SubCommandGroup(title=i18n.gettext('commands'))
     group.attr = 'main'
     group.sub_parsers = {cmd: SubCommand(cmd, pp) for cmd, pp in parsers.items()}
     # noinspection PyProtectedMember

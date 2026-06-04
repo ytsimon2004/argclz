@@ -1,4 +1,7 @@
+import gettext
+import re
 import unittest
+import unittest.mock
 from typing import Literal
 
 from argclz import *
@@ -673,6 +676,158 @@ usage: run.py [-h] [-a A=B,...]
 options:
   -h, --help  show this help message and exit
   -a A=B,...  a dict
+""")
+
+
+class I18nHelpTest(unittest.TestCase):
+    class Translation(gettext.NullTranslations):
+        D1 = {
+            'usage': '用法',
+            'description': '描述',
+            'options': '選項',
+            'default': '預設',
+            'epilog text': '結語文字',
+            'epilog': '結語',
+            'more text': '更多文字',
+            'text': '文字',
+            'sub command': '子命令',
+            'commands': '命令',
+            'command': '命令',
+            'positional arguments': '位置參數'
+        }
+        D2 = {
+            '.': '。',
+            'show this help message and exit': '顯示該幫助文字後離開'
+        }
+        D3 = {
+            r'a text for option (\w+)': r'一段關於選項 \1 的文字',
+            r'text for (\w+)': r'關於 \1 的文字',
+        }
+
+        def gettext(self, message):
+            for t1, t2 in self.D3.items():
+                message = re.sub(t1, t2, message)
+            for t1, t2 in self.D2.items():
+                message = message.replace(t1, t2)
+            for t1, t2 in self.D1.items():
+                message = re.sub(r'(?i)' + t1, t2, message)
+            return message
+
+    @classmethod
+    def setUpClass(cls):
+        translation = cls.Translation()
+        patchers = [
+            unittest.mock.patch('gettext.gettext', translation.gettext),
+            unittest.mock.patch('argparse._', translation.gettext),
+            unittest.mock.patch('argclz.i18n._', translation.gettext),
+        ]
+        for patcher in patchers:
+            patcher.start()
+            cls.addClassCleanup(patcher.stop)
+
+    def test_translation(self):
+        _ = gettext.gettext
+
+        self.assertEqual(_('usage'), '用法')
+
+    def test_print_help(self):
+        class Opt(AbstractParser):
+            DESCRIPTION = 'Opt description'
+            EPILOG = 'Opt epilog text'
+            a: bool = argument('-a', help='a text for option a')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+用法: run.py [-h] [-a]
+
+Opt 描述
+
+選項:
+  -h, --help  顯示該幫助文字後離開
+  -a          一段關於選項 a 的文字 (預設: False)
+
+Opt 結語文字
+""")
+
+    def test_print_help_sub_commands(self):
+        class P(AbstractParser):
+            DESCRIPTION = 'description'
+            EPILOG = 'epilog text'
+
+            sub_command = sub_command_group(title='commands', description='commands description')
+
+            @sub_command('a')
+            class P1(AbstractParser):
+                DESCRIPTION = 'sub command a'
+                a: str = argument('-a', default='default P1')
+
+            @sub_command('b')
+            class P2(AbstractParser):
+                DESCRIPTION = 'sub command b'
+                a: str = argument('-a', default='default P2')
+
+        self.assertEqual(print_help(P, None, prog='run.py'), """\
+用法: run.py [-h] {a,b} ...
+
+描述
+
+選項:
+  -h, --help  顯示該幫助文字後離開
+
+命令:
+  命令 描述
+
+  {a,b}
+    a         子命令 a
+    b         子命令 b
+
+結語文字
+""")
+
+    def test_print_help_dispatch_commands(self):
+        from argclz.dispatch import dispatch, Dispatch
+        class Opt(AbstractParser, Dispatch):
+            DESCRIPTION = 'description'
+            EPILOG = 'epilog text'
+
+            c: str = pos_argument('cmd')
+            a: list[str] = var_argument('args')
+
+            @dispatch('A', 'a')
+            def run_a(self):
+                """
+                text for A.
+
+                more text
+                """
+                pass
+
+            @dispatch('B')
+            def run_b(self):
+                """
+                text for B.
+
+                more text
+                """
+                pass
+
+        self.assertEqual(print_help(Opt, None, prog='run.py'), """\
+用法: run.py [-h] cmd [args ...]
+
+描述
+
+位置參數:
+  cmd
+  args
+
+選項:
+  -h, --help  顯示該幫助文字後離開
+
+命令:
+  A (a)       關於 A 的文字。
+  B           關於 B 的文字。
+
+結語文字
 """)
 
 

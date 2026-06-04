@@ -685,8 +685,8 @@ class PrintHelpTest(unittest.TestCase):
 
         self.assertEqual(Opt.build_command_usages(), """\
 Commands:
-  A (a)             text for A.
-  B                 text for B.""")
+  A (a)       text for A.
+  B           text for B.""")
 
     def test_build_command_with_custom_usages(self):
         class Opt(SimpleDispatch):
@@ -700,7 +700,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(), """\
 Commands:
-  A B C D           text for A.""")
+  A B C D     text for A.""")
 
     def test_build_command_usages_with_empty_doc(self):
         class Opt(SimpleDispatch):
@@ -724,7 +724,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A A B             text for A.""")
+  A A B       text for A.""")
 
     def test_build_command_usages_with_optional_para(self):
         class Opt(SimpleDispatch):
@@ -735,7 +735,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A A [B]           text for A.""")
+  A A [B]     text for A.""")
 
     def test_build_command_usages_with_keyword_para(self):
         class Opt(SimpleDispatch):
@@ -746,7 +746,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A A [B=]          text for A.""")
+  A A [B=]    text for A.""")
 
     def test_build_command_usages_with_var_para(self):
         class Opt(SimpleDispatch):
@@ -757,7 +757,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A A *B **C        text for A.""")
+  A A *B **C    text for A.""")
 
     def test_build_command_with_literal_para(self):
         class Opt(SimpleDispatch):
@@ -769,7 +769,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A {AAA|BBB}       text for A.""")
+  A {AAA|BBB}    text for A.""")
 
     def test_build_command_with_literal_para_complete(self):
         class Opt(SimpleDispatch):
@@ -781,7 +781,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A {AAA|BBB}       text for A.""")
+  A {AAA|BBB}    text for A.""")
 
     def test_build_command_with_literal_keyword_para(self):
         class Opt(SimpleDispatch):
@@ -793,7 +793,7 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  A A={AAA|BBB}     text for A.""")
+  A A={AAA|BBB}    text for A.""")
 
     def test_build_command_on_order(self):
         class Opt(SimpleDispatch):
@@ -814,9 +814,9 @@ Commands:
 
         self.assertEqual(Opt.build_command_usages(show_para=True), """\
 Commands:
-  C                 text for C.
-  B                 text for B.
-  A                 text for A.""")
+  C           text for C.
+  B           text for B.
+  A           text for A.""")
 
     def test_build_command_with_long_usages(self):
         class Opt(SimpleDispatch):
@@ -833,8 +833,8 @@ Commands:
         self.assertEqual(Opt.build_command_usages(), """\
 Commands:
   A test is a very long usage text that it is over 20 characters
-                    it is also a very long command document for dispatch command A that it is over 120 characters, and
-                    it does not need to be fit into one line.""")
+              it is also a very long command document for dispatch command A that it is over 120 characters, and it does
+              not need to be fit into one line.""")
 
         self.assertEqual(Opt.build_command_usages(doc_indent=10, width=80), """\
 Commands:
@@ -870,8 +870,8 @@ options:
   -h, --help  show this help message and exit
 
 Commands:
-  A (a)             text for A.
-  B                 text for B.
+  A (a)       text for A.
+  B           text for B.
 """)
 
     def test_print_help_custom_section(self):
@@ -905,7 +905,7 @@ options:
   -h, --help  show this help message and exit
 
 Commands:
-  A (a)             text for A.
+  A (a)       text for A.
 
 A epilog text
 """)
@@ -944,7 +944,7 @@ options:
   -h, --help  show this help message and exit
 
 Commands:
-  A (a)             text for A.
+  A (a)       text for A.
 
 A epilog text
 """)

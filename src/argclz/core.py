@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload,
 
 from typing_extensions import Self
 
+from . import i18n
 from .desp import ArgumentDescriptor, DefaultArgumentDescriptor
 
 if TYPE_CHECKING:
@@ -385,7 +386,7 @@ class Argument(object):
         try:
             kwargs = dict(self.kwargs)
             help_text = kwargs.pop('help', None)
-            help_text = help_text if not self.hidden else argparse.SUPPRESS
+            help_text = i18n.gettext(help_text) if not self.hidden else argparse.SUPPRESS
             return ap.add_argument(*self.options, **kwargs, help=help_text, dest=self.attr)
         except TypeError as e:
             if isinstance(instance, type):
@@ -436,6 +437,7 @@ class Argument(object):
                      metavar: str = None) -> Self:
         pass
 
+    # noinspection PyTypeChecker
     def with_options(self, *options, **kwargs) -> Self:
         """Modify or update keyword parameter and return a new argument.
 
@@ -814,12 +816,12 @@ class argument_group:
 
     def argument(self,
                  *options, **kwargs) -> Any:
-        r"""create an argument under this mutually exclusive group.
+        r"""create an argument under this group.
 
         **Usage**
 
         >>> class Example:
-        ...     g = mutually_exclusive_group()
+        ...     g = argument_group()
         ...     a: str = g.argument('-a')
 
         :param options: options strings
@@ -1016,7 +1018,7 @@ def _parser_usage(instance: AbstractParser | Type[AbstractParser], kwargs: dict[
     if usage is not None:
         usage = usage.replace('{PROG}', '%(prog)s')
 
-    kwargs['usage'] = usage
+    kwargs['usage'] = i18n.gettext(usage)
 
 
 def _parser_description(instance: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any]):
@@ -1033,7 +1035,7 @@ def _parser_description(instance: AbstractParser | Type[AbstractParser], kwargs:
     if description is not None:
         description = description.replace('{PROG}', '%(prog)s')
 
-    kwargs['description'] = description
+    kwargs['description'] = i18n.gettext(description)
 
 
 def _parser_epilog(instance: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any]):
@@ -1065,7 +1067,7 @@ def _parser_epilog(instance: AbstractParser | Type[AbstractParser], kwargs: dict
         case _:
             raise TypeError()  # what else could be?
 
-    kwargs['epilog'] = epilog
+    kwargs['epilog'] = i18n.gettext(epilog)
 
 
 def _parser_dispatch_commands(instance) -> str | None:

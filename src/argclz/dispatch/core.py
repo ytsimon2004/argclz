@@ -8,6 +8,8 @@ from typing import NamedTuple, TypeVar, Any, Type, ParamSpec, Literal, get_origi
 
 from typing_extensions import Self
 
+from argclz import i18n
+
 __all__ = [
     'DispatchCommand',
     'DispatchCommandNotFound',
@@ -528,7 +530,7 @@ class Dispatch:
                              show_para: bool = False,
                              width: int = 120,
                              item_indent: int = 2,
-                             doc_indent: int = 20,
+                             doc_indent: int = 14,
                              header: str | None = "Commands:") -> str:
         """
         Build a help document for :func:`~argclz.dispatch.annotations.dispatch` functions
@@ -566,7 +568,7 @@ class Dispatch:
         """
         ret = []
         if header is not None:
-            ret.append(header)
+            ret.append(i18n.gettext(header))
 
         commands = cls.list_commands(group)
         commands.sort(key=lambda it: it.order)
@@ -581,7 +583,7 @@ class Dispatch:
             content = info.brief_doc()
 
             if len(header) < doc_indent:
-                content = item_space + header + ' ' * (doc_indent - len(header) - item_indent) + content
+                content = item_space + header + ' ' * max(4, doc_indent - len(header) - item_indent) + content
                 ret.extend(textwrap.wrap(content, width,
                                          subsequent_indent=desp_space,
                                          break_long_words=True,
