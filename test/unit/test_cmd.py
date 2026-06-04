@@ -5,7 +5,7 @@ import unittest
 
 from argclz import *
 from argclz.commands import parse_command_args, new_command_parser, get_sub_command_group
-from argclz.core import print_help, new_parser, parse_args
+from argclz.core import print_help, parse_args
 
 
 class CommandParserTest(unittest.TestCase):
@@ -309,7 +309,7 @@ class CommandParserClassTest(unittest.TestCase):
 
             @classmethod
             def new_parser(cls, **kwargs):
-                return new_parser(cls, **kwargs, allow_abbrev=enable_allow_abbrev)
+                return super().new_parser(**kwargs, allow_abbrev=enable_allow_abbrev)
 
         with self.subTest('enable'):
             enable_allow_abbrev = True

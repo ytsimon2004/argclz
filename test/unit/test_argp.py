@@ -328,7 +328,31 @@ epilog text
             @classmethod
             def new_parser(cls, **kwargs) -> ArgumentParser:
                 called.append('yes')
+                return super().new_parser(**kwargs)
+
+        self.assertListEqual(called, [])
+        _ = new_parser(Main())
+        self.assertListEqual(called, ['yes'])
+
+    def test_new_parser_on_abstract_parser_overflow(self):
+        class Main(AbstractParser):
+            @classmethod
+            def new_parser(cls, **kwargs) -> ArgumentParser:
                 return new_parser(cls, **kwargs)
+
+        with self.assertRaises(RecursionError):
+            _ = new_parser(Main())
+
+    def test_parse_args_on_abstract_parser(self):
+        called = []
+
+        class Main(AbstractParser):
+            a: str = argument('-a', help='help text')
+
+            @classmethod
+            def new_parser(cls, **kwargs) -> ArgumentParser:
+                called.append('yes')
+                return super().new_parser(**kwargs)
 
         self.assertListEqual(called, [])
         _ = parse_args(Main(), [])
@@ -490,7 +514,7 @@ options:
 
             @classmethod
             def new_parser(cls, **kwargs):
-                return new_parser(cls, **kwargs, add_help=False)
+                return super().new_parser(**kwargs, add_help=False)
 
         ret = Main().main(['-h=1'])
         self.assertEqual(ret.h, 1)

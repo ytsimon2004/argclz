@@ -124,12 +124,18 @@ class AbstractParser(metaclass=abc.ABCMeta):
         Subclass can overwrite this method to pass additional argument to
         create an :class:`argparse.ArgumentParser`.
 
-        **Note** Using :func:`~argclz.core.new_parser` to create an :class:`argparse.ArgumentParser`.
+        >>> @classmethod
+        ... def new_parser(cls, **kwargs):
+        ...     # add additional argument into kwargs
+        ...     return super().new_parser(**kwargs)
+
+        **Note** Do not use :func:`~argclz.core.new_parser` to create an :class:`argparse.ArgumentParser`.
+        Otherwise, an RecursionError will be raised.
 
         :param kwargs: keyword parameters to :class:`argparse.ArgumentParser`
         :return: an ArgumentParser.
         """
-        return new_parser(cls, **kwargs)
+        return _new_parser(cls, **kwargs)
 
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
@@ -911,6 +917,13 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
     :return: an :class:`~argparse.ArgumentParser`
     """
+    if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
+        return instance.new_parser(**kwargs)
+    else:
+        return _new_parser(instance, **kwargs)
+
+
+def _new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     for unsupported in ('parents', 'prefix_chars', 'argument_default', 'exit_on_error', 'conflict_handler'):
         # Reason of unsupported keywords
         # parents, conflict_handler: we use class-based as parser, so parent parser means parent class.
@@ -928,9 +941,9 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
             raise ValueError(f'unsupported keyword : {unsupported}')
 
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
-        kwargs.setdefault('usage', _parser_usage(instance))
-        kwargs.setdefault('description', _parser_description(instance))
-        kwargs.setdefault('epilog', _parser_epilog(instance))
+        _parser_usage(instance, kwargs)
+        _parser_description(instance, kwargs)
+        _parser_epilog(instance, kwargs)
         # we do not need special handle for help text.
         kwargs.setdefault('formatter_class', argparse.RawTextHelpFormatter)
 
@@ -961,23 +974,32 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     return ap
 
 
-def _parser_usage(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+def _parser_usage(instance: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any]):
+    if 'usage' in kwargs:
+        return
+
     usage = instance.USAGE
     if callable(usage):
         usage = usage()
     if isinstance(usage, list):
         usage = '\n       '.join(usage)
-    return usage
+    kwargs['usage'] = usage
 
 
-def _parser_description(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+def _parser_description(instance: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any]):
+    if 'description' in kwargs:
+        return
+
     description = instance.DESCRIPTION
     if callable(description):
         description = cast(str, description())
-    return description
+    kwargs['description'] = description
 
 
-def _parser_epilog(instance: AbstractParser | Type[AbstractParser]) -> str | None:
+def _parser_epilog(instance: AbstractParser | Type[AbstractParser], kwargs: dict[str, Any]):
+    if 'epilog' in kwargs:
+        return
+
     epilog = instance.EPILOG
     if callable(epilog):
         epilog = cast(str, epilog())
@@ -1004,7 +1026,7 @@ def _parser_epilog(instance: AbstractParser | Type[AbstractParser]) -> str | Non
             else:
                 epilog = command_help
 
-    return epilog
+    kwargs['epilog'] = epilog
 
 
 def _init_group(parser: ArgumentParser,
