@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import argparse
 import collections
+import inspect
 import sys
 import warnings
 from collections.abc import Sequence, Iterable, Callable
@@ -128,9 +129,6 @@ class AbstractParser(metaclass=abc.ABCMeta):
         ... def new_parser(cls, **kwargs):
         ...     # add additional argument into kwargs
         ...     return super().new_parser(**kwargs)
-
-        **Note** Do not use :func:`~argclz.core.new_parser` to create an :class:`argparse.ArgumentParser`.
-        Otherwise, an RecursionError will be raised.
 
         :param kwargs: keyword parameters to :class:`argparse.ArgumentParser`
         :return: an ArgumentParser.
@@ -913,14 +911,42 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     There are unsupported keywords: ``parents``, ``prefix_chars``, ``exit_on_error``, ``argument_default`` and
     ``conflict_handler``. A ``ValueError`` will be raised if any unsupported keywords shown.
 
-    :param instance: any instance that contains ``argument``.
+    :param instance: any instance that contains ``argument`` attributes.
     :param kwargs: Please see ``argparse.ArgumentParser(**kwargs)`` for detailed.
     :return: an :class:`~argparse.ArgumentParser`
     """
-    if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
-        return instance.new_parser(**kwargs)
-    else:
-        return _new_parser(instance, **kwargs)
+    if isinstance(instance, AbstractParser):
+        return __argclz_check_new_parser_recursive_calling__(type(instance), kwargs)
+    if isinstance(instance, type) and issubclass(instance, AbstractParser):
+        return __argclz_check_new_parser_recursive_calling__(instance, kwargs)
+
+    return _new_parser(instance, **kwargs)
+
+
+def __argclz_check_new_parser_recursive_calling__(instance: Type[AbstractParser], kwargs: dict[str, Any]) -> ArgumentParser:
+    """
+    It is a special function that check the revisiting count of itself according to the calling stacks.
+    If it is the first time of this function invoking, it calls :meth:`AbstractParser.new_parser`.
+    Otherwise, it calls :func:`_new_parser`.
+    """
+    stack = inspect.stack()
+    ## FIRST CALL
+    # [1] new_parser
+    # [0] __argclz_check_new_parser_recursive_calling__
+    # => AbstractParser.new_parser
+    #
+    ## SECOND CALL
+    # [4] new_parser
+    # [3] __argclz_check_new_parser_recursive_calling__
+    # [2] AbstractParser.new_parser
+    # [1] new_parser
+    # [0] __argclz_check_new_parser_recursive_calling__
+    # => _new_parser
+    for i, frame in enumerate(stack[1:5]):
+        # check whether it is the second call
+        if frame.function == '__argclz_check_new_parser_recursive_calling__' and frame.frame.f_locals['instance'] is instance:
+            return _new_parser(instance, **kwargs)
+    return instance.new_parser(**kwargs)
 
 
 def _new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
@@ -1160,12 +1186,7 @@ def parse_args(instance: T, args: list[str] | None = None) -> T:
     if isinstance(instance, type):
         raise TypeError('not an instance')
 
-    if isinstance(instance, AbstractParser):
-        # respect AbstractParser custom new_parser
-        ap = instance.new_parser()
-    else:
-        ap = new_parser(instance)
-
+    ap = new_parser(instance)
     ot = ap.parse_args(args)
     return set_options(instance, ot)
 
@@ -1193,10 +1214,6 @@ def print_help(instance, file: TextIO | None = sys.stdout, prog: str | None = No
     if file is None:
         import io
         buf = file = io.StringIO()
-
-    if isinstance(instance, type) and issubclass(instance, AbstractParser):
-        # respect AbstractParser custom new_parser
-        instance = instance.new_parser(prog=prog)
 
     if not isinstance(instance, ArgumentParser):
         instance = new_parser(instance, prog=prog)

@@ -330,18 +330,40 @@ epilog text
                 called.append('yes')
                 return super().new_parser(**kwargs)
 
-        self.assertListEqual(called, [])
-        _ = new_parser(Main())
-        self.assertListEqual(called, ['yes'])
+        with self.subTest('new_parser(type)'):
+            self.assertListEqual(called, [])
+            _ = new_parser(Main)
+            self.assertListEqual(called, ['yes'])
+
+        with self.subTest('new_parser(instance)'):
+            called.clear()
+            self.assertListEqual(called, [])
+            _ = new_parser(Main())
+            self.assertListEqual(called, ['yes'])
 
     def test_new_parser_on_abstract_parser_overflow(self):
+        called = []
         class Main(AbstractParser):
+            a: str = argument('-a', help='help text')
+
             @classmethod
             def new_parser(cls, **kwargs) -> ArgumentParser:
+                called.append('yes')
+                # Here use wrong function to create new_parser.
+                # It should be `super().new_parser(**kwargs)`.
+                # However, using `new_parser` won't give caller a RecursionError.
                 return new_parser(cls, **kwargs)
 
-        with self.assertRaises(RecursionError):
+        with self.subTest('new_parser(type)'):
+            self.assertListEqual(called, [])
+            _ = new_parser(Main)
+            self.assertListEqual(called, ['yes'])
+
+        with self.subTest('new_parser(instance)'):
+            called.clear()
+            self.assertListEqual(called, [])
             _ = new_parser(Main())
+            self.assertListEqual(called, ['yes'])
 
     def test_parse_args_on_abstract_parser(self):
         called = []
