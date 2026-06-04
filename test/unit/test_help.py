@@ -2,7 +2,7 @@ import unittest
 from typing import Literal
 
 from argclz import *
-from argclz.core import print_help
+from argclz.core import print_help, new_parser
 
 
 class PrintHelpTest(unittest.TestCase):
@@ -374,23 +374,74 @@ options:
   -a          text (default: False)
 """)
 
-    def test_print_help_with_usages(self):
+    def test_print_help_with_usage_method(self):
         class Opt(AbstractParser):
-            USAGE = [
-                'test.py [-h]',
-                'test.py [-a]',
-            ]
             a: bool = argument('-a', help='text')
+
+            @classmethod
+            def USAGE(cls):
+                return f'run.py [-h] [options]'
 
         h = print_help(Opt, None, prog='run.py')
         self.assertEqual(h, """\
-usage: test.py [-h]
-       test.py [-a]
+usage: run.py [-h] [options]
 
 options:
   -h, --help  show this help message and exit
   -a          text (default: False)
 """)
+
+    def test_print_help_with_usage_placeholder(self):
+        class Opt(AbstractParser):
+            USAGE = '...'
+
+        with self.subTest('%(prog)s'):
+            Opt.USAGE = '%(prog)s [-h] [options]'
+            h = print_help(Opt, None, prog='run_test_1.py')
+            self.assertEqual(h, """\
+usage: run_test_1.py [-h] [options]
+
+options:
+  -h, --help  show this help message and exit
+""")
+
+        with self.subTest('{PROG}'):
+            Opt.USAGE = '{PROG} [-h] [options]'
+            h = print_help(Opt, None, prog='run_test_2.py')
+            self.assertEqual(h, """\
+usage: run_test_2.py [-h] [options]
+
+options:
+  -h, --help  show this help message and exit
+""")
+
+    def test_print_help_with_usages(self):
+        class Opt(AbstractParser):
+            USAGE = [
+                '{PROG} [-h]',
+                '{PROG} [-a]',
+            ]
+            a: bool = argument('-a', help='text')
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: 
+  run.py [-h]
+  run.py [-a]
+
+options:
+  -h, --help  show this help message and exit
+  -a          text (default: False)
+""")
+
+    def test_wrong_usage_type(self):
+        class Opt(AbstractParser):
+            USAGE = object()
+
+        with self.assertRaises(TypeError) as capture:
+            new_parser(Opt)
+        self.assertRegex(capture.exception.args[0],
+                         r'USAGE is not a str or list\[str]:. *')
 
     def test_print_help_with_description(self):
         class Opt(AbstractParser):
@@ -405,6 +456,31 @@ text
 options:
   -h, --help  show this help message and exit
 """)
+
+    def test_print_help_with_description_method(self):
+        class Opt(AbstractParser):
+            @classmethod
+            def DESCRIPTION(cls):
+                return 'text from DESCRIPTION()'
+
+        h = print_help(Opt, None, prog='run.py')
+        self.assertEqual(h, """\
+usage: run.py [-h]
+
+text from DESCRIPTION()
+
+options:
+  -h, --help  show this help message and exit
+""")
+
+    def test_wrong_description_type(self):
+        class Opt(AbstractParser):
+            DESCRIPTION = object()
+
+        with self.assertRaises(TypeError) as capture:
+            new_parser(Opt)
+        self.assertRegex(capture.exception.args[0],
+                         r'DESCRIPTION is not a str:. *')
 
     def test_print_help_with_epilog(self):
         class Opt(AbstractParser):
@@ -435,6 +511,26 @@ options:
 
 text
 """)
+
+    def test_wrong_epilog_type(self):
+        class Opt(AbstractParser):
+            EPILOG = object()
+
+        with self.assertRaises(TypeError) as capture:
+            new_parser(Opt)
+        self.assertRegex(capture.exception.args[0],
+                         r'EPILOG is not a str:. *')
+
+    def test_wrong_epilog_method_rtype(self):
+        class Opt(AbstractParser):
+            @classmethod
+            def EPILOG(cls):
+                return object()
+
+        with self.assertRaises(TypeError) as capture:
+            new_parser(Opt)
+        self.assertRegex(capture.exception.args[0],
+                         r'EPILOG is not a str:. *')
 
     def test_print_default_bool_value(self):
         class Opt(AbstractParser):

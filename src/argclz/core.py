@@ -102,7 +102,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
     """
 
     USAGE: str | list[str] | Callable[[], str] | None = None
-    """parser usage."""
+    """parser usage. Placeholder ``%(prog)s`` and ``{PROG}`` will be replaced with actual program name."""
 
     DESCRIPTION: str | Callable[[], str] | None = None
     """parser description. Could be override as a method if its content is dynamic-generated."""
@@ -1008,7 +1008,14 @@ def _parser_usage(instance: AbstractParser | Type[AbstractParser], kwargs: dict[
     if callable(usage):
         usage = usage()
     if isinstance(usage, list):
-        usage = '\n       '.join(usage)
+        usage = '\n  ' + '\n  '.join(usage)
+
+    if usage is not None and not isinstance(usage, str):
+        raise TypeError(f'USAGE is not a str or list[str]: {usage}')
+
+    if usage is not None:
+        usage = usage.replace('{PROG}', '%(prog)s')
+
     kwargs['usage'] = usage
 
 
@@ -1019,6 +1026,13 @@ def _parser_description(instance: AbstractParser | Type[AbstractParser], kwargs:
     description = instance.DESCRIPTION
     if callable(description):
         description = cast(str, description())
+
+    if description is not None and not isinstance(description, str):
+        raise TypeError(f'DESCRIPTION is not a str: {description}')
+
+    if description is not None:
+        description = description.replace('{PROG}', '%(prog)s')
+
     kwargs['description'] = description
 
 
@@ -1030,29 +1044,49 @@ def _parser_epilog(instance: AbstractParser | Type[AbstractParser], kwargs: dict
     if callable(epilog):
         epilog = cast(str, epilog())
 
-    assert epilog is None or isinstance(epilog, str)
+    if epilog is not None and not isinstance(epilog, str):
+        raise TypeError(f'EPILOG is not a str: {epilog}')
+
+    if epilog is not None:
+        epilog = epilog.replace('{PROG}', '%(prog)s')
 
     # special handler for Dispatch for command sections.
     # it put above epilog, but as part of epilog.
+    command_help = _parser_dispatch_commands(instance)
+    match (epilog, command_help):
+        case (None | str(), None):
+            pass
+        case (None, str()):
+            epilog = command_help
+        case (str(), str()):
+            if not command_help.endswith('\n'):
+                command_help += '\n'
+            epilog = command_help + "\n" + epilog
+        case _:
+            raise TypeError()  # what else could be?
+
+    kwargs['epilog'] = epilog
+
+
+def _parser_dispatch_commands(instance) -> str | None:
     from argclz.dispatch import Dispatch
     if isinstance(instance, Dispatch) or (isinstance(instance, type) and issubclass(instance, Dispatch)):
         command_help = instance.COMMAND_HELP_DOC
         if command_help is None:
             command_help = instance.build_command_usages()
+
         elif callable(command_help):
             command_help = command_help()
 
-        assert isinstance(command_help, str)
+        if command_help is not None and not isinstance(command_help, str):
+            raise TypeError(f'COMMAND_HELP_DOC is not a str: {command_help}')
 
-        if len(command_help):
-            if epilog is not None:
-                if not command_help.endswith('\n'):
-                    command_help += '\n'
-                epilog = command_help + "\n" + epilog
-            else:
-                epilog = command_help
+        if command_help is not None:
+            command_help = command_help.replace('{PROG}', '%(prog)s')
 
-    kwargs['epilog'] = epilog
+        return command_help
+    else:
+        return None
 
 
 def _init_group(parser: ArgumentParser,

@@ -949,6 +949,25 @@ Commands:
 A epilog text
 """)
 
+    def test_wrong_chd_type(self):
+        class Opt(SimpleDispatch):
+            COMMAND_HELP_DOC = object()
+
+        with self.assertRaises(TypeError) as capture:
+            Opt.new_parser()
+        self.assertRegex(capture.exception.args[0],
+                         r'COMMAND_HELP_DOC is not a str:. *')
+
+    def test_wrong_chd_method_rtype(self):
+        class Opt(SimpleDispatch):
+            @classmethod
+            def COMMAND_HELP_DOC(cls):
+                return object()
+
+        with self.assertRaises(TypeError) as capture:
+            Opt.new_parser()
+        self.assertRegex(capture.exception.args[0],
+                         r'COMMAND_HELP_DOC is not a str:. *')
 
 class UseCaseTest(unittest.TestCase):
     def test_example_1(self):
