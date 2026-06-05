@@ -587,6 +587,7 @@ def argument(*options, **kwargs) -> Any:
     :param validator: value validator with signature ``(T) -> bool``.
     :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
     :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
+    :param descriptor: An :class:`ArgumentDescriptor` that used to custom how value to be got/set from/to an attribute.
     :param hidden: hide this argument from help document.
     :param help: help document for this argument.
     :param group: group name of this argument.
@@ -704,7 +705,7 @@ class AliasArgument(Argument):
 
 # noinspection PyOverloads
 @overload  # this overload is used to show the actual keyword arguments.
-def aliased_argument(options: str, *,
+def aliased_argument(*options: str,
                      aliases: dict[str, T],
                      nargs: Nargs = ...,
                      action: Actions = ...,
@@ -713,6 +714,7 @@ def aliased_argument(options: str, *,
                      type: Type | Callable[[str], T] = ...,
                      validator: Callable[[T], bool] | None = None,
                      choices: Sequence[str] = ...,
+                     descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = ...,
                      help: str = ...,
                      group: str | argument_group | None = None,
                      metavar: str = ...) -> T:
@@ -810,13 +812,13 @@ class argument_group:
                  choices: Sequence[T] = ...,
                  required: bool = False,
                  hidden: bool = False,
+                 descriptor: ArgumentDescriptor | Type[ArgumentDescriptor] = ...,
                  help: str = ...,
                  metavar: str = ...) -> T:
         ...
 
-    def argument(self,
-                 *options, **kwargs) -> Any:
-        r"""create an argument under this group.
+    def argument(self, *options, **kwargs) -> Any:
+        """create an argument under this group.
 
         **Usage**
 
@@ -825,17 +827,7 @@ class argument_group:
         ...     a: str = g.argument('-a')
 
         :param options: options strings
-        :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
-        :param nargs: number of following values. Please see ``argparse.ArgumentParser.add_argument(nargs)`` for detailed.
-        :param const: Please see ``argparse.ArgumentParser.add_argument(const)`` for detailed.
-        :param default: default value of argument. Please see ``argparse.ArgumentParser.add_argument(default)`` for detailed.
-        :param type: type caster with signature ``(str) -> T``. Please see ``argparse.ArgumentParser.add_argument(type)`` for detailed.
-        :param validator: value validator with signature ``(T) -> bool``.
-        :param choices: Please see ``argparse.ArgumentParser.add_argument(choices)`` for detailed.
-        :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
-        :param hidden: hide this argument from help document.
-        :param help: help document for this argument.
-        :param metavar: name of argument value. Please see ``argparse.ArgumentParser.add_argument(metavar)`` for detailed.
+        :param kwargs: look :func:`argument`
         """
         return Argument(*options, group=self, **kwargs)
 
