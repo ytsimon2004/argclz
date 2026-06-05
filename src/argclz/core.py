@@ -7,6 +7,7 @@ import inspect
 import sys
 import warnings
 from collections.abc import Sequence, Iterable, Callable
+from types import EllipsisType
 from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload, get_type_hints, cast
 
 from typing_extensions import Self
@@ -245,7 +246,8 @@ class Argument(object):
             options = options[:-1]
 
         if not all([it.startswith('-') for it in options]):
-            raise ValueError(f'options should startswith "-". {options}')
+            options_str = ', '.join(options)
+            raise ValueError(f"options should startswith '-': {options_str}")
 
         if isinstance(validator, Validator):
             validator = validator.freeze()
@@ -418,23 +420,60 @@ class Argument(object):
                 nargs='?'
             )
 
-    # noinspection PyOverloads
+    # noinspection PyShadowingBuiltins
     @overload  # this overload is used to show the actual keyword arguments.
     def with_options(self,
-                     option: str | dict[str, str] = None,
                      *options: str,
                      action: Actions = None,
                      nargs: int | Nargs = None,
-                     const: T = None,
-                     default: T = None,
-                     type: Type | Callable[[str], T] = None,
+                     const: T | EllipsisType = None,
+                     default: T | EllipsisType = None,
+                     type: Type | Callable[[str], T] | Ellipsis = None,
                      validator: Callable[[T], bool] = None,
                      choices: Sequence[str] = None,
                      required: bool = None,
                      hidden: bool = None,
                      help: str = None,
                      group: str | argument_group | None = None,
-                     metavar: str = None) -> Self:
+                     metavar: str | EllipsisType = None) -> Self:
+        pass
+
+    # noinspection PyShadowingBuiltins
+    @overload  # this overload is used to show the actual keyword arguments.
+    def with_options(self,
+                     kept: EllipsisType,
+                     *options: str,
+                     action: Actions = None,
+                     nargs: int | Nargs = None,
+                     const: T | EllipsisType = None,
+                     default: T | EllipsisType = None,
+                     type: Type | Callable[[str], T] | EllipsisType = None,
+                     validator: Callable[[T], bool] = None,
+                     choices: Sequence[str] = None,
+                     required: bool = None,
+                     hidden: bool = None,
+                     help: str = None,
+                     group: str | argument_group | None = None,
+                     metavar: str | EllipsisType = None) -> Self:
+        pass
+
+    # noinspection PyShadowingBuiltins
+    @overload  # this overload is used to show the actual keyword arguments.
+    def with_options(self,
+                     rename: dict[str, str | Ellipsis | None],
+                     *options: str,
+                     action: Actions = None,
+                     nargs: int | Nargs = None,
+                     const: T | Ellipsis = None,
+                     default: T | Ellipsis = None,
+                     type: Type | Callable[[str], T] | Ellipsis = None,
+                     validator: Callable[[T], bool] = None,
+                     choices: Sequence[str] = None,
+                     required: bool = None,
+                     hidden: bool = None,
+                     help: str = None,
+                     group: str | argument_group | None = None,
+                     metavar: str | Ellipsis = None) -> Self:
         pass
 
     # noinspection PyTypeChecker
@@ -454,10 +493,10 @@ class Argument(object):
         option flags update rule:
 
         1. ``()``, ``(...)`` : do not update options
-        2. ``('-a', '-b')`` : replace options
+        2. ``('-a', '-b')`` : replace with new options
         3. ``(..., '-c')`` : additional options
         4. ``({'-a': '-A'})`` : rename options
-        5. ``({'-a': ...})`` : remove options
+        5. ``({'-a': ...})``, ``({'-a': None})`` : remove options
         6. ``({'-a': '-A', '-b': ...}, '-c')`` : rename '-a', remove '-b', add '-c'
 
         general form:
@@ -481,7 +520,7 @@ class Argument(object):
 
         cls = type(self)
 
-        if len(self.options) > 0:
+        if len(self.options) > 0:  # self is optional
             match options:
                 case ():
                     return cls(*self.options, **kw)
@@ -493,15 +532,25 @@ class Argument(object):
                     return cls(*self._map_options(d), *o, **kw)
                 case _:
                     return cls(*options, **kw)
-        else:
-            if len(options) > 0:
-                raise RuntimeError('cannot change positional argument to optional')
 
-            return cls(**kw)
+        else:  # self is positional
+            if len(options) == 0:
+                ret = cls(**kw)
+                if ret.metavar is None:
+                    raise ValueError('missing metavar')
+                return ret
+            elif len(options) == 1 and 'metavar' not in kwargs:
+                option = options[0]
+                if option.startswith('-'):
+                    raise ValueError('cannot change positional argument to optional')
+
+                kw.pop('metavar', None)
+                return cls(metavar=option, **kw)
+            else:
+                raise ValueError('cannot change positional argument to optional')
 
     @classmethod
     def _copy_group(cls, group: str | argument_group | None):
-
         match group:
             case None | str():
                 return group
@@ -511,7 +560,7 @@ class Argument(object):
             case _:
                 raise TypeError()
 
-    def _map_options(self, mapping: dict[str, str]) -> list[str]:
+    def _map_options(self, mapping: dict[str, str | EllipsisType | None]) -> list[str]:
         ret = []
         for old_opt in self.options:
             try:
@@ -519,7 +568,7 @@ class Argument(object):
             except KeyError:
                 ret.append(old_opt)
             else:
-                if new_opt is not ...:
+                if new_opt not in (..., None):
                     ret.append(new_opt)
         return ret
 
@@ -633,6 +682,8 @@ def pos_argument(option: str, validator: Callable[[T], bool] | None = None, *, n
     :param required: Please see ``argparse.ArgumentParser.add_argument(required)`` for detailed.
     :param help: help document for this argument.
     """
+    if option.startswith('-'):
+        raise ValueError(f"positional argument startswith '-': {option}")
     if validator is not None:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, **kwargs)

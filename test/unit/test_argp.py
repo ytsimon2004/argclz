@@ -568,7 +568,7 @@ options:
                          'argument -a: conflicting option string: -a')
 
 
-class TestArguments(unittest.TestCase):
+class ArgumentsTest(unittest.TestCase):
     def test_argument_default(self):
         class Opt:
             a: str = argument('-a', default='DEFAULT')
@@ -900,6 +900,22 @@ class TestArguments(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'exit 2: unrecognized arguments: -b')
 
+    def test_pos_argument(self):
+        class Opt:
+            a: str = pos_argument('A')
+
+        self.assertEqual(as_argument(Opt.a).metavar, 'A')
+        self.assertTupleEqual(as_argument(Opt.a).options, ())
+        opt = parse_args(Opt(), ['TEXT'])
+        self.assertEqual(opt.a, 'TEXT')
+
+    # noinspection PyUnusedLocal
+    def test_pos_argument_with_dash(self):
+        with self.assertRaises(ValueError) as capture:
+            class Opt:
+                a: str = pos_argument('-a')
+        self.assertEqual(capture.exception.args[0],
+                         "positional argument startswith '-': -a")
 
 class ArgumentDescriptorTest(unittest.TestCase):
     def test_replace_descriptor(self):
@@ -1582,22 +1598,89 @@ class WithOptionsTest(unittest.TestCase):
         class Parent:
             a: str = argument('-a', '--long')
 
-        class Child(Parent):
-            a: str = as_argument(Parent.a).with_options({'-a': ...})
+        for new_value in [..., None]:
+            with self.subTest(f'rename({new_value})'):
+                class Child(Parent):
+                    a: str = as_argument(Parent.a).with_options({'-a': new_value})
 
-        p = as_argument(Parent.a)
-        c = as_argument(Child.a)
-        self.assertEqual(p.options, ('-a', '--long'))
-        self.assertEqual(c.options, ('--long',))
-        self.assertEqual(p.kwargs, c.kwargs)
+                p = as_argument(Parent.a)
+                c = as_argument(Child.a)
+                self.assertEqual(p.options, ('-a', '--long'))
+                self.assertEqual(c.options, ('--long',))
+                self.assertEqual(p.kwargs, c.kwargs)
 
+    def test_change_pos_arg(self):
+        class Parent:
+            a: str = pos_argument('A')
+
+        with self.subTest('by metavar'):
+            class Child(Parent):
+                a: str = as_argument(Parent.a).with_options(metavar='B')
+
+            self.assertEqual(as_argument(Parent.a).metavar, 'A')
+            self.assertEqual(as_argument(Child.a).metavar, 'B')
+            self.assertTupleEqual(as_argument(Parent.a).options, ())
+            self.assertTupleEqual(as_argument(Child.a).options, ())
+
+        with self.subTest('by options'):
+            class Child(Parent):
+                a: str = as_argument(Parent.a).with_options('B')
+
+            self.assertEqual(as_argument(Parent.a).metavar, 'A')
+            self.assertEqual(as_argument(Child.a).metavar, 'B')
+            self.assertTupleEqual(as_argument(Parent.a).options, ())
+            self.assertTupleEqual(as_argument(Child.a).options, ())
+
+    # noinspection PyUnusedLocal,PyRedeclaration
+    def test_change_pos_by_removing(self):
+        class Parent:
+            a: str = pos_argument('A')
+
+        # Although argparse still works, which might take dest (aka 'a') as its metavar,
+        # we do not want that.
+        with self.subTest('metavar=...'):
+            with self.assertRaises(ValueError) as capture:
+                class Child(Parent):
+                    a: str = as_argument(Parent.a).with_options(metavar=...)
+            self.assertEqual(capture.exception.args[0],
+                             'missing metavar')
+
+        with self.subTest('metavar=None'):
+            with self.assertRaises(ValueError) as capture:
+                class Child(Parent):
+                    a: str = as_argument(Parent.a).with_options(metavar=None)
+            self.assertEqual(capture.exception.args[0],
+                             'missing metavar')
+
+    # noinspection PyUnusedLocal,PyRedeclaration
     def test_error_on_change_pos_to_opt(self):
         class Parent:
             a: str = pos_argument('A')
 
-        with self.assertRaises(RuntimeError):
+        with self.subTest('single options'):
+            with self.assertRaises(ValueError) as capture:
+                class Child(Parent):
+                    a: str = as_argument(Parent.a).with_options('-a')
+            self.assertEqual(capture.exception.args[0],
+                             'cannot change positional argument to optional')
+
+        with self.subTest('many options'):
+            with self.assertRaises(ValueError) as capture:
+                class Child(Parent):
+                    a: str = as_argument(Parent.a).with_options('-a', '--aa')
+            self.assertEqual(capture.exception.args[0],
+                             'cannot change positional argument to optional')
+
+    # noinspection PyUnusedLocal
+    def test_error_on_change_opt_to_pos(self):
+        class Parent:
+            a: str = argument('-a')
+
+        with self.assertRaises(ValueError) as capture:
             class Child(Parent):
-                a: str = as_argument(Parent.a).with_options('-a')
+                a: str = as_argument(Parent.a).with_options('a')
+        self.assertEqual(capture.exception.args[0],
+                         "options should startswith '-': a")
 
     def test_remove_keyword(self):
         class Parent:
