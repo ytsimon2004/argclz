@@ -3,7 +3,7 @@ import warnings
 from typing import Callable, TypeVar, Generic, get_origin, Literal
 
 from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand, DispatchGroup
-from ..validator import Validator
+from ..validator import Validator, argument_validating
 
 __all__ = ['DispatchCommandBuilder']
 
@@ -94,12 +94,6 @@ class TypeCasterWithValidator(Generic[T]):
             result = raw_value  # pyright: ignore[reportAssignmentType]
 
         if self.validator is not None:
-            try:
-                fail = not self.validator(result)
-            except BaseException:
-                raise
-            else:
-                if fail:
-                    raise ValueError(f'fail validation : "{raw_value}"')
+            argument_validating(None, result, self.validator)
 
         return result

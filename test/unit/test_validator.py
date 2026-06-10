@@ -1525,5 +1525,61 @@ class TestValidateBuilderOnOtherArgument(unittest.TestCase):
             parse_args(Opt(), ['1', '0'])
 
 
+class TestValidatorDecorator(unittest.TestCase):
+    def test_validator(self):
+        callback = []
+
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            def check_a(self, value: str):
+                callback.append(value)
+                return len(value) > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = '1'
+        self.assertListEqual(callback, ['1'])
+
+        with self.assertRaises(ValueError):
+            opt.a = ''
+        self.assertListEqual(callback, ['1', ''])
+
+    def test_validator_duplicated(self):
+        with self.assertRaises(RuntimeError) as capture:
+            class Opt:
+                a: str = argument('-a', validator.str)
+
+                @validate(a)
+                def check_a(self, value: str):
+                    return True
+        self.assertEqual(capture.exception.args[0],
+                         "Argument already has a validator")
+
+    def test_not_an_argument(self):
+        with self.assertRaises(TypeError) as capture:
+            class Opt:
+                a: str = ''
+
+                @validate(a)
+                def check_a(self, value: str):
+                    return True
+        self.assertEqual(capture.exception.args[0],
+                         "Not an argument")
+
+    def test_wrong_method_parameter(self):
+        with self.assertRaises(RuntimeError) as capture:
+            class Opt:
+                a: str = argument('-a')
+
+                @validate(a)
+                def check_a(self):
+                    return True
+        self.assertEqual(capture.exception.args[0],
+                         "the signature of validate method 'check_a' not (self, value)")
+
 if __name__ == '__main__':
     unittest.main()

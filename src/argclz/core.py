@@ -370,7 +370,7 @@ class Argument(object):
     def __set__(self, instance, value):
         if (validator := self.validator) is not None:
             from .validator import argument_validating
-            value = argument_validating(value, validator)
+            value = argument_validating(instance, value, validator)
 
         self.descriptor.__set_arg__(instance, self.attr, value)
 

@@ -411,7 +411,7 @@ class TestDispatch(AbstractDispatchTester):
         with self.assertRaises(ValueError) as capture:
             Opt().main(['A', 'b'])
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : fail validation : "b"')
+                         'command A argument "a" : validation failed')
 
     def test_dispatch_command_argument_validator_error_fail(self):
         class Opt(SimpleDispatch):

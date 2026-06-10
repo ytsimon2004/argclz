@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 T = TypeVar('T')
 
 
-def argument_validating(value: T, validator: Callable[[T], bool]) -> T:
+def argument_validating(instance: Any, value: T, validator: Callable[[T], bool]) -> T:
     """
     Top level argument value validating function.
 
@@ -28,7 +29,10 @@ def argument_validating(value: T, validator: Callable[[T], bool]) -> T:
 
         while True:
             try:
-                fail = not validator(value)
+                if isinstance(validator, Validator):
+                    fail = not validator(instance, value)
+                else:
+                    fail = not validator(value)
                 break
             except ValidatorChangeValueRequest as request:
                 value = request.value
@@ -116,7 +120,7 @@ class ValidatorFailOnIndexError(ValidatorFailError):
 
 
 class Validator:
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         """
 
         :param value: type-casted value.
@@ -150,10 +154,15 @@ class LambdaValidator(Validator, Generic[T]):
         """
         self._validator = validator
         self._message = message
+        self._para_count = len(inspect.signature(validator).parameters)
 
-    def __call__(self, value: T) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         try:
-            success = self._validator(value)
+            if self._para_count == 2:
+                success = self._validator(instance, value)
+            else:
+                success = self._validator(value)
+
         except ValidatorFailError:
             raise
         except BaseException as e:
@@ -314,7 +323,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         self._validators: list[LambdaValidator[T]] = []
         self._allow_none = False
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -322,7 +331,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         if self._value_type is not None and not isinstance(value, self._value_type):
             raise ValidatorFailOnTypeError(value, self._value_type)
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
     def _check_none(self, value):
         if value is None:
@@ -332,9 +341,9 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
                 raise ValidatorFailError('None value')
         return False
 
-    def _call_validators(self, value):
+    def _call_validators(self, instance: Any, value: Any):
         for validator in self._validators:
-            if not validator(value):
+            if not validator(value, instance):
                 return False
 
         return True
@@ -518,7 +527,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
             self._add(lambda it: it < 0, 'not a negative value : %d')
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -531,7 +540,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
 
             raise ValidatorFailOnTypeError(value, int)
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
@@ -600,7 +609,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             self._add(lambda it: it < 0, 'not a negative value : %f')
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -619,7 +628,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             else:
                 raise ValidatorFailError('NaN')
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
@@ -683,7 +692,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         self._add(ListItemValidatorBuilder(validator))
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -701,7 +710,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
                 if not element_isinstance(element, element_type):
                     raise ValidatorFailOnTypeError(element, element_type).on_index(i)
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
@@ -780,7 +789,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
         self._add(TupleItemValidatorBuilder(item, validator))
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -814,7 +823,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
                     if t is not None and not element_isinstance(e, t):
                         raise ValidatorFailOnTypeError(e, t).on_index(i)
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
@@ -898,7 +907,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         self._add(DictItemValidatorBuilder(validator))
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
@@ -939,7 +948,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                 if not element_isinstance(element, element_type):
                     raise ValidatorFailOnTypeError(element, element_type).on_index(k)
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
@@ -974,18 +983,18 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
         self._add(lambda it: it.is_dir(), f'path is not a directory: %s')
         return self
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
         if not isinstance(value, Path):
             raise ValidatorChangeValueRequest(Path(value))
 
-        return self._call_validators(value)
+        return self._call_validators(value, instance)
 
 
 class ListItemValidatorBuilder(LambdaValidator):
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, list)
 
         backup = None
@@ -995,7 +1004,7 @@ class ListItemValidatorBuilder(LambdaValidator):
 
             try:
                 try:
-                    fail = not super().__call__(element)
+                    fail = not super().__call__(instance, element)
                 except ValidatorChangeValueRequest as e:
                     if backup is None:
                         backup = list(value)
@@ -1028,7 +1037,7 @@ class TupleItemValidatorBuilder(LambdaValidator):
         super().__init__(validator)
         self._item = item
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, tuple)
 
         if self._item is None:
@@ -1041,7 +1050,7 @@ class TupleItemValidatorBuilder(LambdaValidator):
         backup = None
         for index in index_seq:
             try:
-                if not self.__call_on_index__(index, value):
+                if not self.__call_on_index__(index, instance, value):
                     return False
             except ValidatorChangeValueRequest as e:
                 if backup is None:
@@ -1053,14 +1062,14 @@ class TupleItemValidatorBuilder(LambdaValidator):
 
         return True
 
-    def __call_on_index__(self, index: int, value: Any) -> bool:
+    def __call_on_index__(self, index: int, instance: Any, value: Any) -> bool:
         try:
             element = value[index]
         except IndexError as e:
             raise ValidatorFailOnIndexError(index, f'out of size {len(value)}') from e
 
         try:
-            return super().__call__(element)
+            return super().__call__(instance, element)
         except ValidatorChangeValueRequest:
             raise
         except ValidatorFailOnIndexError as e:
@@ -1076,11 +1085,11 @@ class TupleItemValidatorBuilder(LambdaValidator):
 
 
 class DictKeyValidatorBuilder(LambdaValidator):
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         for k in value:
             try:
-                fail = not super().__call__(k)
+                fail = not super().__call__(instance, k)
             except ValidatorFailOnIndexError as e:
                 raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
             except BaseException as e:
@@ -1098,11 +1107,11 @@ class DictKeyValidatorBuilder(LambdaValidator):
 
 
 class DictItemValidatorBuilder(LambdaValidator):
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         for k, element in value.items():
             try:
-                fail = not super().__call__(element)
+                fail = not super().__call__(instance, element)
             except ValidatorFailOnIndexError as e:
                 raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
             except BaseException as e:
@@ -1123,14 +1132,14 @@ class OrValidatorBuilder(Validator):
     def __init__(self, *validator: Callable[[Any], bool]):
         self.__validators = [it.freeze() if isinstance(it, Validator) else it for it in validator]
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if len(self.__validators) == 0:
             return True
 
         coll = []
         for validator in self.__validators:
             try:
-                if validator(value):
+                if validator(instance, value):
                     return True
             except ValidatorChangeValueRequest:
                 raise
@@ -1151,8 +1160,10 @@ class OrValidatorBuilder(Validator):
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
         if isinstance(validator, OrValidatorBuilder):
             self.__validators.extend(validator.__validators)
-        else:
+        elif isinstance(validator, Validator):
             self.__validators.append(validator)
+        else:
+            self.__validators.append(LambdaValidator(validator))
         return self
 
 
@@ -1160,12 +1171,12 @@ class AndValidatorBuilder(Validator):
     def __init__(self, *validator: Callable[[Any], bool]):
         self.__validators = [it.freeze() if isinstance(it, Validator) else it for it in validator]
 
-    def __call__(self, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         if len(self.__validators) == 0:
             return True
 
         for validator in self.__validators:
-            if not validator(value):
+            if not validator(instance, value):
                 raise ValidatorFailError()
 
         return True
@@ -1176,8 +1187,10 @@ class AndValidatorBuilder(Validator):
     def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
         if isinstance(validator, AndValidatorBuilder):
             self.__validators.extend(validator.__validators)
-        else:
+        elif isinstance(validator, Validator):
             self.__validators.append(validator)
+        else:
+            self.__validators.append(LambdaValidator(validator))
         return self
 
     def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
