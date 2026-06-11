@@ -1548,16 +1548,27 @@ class TestValidatorDecorator(unittest.TestCase):
             opt.a = ''
         self.assertListEqual(callback, ['1', ''])
 
-    def test_validator_duplicated(self):
-        with self.assertRaises(RuntimeError) as capture:
-            class Opt:
-                a: str = argument('-a', validator.str)
+    def test_validator_error(self):
+        callback = []
 
-                @validate(a)
-                def check_a(self, value: str):
-                    return True
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            def check_a(self, value: str):
+                callback.append(value)
+                if len(value) == 0:
+                    raise RuntimeError('custom fail message')
+                return True
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        # even we raise RuntimeError, validator always raises ValueError
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ''
         self.assertEqual(capture.exception.args[0],
-                         "Argument already has a validator")
+                         'custom fail message')
 
     def test_not_an_argument(self):
         with self.assertRaises(TypeError) as capture:
@@ -1580,6 +1591,243 @@ class TestValidatorDecorator(unittest.TestCase):
                     return True
         self.assertEqual(capture.exception.args[0],
                          "the signature of validate method 'check_a' not (self, value)")
+
+    def test_validator_int(self):
+        callback = []
+
+        class Opt:
+            a: int = argument('-a')
+
+            @validate(a)
+            def check_a(zelf, value: int):
+                self.assertIsInstance(value, int)
+                callback.append(value)
+                return value > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = 1
+        self.assertListEqual(callback, [1])
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+        self.assertListEqual(callback, [1, 0])
+
+        with self.assertRaises(ValueError):
+            opt.a = '0'  # type mismatch, check_a isn't called
+        self.assertListEqual(callback, [1, 0])
+
+    def test_validator_float(self):
+        callback = []
+
+        class Opt:
+            a: float = argument('-a')
+
+            @validate(a)
+            def check_a(zelf, value: float):
+                self.assertIsInstance(value, float)
+                callback.append(value)
+                return value > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = 1
+        self.assertListEqual(callback, [1.0])
+
+        with self.assertRaises(ValueError):
+            opt.a = 0
+        self.assertListEqual(callback, [1.0, 0.0])
+
+        with self.assertRaises(ValueError):
+            opt.a = '0'  # type mismatch, check_a isn't called
+        self.assertListEqual(callback, [1.0, 0.0])
+
+    def test_validator_path(self):
+        callback = []
+
+        class Opt:
+            a: Path = argument('-a')
+
+            @validate(a)
+            def check_a(zelf, value: Path):
+                self.assertIsInstance(value, Path)
+                callback.append(value)
+                return True
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = 'a'
+        self.assertEqual(opt.a, Path('a'))
+        self.assertListEqual(callback, [Path('a')])
+
+    def test_validator_additional(self):
+        class Opt:
+            a: str = argument('-a', validator.str.length_in_range(2, None))
+
+            @validate(a)
+            def check_a(self, value: str):
+                return len(value) < 5
+
+        opt = Opt()
+        opt.a = '123'
+
+        with self.assertRaises(ValueError):
+            opt.a = ''
+        with self.assertRaises(ValueError):
+            opt.a = '123456'
+
+    def test_validator_additional_more(self):
+        class Opt:
+            a: str = argument('-a', validator.str.length_in_range(2, None))
+
+            @validate(a)
+            def check_a(self, value: str):
+                return len(value) < 5
+
+            @validate(a)
+            def check_a_is_digit(self, value: str):
+                return value.isdigit()
+
+        opt = Opt()
+        opt.a = '123'
+
+        with self.assertRaises(ValueError):
+            opt.a = ''
+        with self.assertRaises(ValueError):
+            opt.a = '123456'
+        with self.assertRaises(ValueError):
+            opt.a = 'abcd'
+
+    def test_validator_shared(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+            @validate(a, b)
+            def check_input(self, value: str):
+                return len(value) < 5
+
+        opt = Opt()
+        opt.a = '123'
+        opt.b = '123'
+
+        with self.assertRaises(ValueError):
+            opt.a = '123456'
+
+        with self.assertRaises(ValueError):
+            opt.b = '123456'
+
+    def test_validator_reused(self):
+        class Opt:
+            a: str = argument('-a')
+            b: str = argument('-b')
+
+            @validate(a)
+            @validate(b)
+            def check_input(self, value: str):
+                return len(value) < 5
+
+        opt = Opt()
+        opt.a = '123'
+        opt.b = '123'
+
+        with self.assertRaises(ValueError):
+            opt.a = '123456'
+
+        with self.assertRaises(ValueError):
+            opt.b = '123456'
+
+    def test_validator_complex_parameter_type(self):
+        callback = []
+
+        class Opt:
+            a: str = argument('-a')
+            b: int = argument('-b')
+
+            @validate(a)
+            @validate(b)
+            def check_input(self, value: str | int | None):
+                callback.append(value)
+                return value is not None
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = '123'
+        self.assertListEqual(callback, ['123'])
+        opt.b = 123
+        self.assertListEqual(callback, ['123', 123])
+
+        with self.assertRaises(ValueError):
+            opt.a = None  # complex type, so check_input is called
+        self.assertListEqual(callback, ['123', 123, None])
+
+        with self.assertRaises(ValueError):
+            opt.b = None  # complex type, so check_input is called
+        self.assertListEqual(callback, ['123', 123, None, None])
+
+    def test_validator_tuple(self):
+        class Opt:
+            a: tuple[int, int, int] = argument('-a', validator.tuple(3, int))
+
+            @validate(a)
+            def check_a(zelf, value: tuple[int, int, int]):
+                self.assertIsInstance(value, tuple)
+                return all([it > 0 for it in value])
+
+        opt = Opt()
+        opt.a = (1, 2, 3)
+        with self.assertRaises(ValueError) as capture:
+            opt.a = ()
+        self.assertEqual(capture.exception.args[0],
+                         'length not match to 3 : ()')
+        with self.assertRaises(ValueError) as capture:
+            opt.a = (0, 0, 0)
+        self.assertEqual(capture.exception.args[0],
+                         'check_a validation failed')
+
+    def test_validator_list(self):
+        class Opt:
+            a: list[int] = argument('-a', validator.list(int).length_in_range(3, 3))
+
+            @validate(a)
+            def check_a(zelf, value: list[int]):
+                self.assertIsInstance(value, list)
+                return all([it > 0 for it in value])
+
+        opt = Opt()
+        opt.a = [1, 2, 3]
+        with self.assertRaises(ValueError) as capture:
+            opt.a = []
+        self.assertEqual(capture.exception.args[0],
+                         'list length out of range [3, 3]: 0')
+        with self.assertRaises(ValueError) as capture:
+            opt.a = [0, 0, 0]
+        self.assertEqual(capture.exception.args[0],
+                         'check_a validation failed')
+
+    def test_validator_dict(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', validator.dict(int))
+
+            @validate(a)
+            def check_a(zelf, value: dict[str, int]):
+                self.assertIsInstance(value, dict)
+                return all([it > 0 for it in value.values()])
+
+        opt = Opt()
+        opt.a = {'a': 1}
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = {'a': 0}
+        self.assertEqual(capture.exception.args[0],
+                         'check_a validation failed')
+
 
 if __name__ == '__main__':
     unittest.main()
