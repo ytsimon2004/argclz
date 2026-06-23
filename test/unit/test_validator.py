@@ -1828,6 +1828,37 @@ class TestValidatorDecorator(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'check_a validation failed')
 
+    def test_dict_type_changing_key(self):
+        class Opt:
+            d: dict[str, str] = argument(
+                '-d',
+                validator.dict().on_key(validator.str.upper(transform=True))
+            )
+
+        opt = Opt()
+
+        opt.d = {}
+        self.assertDictEqual(opt.d, {})
+
+        opt.d = {'a': 'x', 'b': 'y'}
+        self.assertDictEqual(opt.d, {'A': 'x', 'B': 'y'})
+
+        with self.assertRaises(ValueError) as capture:
+            opt.d = {'a': 'x', 'A': 'y'}
+        self.assertEqual(capture.exception.args[0],
+                         'at key a, duplicated keys: A')
+
+    def test_dict_type_changing_value(self):
+        class Opt:
+            d: dict[str, str] = argument(
+                '-d',
+                validator.dict().on_value(validator.str.upper(transform=True))
+            )
+
+        opt = Opt()
+        opt.d = {'a': 'x', 'b': 'Y'}
+
+        self.assertDictEqual(opt.d, {'a': 'X', 'b': 'Y'})
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,7 @@
 import contextlib
 import io
 import re
+import sys
 import unittest
 
 from argclz import *
@@ -261,8 +262,13 @@ class CommandParserClassTest(unittest.TestCase):
                 g1 = sub_command_group()
                 g2 = sub_command_group()
 
-        self.assertEqual(capture.exception.args[0],
-                         'cannot have multiple sub-commands groups: g1 and g2')
+        if sys.version_info >= (3, 12):
+            self.assertEqual(capture.exception.args[0],
+                             'cannot have multiple sub-commands groups: g1 and g2')
+        else:
+            # error is wrapped in __set_name__
+            self.assertEqual(capture.exception.__cause__.args[0],
+                             'cannot have multiple sub-commands groups: g1 and g2')
 
     def test_sub_command_should_be_a_parser(self):
         with self.assertRaises(TypeError) as capture:
@@ -440,7 +446,7 @@ epilog
                 a: str = argument('-a', default='default P2', help='sub command b -a help')
 
         def get_buffer_value(output):
-            return re.sub(r'usage: .*\.py', 'usage: run.py', output.getvalue())
+            return re.sub(r'usage: (python -m unittest|pytest|.*\.py)', 'usage: run.py', output.getvalue())
 
         with self.subTest('parent case'):
             buf = io.StringIO()

@@ -5,7 +5,6 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
-
 from typing_extensions import Self
 
 if TYPE_CHECKING:
@@ -1094,9 +1093,21 @@ class TupleItemValidatorBuilder(LambdaValidator):
 class DictKeyValidatorBuilder(LambdaValidator):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
+
+        backup = None
         for k in value:
             try:
                 fail = not super().__call__(instance, k)
+            except ValidatorChangeValueRequest as e:
+                if backup is None:
+                    backup = dict(value)
+
+                n = str(e.value)
+                if n in backup:
+                    raise ValidatorFailOnIndexError(k, f'duplicated keys: {n}') from e
+
+                backup[n] = backup.pop(k)
+
             except ValidatorFailOnIndexError as e:
                 raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
             except BaseException as e:
@@ -1104,6 +1115,10 @@ class DictKeyValidatorBuilder(LambdaValidator):
             else:
                 if fail:
                     raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
+
+        if backup is not None:
+            raise ValidatorChangeValueRequest(backup)
+
         return True
 
     def freeze(self) -> Self:
@@ -1116,9 +1131,16 @@ class DictKeyValidatorBuilder(LambdaValidator):
 class DictItemValidatorBuilder(LambdaValidator):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
+
+        backup = None
         for k, element in value.items():
             try:
                 fail = not super().__call__(instance, element)
+            except ValidatorChangeValueRequest as e:
+                if backup is None:
+                    backup = dict(value)
+                backup[k] = e.value
+
             except ValidatorFailOnIndexError as e:
                 raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
             except BaseException as e:
@@ -1126,6 +1148,10 @@ class DictItemValidatorBuilder(LambdaValidator):
             else:
                 if fail:
                     raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
+
+        if backup is not None:
+            raise ValidatorChangeValueRequest(backup)
+
         return True
 
     def freeze(self) -> Self:

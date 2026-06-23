@@ -3,6 +3,7 @@ import builtins
 import contextlib
 import io
 import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -343,6 +344,7 @@ epilog text
 
     def test_new_parser_on_abstract_parser_overflow(self):
         called = []
+
         class Main(AbstractParser):
             a: str = argument('-a', help='help text')
 
@@ -380,6 +382,7 @@ epilog text
         _ = parse_args(Main(), [])
         self.assertListEqual(called, ['yes'])
 
+    @unittest.skipIf(sys.version_info < (3, 12), 'delete_on_close added since 3.12')
     def test_new_parser_from_file_prefix(self):
         class Opt:
             a: str = argument('-a')
@@ -430,6 +433,60 @@ epilog text
         with self.assertRaises(ValueError):
             new_parser(Opt, conflict_handler='error')
 
+    def test_dict_type_default(self):
+        with self.subTest('default=None'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int))
+
+            ap = new_parser(Opt)
+
+            self.assertDictEqual(ap.parse_args(['-d', 'a=1']).d, {'a': 1})
+            self.assertDictEqual(ap.parse_args([]).d, {})
+
+            self.assertDictEqual(ap.parse_args(['-d', 'b=2']).d, {'b': 2})
+            self.assertDictEqual(ap.parse_args([]).d, {})
+
+        with self.subTest('default={}'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int), default={})
+
+            ap = new_parser(Opt)
+
+            self.assertDictEqual(ap.parse_args(['-d', 'a=1']).d, {'a': 1})
+            self.assertDictEqual(ap.parse_args([]).d, {})
+
+            self.assertDictEqual(ap.parse_args(['-d', 'b=2']).d, {'b': 2})
+            self.assertDictEqual(ap.parse_args([]).d, {})
+
+        with self.subTest('default={...}'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int), default={'x': 1})
+
+            ap = new_parser(Opt)
+
+            self.assertDictEqual(ap.parse_args([]).d, {'x': 1})
+            self.assertDictEqual(ap.parse_args(['-d', 'a=1']).d, {'x': 1, 'a': 1})
+            self.assertDictEqual(ap.parse_args([]).d, {'x': 1})
+
+        with self.subTest('default leak'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int))
+
+            ap = new_parser(Opt)
+            ns = ap.parse_args([])
+            self.assertDictEqual(ap.parse_args([]).d, {})
+
+            ns.d['new_key'] = 0  # ns.d is same dict instance as the default
+            self.assertDictEqual(ap.parse_args([]).d, {'new_key': 0})
+
+            ## argparse has similar issue, so I won't fix it.
+            # ap = argparse.ArgumentParser()
+            # ap.add_argument('-a', default=[], action='append',metavar='V')
+            # opt = ap.parse_args([])
+            # self.assertListEqual(opt.a, [])
+            # opt.a.append('a')
+            # opt = ap.parse_args([])
+            # self.assertListEqual(opt.a, ['a'])
 
 class AbstractParserTest(unittest.TestCase):
     def test_parser_init(self):
@@ -916,6 +973,7 @@ class ArgumentsTest(unittest.TestCase):
                 a: str = pos_argument('-a')
         self.assertEqual(capture.exception.args[0],
                          "positional argument startswith '-': -a")
+
 
 class ArgumentDescriptorTest(unittest.TestCase):
     def test_replace_descriptor(self):

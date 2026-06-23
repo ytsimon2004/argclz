@@ -9,7 +9,6 @@ from collections.abc import Sequence, Iterable, Callable
 from contextvars import ContextVar
 from types import EllipsisType
 from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload, get_type_hints, cast
-
 from typing_extensions import Self
 
 from . import i18n
@@ -1198,6 +1197,12 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
         except AttributeError:
             pass
         else:
+            # defense copy
+            if isinstance(value, list):
+                value = list(value)
+            elif isinstance(value, dict):
+                value = dict(value)
+
             arg.__set__(instance, value)
 
     from .commands import get_sub_command_group

@@ -409,7 +409,10 @@ class TypeAnnotationTest(unittest.TestCase):
         with self.assertRaises(RuntimeError) as capture:
             # raise from argparse choices checking
             parse_args(Opt(), ['-a', 'CCC'])
-        self.assertEqual(capture.exception.args[0], "exit 2: argument -a: invalid choice: 'CCC' (choose from AAA, BBB)")
+
+        # argparse message changed between 3.10 and 3.12
+        self.assertRegex(capture.exception.args[0],
+                         r"exit 2: argument -a: invalid choice: 'CCC' \(choose from '?AAA'?, '?BBB'?\)")
 
         with self.assertRaises(RuntimeError) as capture:
             # raise from literal_type validation
@@ -576,7 +579,6 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(opt, ['-a=b=2'])
         self.assertDictEqual(opt.a, {'b': 2})
 
-
     def test_dict_type_recall_should_not_append(self):
         class Opt:
             a: dict[str, int] = argument('-a', type=dict_type(int))
@@ -600,6 +602,67 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=a=1', '-b=b=2'])
         self.assertDictEqual(opt.a, {'a': 1})
         self.assertDictEqual(opt.b, {'b': 2})
+
+    def test_dict_type_default(self):
+        # same test as NewParserTest.test_dict_type_default,
+        # but using argclz.parse_args.
+        with self.subTest('default=None'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int))
+
+            opt = parse_args(Opt(), ['-d', 'a=1'])
+            self.assertDictEqual(opt.d, {'a': 1})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
+            opt = parse_args(Opt(), ['-d', 'b=2'])
+            self.assertDictEqual(opt.d, {'b': 2})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
+        with self.subTest('default={}'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int), default={})
+
+            opt = parse_args(Opt(), ['-d', 'a=1'])
+            self.assertDictEqual(opt.d, {'a': 1})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
+            opt = parse_args(Opt(), ['-d', 'b=2'])
+            self.assertDictEqual(opt.d, {'b': 2})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
+        with self.subTest('default={...}'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int), default={'x': 1})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {'x': 1})
+
+            opt = parse_args(Opt(), ['-d', 'b=2'])
+            self.assertDictEqual(opt.d, {'b': 2, 'x': 1})
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {'x': 1})
+
+        with self.subTest('default leaked'):
+            class Opt:
+                d: dict[str, int] = argument('-d', type=dict_type(int))
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
+            opt.d['new_key'] = 0
+
+            opt = parse_args(Opt(), [])
+            self.assertDictEqual(opt.d, {})
+
 
 
 if __name__ == '__main__':

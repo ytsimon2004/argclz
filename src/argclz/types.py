@@ -181,18 +181,33 @@ def union_type(*t: Callable[[str], T]):
 # noinspection PyPep8Naming
 class dict_type:
     """Caster that accumulates key-value pairs from 'key=value' strings.
+
+    **Default value**
+
+    ``dict_type`` take ``default`` value in :func:`~argclz.core.argument`.
+    ``None`` and omitted default is considered ``default={}`.
+
+    >>> class Example:
+    ...     d: dict[str, str] = argument('-d', type=dict_type(), default={})
+
+    .. warning::
+
+        When using :class:`argparse.ArgumentParser` directly, the mutable dict instance as default
+        will be leaked when the option is omitted if you use
+        :class:`argparse.ArgumentParser` directly.
+        The modification of that dict instance will cause unexpected result when reusing
+        the parser again.
+
     """
 
     def __init__(self, value_type: Type[T] | Callable[[str], T] | None = str, *,
                  kv_split: str = '=',
-                 split: str | None = None,
-                 default: dict[str, T] | None = None):
+                 split: str | None = None):
         """
 
         :param value_type: function to convert values (default: str)
         :param kv_split: the splitter of key and value.
         :param split: the splitter that allow dict_type accept a list of key-value pairs.
-        :param default: initial dict to populate (default: new dict)
         """
         if len(kv_split) == 0:
             raise ValueError('empty kv_split')
@@ -203,16 +218,12 @@ class dict_type:
             if split in kv_split:
                 raise ValueError('split reused in kv_split')
 
-        if default is None:
-            default = {}
-
         self._value_type = value_type
         self._kv_split = kv_split
         self._split = split
-        self._default_dict = dict(default)
 
     def __call__(self, arg: str) -> dict[str, T]:
-        ret = dict(self._default_dict)
+        ret = {}
 
         if len(arg):
             if self._split is None:
@@ -240,8 +251,9 @@ class dict_type:
                      option_strings,
                      dest: str,
                      type: dict_type,
+                     default=None,
                      required: bool = False,
-                     help: str = None,
+                     help: str | None = None,
                      metavar: str | tuple[str, str] = ('Key', 'Value')):
             if not isinstance(type, dict_type):
                 raise TypeError('type should be dict_type')
@@ -259,11 +271,14 @@ class dict_type:
                 case _:
                     raise TypeError('illegal metavar')
 
+            if default is None:
+                default = {}
+
             super().__init__(
                 option_strings=option_strings,
                 dest=dest,
                 nargs=1,
-                default={},
+                default=default,
                 required=required,
                 help=help,
                 metavar=metavar)
@@ -277,6 +292,7 @@ class dict_type:
             if coll is None:
                 coll = {}
 
+            coll = dict(coll)  # copy items
             coll.update(self._dict_type(values[0]))
             setattr(namespace, self.dest, coll)
 
