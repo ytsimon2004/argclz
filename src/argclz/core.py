@@ -3,10 +3,10 @@ from __future__ import annotations
 import abc
 import argparse
 import collections
-import inspect
 import sys
 import warnings
 from collections.abc import Sequence, Iterable, Callable
+from contextvars import ContextVar
 from types import EllipsisType
 from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload, get_type_hints, cast
 
@@ -188,29 +188,6 @@ class AbstractParser(metaclass=abc.ABCMeta):
         """called after :meth:`~argclz.core.ArgumentParser.main()`.
         Used for runs the main execution logic of the object"""
         pass
-
-    def __str__(self):
-        return type(self).__name__
-
-    # TODO do we need this repr which goes all of the arguments and properties?
-    # def __repr__(self):
-    #     """print key value pair content"""
-    #     self_type = type(self)
-    #     ret = []
-    #     for a_name in dir(self_type):
-    #         a_value = getattr(self_type, a_name)
-    #         if isinstance(a_value, Argument) and not a_name.startswith('_'):
-    #             try:
-    #                 ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
-    #             except:
-    #                 ret.append(f'{a_name} = <error>')
-    #         elif isinstance(a_value, property):
-    #             try:
-    #                 ret.append(f'{a_name} = {a_value.__get__(self, self_type)}')
-    #             except:
-    #                 ret.append(f'{a_name} = <error>')
-    #
-    #     return '\n'.join(ret)
 
 
 class Argument(object):
@@ -420,7 +397,7 @@ class Argument(object):
                 nargs='?'
             )
 
-    # noinspection PyShadowingBuiltins
+    # noinspection PyShadowingBuiltins,PyTypeChecker
     @overload  # this overload is used to show the actual keyword arguments.
     def with_options(self,
                      *options: str,
@@ -438,7 +415,7 @@ class Argument(object):
                      metavar: str | EllipsisType = None) -> Self:
         pass
 
-    # noinspection PyShadowingBuiltins
+    # noinspection PyShadowingBuiltins,PyTypeChecker
     @overload  # this overload is used to show the actual keyword arguments.
     def with_options(self,
                      kept: EllipsisType,
@@ -457,7 +434,7 @@ class Argument(object):
                      metavar: str | EllipsisType = None) -> Self:
         pass
 
-    # noinspection PyShadowingBuiltins
+    # noinspection PyShadowingBuiltins,PyTypeChecker
     @overload  # this overload is used to show the actual keyword arguments.
     def with_options(self,
                      rename: dict[str, str | Ellipsis | None],
@@ -939,6 +916,9 @@ def new_parser(instance: T | Type[T], *,
     pass
 
 
+ARGCLZ_NEWPARSER_CONTEXT: ContextVar[set[Type[AbstractParser]]] = ContextVar('ARGCLZ_NEWPARSER_CONTEXT')
+EMPTY_SET = set()
+
 def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     """Create :class:`~argparse.ArgumentParser` for *instance*.
 
@@ -961,37 +941,18 @@ def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     :return: an :class:`~argparse.ArgumentParser`
     """
     if isinstance(instance, AbstractParser):
-        return __argclz_check_new_parser_recursive_calling__(type(instance), kwargs)
+        instance = type(instance)
+
     if isinstance(instance, type) and issubclass(instance, AbstractParser):
-        return __argclz_check_new_parser_recursive_calling__(instance, kwargs)
+        parser_set = ARGCLZ_NEWPARSER_CONTEXT.get(EMPTY_SET)
+        if instance not in parser_set:
+            token = ARGCLZ_NEWPARSER_CONTEXT.set({*parser_set, instance})
+            try:
+                return instance.new_parser(**kwargs)
+            finally:
+                ARGCLZ_NEWPARSER_CONTEXT.reset(token)
 
     return _new_parser(instance, **kwargs)
-
-
-def __argclz_check_new_parser_recursive_calling__(instance: Type[AbstractParser], kwargs: dict[str, Any]) -> ArgumentParser:
-    """
-    It is a special function that check the revisiting count of itself according to the calling stacks.
-    If it is the first time of this function invoking, it calls :meth:`AbstractParser.new_parser`.
-    Otherwise, it calls :func:`_new_parser`.
-    """
-    stack = inspect.stack()
-    ## FIRST CALL
-    # [1] new_parser
-    # [0] __argclz_check_new_parser_recursive_calling__
-    # => AbstractParser.new_parser
-    #
-    ## SECOND CALL
-    # [4] new_parser
-    # [3] __argclz_check_new_parser_recursive_calling__
-    # [2] AbstractParser.new_parser
-    # [1] new_parser
-    # [0] __argclz_check_new_parser_recursive_calling__
-    # => _new_parser
-    for i, frame in enumerate(stack[1:5]):
-        # check whether it is the second call
-        if frame.function == '__argclz_check_new_parser_recursive_calling__' and frame.frame.f_locals['instance'] is instance:
-            return _new_parser(instance, **kwargs)
-    return instance.new_parser(**kwargs)
 
 
 def _new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:

@@ -566,6 +566,17 @@ class TypeAnnotationTest(unittest.TestCase):
         opt = parse_args(Opt(), ['-a=a=1', '-a=b=2', '-a=c'])
         self.assertDictEqual(opt.a, {'a': 1, 'b': 2, 'c': ''})
 
+    def test_dict_reuse_object(self):
+        class Opt:
+            a: dict[str, int] = argument('-a', type=dict_type(int))
+
+        opt = parse_args(Opt(), ['-a=a=1'])
+        self.assertDictEqual(opt.a, {'a': 1})
+
+        opt = parse_args(opt, ['-a=b=2'])
+        self.assertDictEqual(opt.a, {'b': 2})
+
+
     def test_dict_type_recall_should_not_append(self):
         class Opt:
             a: dict[str, int] = argument('-a', type=dict_type(int))
