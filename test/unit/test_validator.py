@@ -1,3 +1,5 @@
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Literal
@@ -1859,6 +1861,184 @@ class TestValidatorDecorator(unittest.TestCase):
         opt.d = {'a': 'x', 'b': 'Y'}
 
         self.assertDictEqual(opt.d, {'a': 'X', 'b': 'Y'})
+
+
+@unittest.skipIf(np is None, 'numpy is not installed')
+class TestNumpyArrayValidator(unittest.TestCase):
+
+    @unittest.skipIf(sys.version_info < (3, 12), 'delete_on_close added since 3.12')
+    def test_numpy_type(self):
+        from numpy.testing import assert_array_equal
+
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy())
+
+        with tempfile.NamedTemporaryFile('w+', dir='.', suffix='.npy', delete_on_close=False) as tf:
+            arr = np.empty((3, 3), dtype=int)
+            np.save(tf.name, arr)
+
+            opt = parse_args(Opt(), ['-a', tf.name])
+
+        self.assertIsInstance(opt.a, np.ndarray)
+        assert_array_equal(opt.a, arr)
+
+    @unittest.skipIf(sys.version_info < (3, 12), 'delete_on_close added since 3.12')
+    def test_numpy_memmap(self):
+        from numpy.testing import assert_array_equal
+
+        arr = np.empty((3, 3), dtype=int)
+
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(arr.dtype).shape(arr.shape).binary())
+
+        with tempfile.NamedTemporaryFile('w+', dir='.', suffix='.bin', delete_on_close=False) as tf:
+            out = np.memmap(tf.name, mode='w+', dtype=arr.dtype, shape=arr.shape)
+            out[:] = arr
+            out.flush()
+
+            opt = parse_args(Opt(), ['-a', tf.name])
+
+            self.assertIsInstance(opt.a, np.memmap)
+            assert_array_equal(opt.a, arr)
+
+    @unittest.skipIf(sys.version_info < (3, 12), 'delete_on_close added since 3.12')
+    def test_numpy_memmap_with_unbounded_length(self):
+        from numpy.testing import assert_array_equal
+
+        arr = np.empty((3, 3, 3), dtype=int)
+
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(arr.dtype).shape((3, None, 3)).binary())
+
+        with tempfile.NamedTemporaryFile('w+', dir='.', suffix='.bin', delete_on_close=False) as tf:
+            out = np.memmap(tf.name, mode='w+', dtype=arr.dtype, shape=arr.shape)
+            out[:] = arr
+            out.flush()
+
+            opt = parse_args(Opt(), ['-a', tf.name])
+
+            self.assertIsInstance(opt.a, np.memmap)
+            assert_array_equal(opt.a, arr)
+
+    def test_dtype(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(float).auto_casting())
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2), dtype=int)
+        self.assertEqual(opt.a.dtype, np.int64)
+
+    def test_ndim(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().ndim(2))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2,))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim is not 2, but shape : (2,)')
+
+    def test_shape_declare(self):
+        with self.subTest('success case'):
+            validator.numpy().shape()
+            validator.numpy().shape(1)
+            validator.numpy().shape(1, 2, 3)
+            validator.numpy().shape('TIME', 'DATA')
+            validator.numpy().shape('TIME', 'DATA', ...)
+            validator.numpy().shape(None, ['TIME', 'DATA'])  # (N, 2)
+            validator.numpy().shape('TIME', ..., 'DATA')
+
+        with self.subTest('multiple ...'):
+            with self.assertRaises(ValueError):
+                validator.numpy().shape('TIME', ..., 'DATA', ...)
+
+        with self.subTest('wrong type'):
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(1, 2.5)
+
+    def test_shape_fixed(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().shape(2, 2))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2,))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim != 2: (2,)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 1))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[1] != 2: (2, 1)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 2, 2))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim != 2: (2, 2, 2)')
+
+    def test_shape_fixed_d(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().shape(None, 2))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2))
+        opt.a = np.zeros((20, 2))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2,))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim != 2: (2,)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 1))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[1] != 2: (2, 1)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 2, 2))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim != 2: (2, 2, 2)')
+
+    def test_shape_tail(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().shape(..., 2))
+
+        opt = Opt()
+        opt.a = np.zeros((2,))
+        opt.a = np.zeros((2, 2))
+        opt.a = np.zeros((1, 1, 2))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((3,))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[0] != 2: (3,)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 3))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[1] != 2: (2, 3)')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 2, 3))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[2] != 2: (2, 2, 3)')
+
+    def test_shape_tail_small(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().shape(2, ..., 2, 2))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2, 2))
+        opt.a = np.zeros((2, 1, 2, 2))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 2))
+        self.assertEqual(capture.exception.args[0],
+                         'ndim < 3: (2, 2)')
 
 
 if __name__ == '__main__':

@@ -5,8 +5,7 @@ import re
 from collections.abc import Callable, Sequence, Iterable
 from pathlib import Path
 from types import EllipsisType
-from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
-
+from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING, Literal
 from typing_extensions import Self
 
 from . import i18n
@@ -18,6 +17,13 @@ T = TypeVar('T')
 C = TypeVar('C')  # collection
 K = TypeVar('K')  # collection key
 CC = TypeVar('CC')  # collection backup
+
+
+def check_import(name: str):
+    try:
+        return __import__(name)
+    except ImportError:
+        return None
 
 
 def argument_validating(instance: Any, value: T, validator: Validator | Callable[[T], bool]) -> T:
@@ -348,6 +354,14 @@ class ValidatorBuilder:
             return validator
         else:
             return LambdaValidator(validator, message)
+
+    if check_import('numpy'):
+        @classmethod
+        def numpy(cls, mode: Literal['r+', 'r', None] = None):
+            from ._validators import _numpy
+            return _numpy.NumpyArrayValidator(mode)
+
+        # TODO npz support?
 
 
 class AbstractTypeValidatorBuilder(Validator, Generic[T]):
@@ -1289,10 +1303,3 @@ class AndValidatorBuilder(Validator):
 
 def element_isinstance(e, t) -> bool:
     return isinstance(t, type) and isinstance(e, t)
-
-
-def check_import(name: str):
-    try:
-        return __import__(name)
-    except ImportError:
-        return None
