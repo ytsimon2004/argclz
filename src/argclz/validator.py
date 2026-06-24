@@ -364,7 +364,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         if self._value_type is not None and not isinstance(value, self._value_type):
             raise ValidatorFailOnTypeError(value, self._value_type)
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
     def _check_none(self, value):
         if value is None:
@@ -376,7 +376,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
 
     def _call_validators(self, instance: Any, value: Any):
         for validator in self._validators:
-            if not validator(value, instance):
+            if not validator(instance, value):
                 return False
 
         return True
@@ -576,7 +576,7 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
 
             raise ValidatorFailOnTypeError(value, int)
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
 
 class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
@@ -664,7 +664,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             else:
                 raise ValidatorFailError(i18n.gettext('NaN'))
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
 
 class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
@@ -746,7 +746,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
                 if not element_isinstance(element, element_type):
                     raise ValidatorFailOnTypeError(element, element_type).on_index(i)
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
 
 class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
@@ -859,21 +859,21 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
                     if t is not None and not element_isinstance(e, t):
                         raise ValidatorFailOnTypeError(e, t).on_index(i)
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
     def _call_validators(self, instance: Any, value: Any):
         index_errors = []
         for validator in self._validators:
             if isinstance(validator, TupleItemValidatorBuilder):
                 try:
-                    if not validator(value, instance):
+                    if not validator(instance, value):
                         return False
                 except ValidatorChangeValueRequest:
                     raise
                 except ValidatorFailError as e:
                     index_errors.append(e)
 
-            elif not validator(value, instance):
+            elif not validator(instance, value):
                 return False
 
         if len(index_errors):
@@ -1006,7 +1006,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                 if not element_isinstance(element, element_type):
                     raise ValidatorFailOnTypeError(element, element_type).on_index(k)
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
 
 class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
@@ -1048,7 +1048,7 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
         if not isinstance(value, Path):
             raise ValidatorChangeValueRequest(Path(value))
 
-        return self._call_validators(value, instance)
+        return self._call_validators(instance, value)
 
 
 class CollectionElementValidatorBuilder(LambdaValidator, Generic[C, K, CC], metaclass=abc.ABCMeta):
