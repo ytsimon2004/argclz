@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import i18n
 from .core import ArgumentParser, copy_argument
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ def _copy_argument(self: Cloneable, ref: ArgumentParser | Cloneable | dict[str, 
 def _copy_argument_polars_dataframe(self: Cloneable, ref: pl.DataFrame, kwargs: dict):
     dataset = ref.unique()
     if len(dataset) > 1:
-        raise RuntimeError(f'dataset not unique : {ref}')
+        raise RuntimeError(i18n.gettext('dataset not unique : %s') % str(ref))
 
     for column in dataset.columns:
         kwargs.setdefault(column, dataset[0, column])

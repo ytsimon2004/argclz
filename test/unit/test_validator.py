@@ -272,7 +272,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.b = 'aaa'
         self.assertEqual(capture.exception.args[0],
-                         'not in UPPER case : "aaa"')
+                         "not in UPPER case : 'aaa'")
 
     def test_str_lower_case(self):
         class Opt:
@@ -291,7 +291,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.b = 'AAA'
         self.assertEqual(capture.exception.args[0],
-                         'not in lower case : "AAA"')
+                         "not in lower case : 'AAA'")
 
     # noinspection PyUnusedLocal,PyRedeclaration
     def test_int_in_range_type_error(self):
@@ -754,7 +754,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('1234', 0, 0.0)
         self.assertEqual(capture.exception.args[0],
-                         'at index 0, str length over 2: "1234"')
+                         "at index 0, str length over 2: '1234'")
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('12', 100, 0.0)
@@ -776,7 +776,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('1234', 0, '1', 1)
         self.assertEqual(capture.exception.args[0],
-                         'at index 0, str length over 2: "1234"')
+                         "at index 0, str length over 2: '1234'")
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('', 100, '1', 1)
@@ -786,7 +786,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('1', 0, '1234', 1)
         self.assertEqual(capture.exception.args[0],
-                         'at index 2, str length over 2: "1234"')
+                         "at index 2, str length over 2: '1234'")
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('', 1, '1', 100)
@@ -797,7 +797,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('', 1000, '1234', 1)  # validator.str comes first
         self.assertEqual(capture.exception.args[0],
-                         'at index 2, str length over 2: "1234"')
+                         "at index 2, str length over 2: '1234'")
 
     # noinspection PyTypeChecker
     def test_tuple_n_element_validating(self):
@@ -830,7 +830,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = ('1234', 0, 0.0)
         self.assertEqual(capture.exception.args[0],
-                         'at index 0, str length over 2: "1234"')
+                         "at index 0, str length over 2: '1234'")
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('12', 100, 0.0)
@@ -949,7 +949,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'B': 2, 'D': 3}
         self.assertEqual(capture.exception.args[0],
-                         'key "D" is not allowed')
+                         "key 'D' is not allowed")
 
     # noinspection PyUnusedLocal
     def test_dict_on_empty_allow_keyset(self):
@@ -1060,7 +1060,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'A': 1, 'AA': 2, 'AAA': 3}
         self.assertEqual(capture.exception.args[0],
-                         'duplicated key: "A" and "AAA"')
+                         "duplicated key: 'A' and 'AAA'")
 
     def test_dict_with_key_checking(self):
         class Opt:
@@ -1213,7 +1213,7 @@ class TestValidateBuilder(unittest.TestCase):
             opt.a = '1' * 13
 
         self.assertEqual(capture.exception.args[0],
-                         'str length out of range [0, 10]: "1111111111111"')
+                         "str length out of range [0, 10]: '1111111111111'")
 
     # noinspection PyTypeChecker
     def test_empty_any(self):
@@ -1244,7 +1244,7 @@ class TestValidateBuilder(unittest.TestCase):
             opt.a = '1' * 13
 
         self.assertEqual(capture.exception.args[0],
-                         'str length out of range [0, 10]: "1111111111111"')
+                         "str length out of range [0, 10]: '1111111111111'")
 
     # noinspection PyTypeChecker
     def test_any_then_or(self):
@@ -1846,7 +1846,7 @@ class TestValidatorDecorator(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.d = {'a': 'x', 'A': 'y'}
         self.assertEqual(capture.exception.args[0],
-                         'at key a, duplicated keys: A')
+                         "at key a, duplicated keys: 'A'")
 
     def test_dict_type_changing_value(self):
         class Opt:

@@ -296,7 +296,7 @@ class CommandParserClassTest(unittest.TestCase):
                     pass
 
         self.assertEqual(capture.exception.args[0],
-                         'sub-command "a" has been used.')
+                         "sub-command 'a' has been used.")
 
     def test_sub_parser_inherit_parent_parser_kwargs(self):
         # there are two properties, fromfile_prefix_chars and allow_abbrev,

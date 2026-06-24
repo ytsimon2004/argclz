@@ -4,6 +4,8 @@ import argparse
 from types import EllipsisType
 from typing import TypeVar, Callable, Literal, get_origin, get_args, Type, Any
 
+from . import i18n
+
 __all__ = [
     'literal_value_type',
     'bool_type',
@@ -77,7 +79,7 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: 
     :return: a function that converts a comma-separated string into a typed tuple
     """
     if len(value_type) == 0:
-        raise ValueError('empty tuple')
+        raise ValueError(i18n.gettext('empty tuple'))
 
     try:
         ellipsis_index = value_type.index(...)
@@ -85,7 +87,7 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: 
         ellipsis_index = None
     else:
         if ellipsis_index == 0 or ellipsis_index != len(value_type) - 1:
-            raise ValueError('`...` does not put at last.')
+            raise ValueError(i18n.gettext('`...` cannot put at last position.'))
 
     def _type(arg: str) -> tuple[T, ...]:
         ret: list[T] = []
@@ -99,7 +101,7 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: 
                     try:
                         t = value_type[i]
                     except IndexError as e:
-                        raise ValueError(f'not a {len(value_type)}-lengthed tuple') from e
+                        raise ValueError(i18n.gettext('not a %d-length tuple') % len(value_type)) from e
 
                     if t is ...:
                         assert ellipsis_index is not None and ellipsis_index == i
@@ -110,7 +112,7 @@ def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: 
 
         if ellipsis_index is None:
             if len(ret) != len(value_type):
-                raise ValueError(f'not a {len(value_type)}-lengthed tuple')
+                raise ValueError(i18n.gettext('not a %d-length tuple') % len(value_type))
 
         return tuple(ret)
 
@@ -210,13 +212,13 @@ class dict_type:
         :param split: the splitter that allow dict_type accept a list of key-value pairs.
         """
         if len(kv_split) == 0:
-            raise ValueError('empty kv_split')
+            raise ValueError(i18n.gettext('empty kv_split'))
 
         if split is not None:
             if len(split) == 0:
-                raise ValueError('empty split')
+                raise ValueError(i18n.gettext('empty split'))
             if split in kv_split:
-                raise ValueError('split reused in kv_split')
+                raise ValueError(i18n.gettext('split reused in kv_split'))
 
         self._value_type = value_type
         self._kv_split = kv_split
@@ -256,7 +258,7 @@ class dict_type:
                      help: str | None = None,
                      metavar: str | tuple[str, str] = ('Key', 'Value')):
             if not isinstance(type, dict_type):
-                raise TypeError('type should be dict_type')
+                raise TypeError(i18n.gettext('type should be dict_type'))
 
             self._dict_type = type
 
@@ -269,7 +271,7 @@ class dict_type:
                     else:
                         metavar = f'{m_key}{type._kv_split}{m_value}{type._split}...'
                 case _:
-                    raise TypeError('illegal metavar')
+                    raise TypeError(i18n.gettext('illegal metavar'))
 
             if default is None:
                 default = {}
@@ -377,7 +379,7 @@ class literal_type:
 
         for element in candidate:
             if element is not None and not isinstance(element, str):
-                raise ValueError('not a str list')
+                raise ValueError(i18n.gettext('not a list[str]'))
 
         if force or self.candidate is None:
             self.optional = None in candidate
@@ -389,10 +391,10 @@ class literal_type:
             # unique checking
             if self.case_sensitive:
                 if len(candidate) != len(set(candidate)):
-                    raise ValueError('candidate not unique')
+                    raise ValueError(i18n.gettext('candidate not unique'))
             else:
                 if len(candidate) != len(set([it.upper() for it in candidate])):
-                    raise ValueError('candidate not unique')
+                    raise ValueError(i18n.gettext('candidate not unique'))
 
     def __call__(self, arg: str) -> str | None:
         assert self.candidate is not None
@@ -425,7 +427,7 @@ class literal_type:
             case [match]:
                 return match
             case possible:
-                raise ValueError(f"'{arg}' is confused for {possible}")
+                raise ValueError(i18n.gettext("'%s' is confused for %s") % (arg, possible))
 
     def __str__(self):
         assert self.candidate is not None

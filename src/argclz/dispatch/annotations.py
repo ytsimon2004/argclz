@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, TypeVar, overload, ParamSpec, TypeAlias, TYPE_CHECKING
 
+from .. import i18n
 from ..validator import Validator
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ def dispatch(command: str,
     """
 
     if len(command) == 0:
-        raise ValueError('empty command string')
+        raise ValueError(i18n.gettext('empty command string'))
 
     def _dispatch(f: Method) -> Method:
         from .builder import DispatchCommandBuilder

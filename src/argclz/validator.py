@@ -8,6 +8,8 @@ from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
 
 from typing_extensions import Self
 
+from . import i18n
+
 if TYPE_CHECKING:
     from .types import literal_type
 
@@ -40,10 +42,10 @@ def argument_validating(instance: Any, value: T, validator: Validator | Callable
     except ValidatorFailError:
         raise
     except BaseException as e:
-        raise ValueError('validation failed') from e
+        raise ValueError(i18n.gettext('validation failed')) from e
     else:
         if fail:
-            raise ValueError('validation failed')
+            raise ValueError(i18n.gettext('validation failed'))
 
     return value
 
@@ -53,7 +55,7 @@ class ValidatorFailError(ValueError):
     A special ValueError used in this module.
     """
 
-    def __init__(self, message: str = 'validation failed'):
+    def __init__(self, message: str = i18n.gettext('validation failed')):
         super().__init__(message)
 
 
@@ -152,7 +154,7 @@ class LambdaValidator(Validator, Generic[T]):
             or a callable ``(T)->str``.
         """
         if validator is None:
-            raise TypeError('None validator')
+            raise TypeError(i18n.gettext('None validator'))
         self._validator = validator
         self._message = message
 
@@ -349,7 +351,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
             if self._allow_none:
                 return True
             else:
-                raise ValidatorFailError('None value')
+                raise ValidatorFailError(i18n.gettext('None value'))
         return False
 
     def _call_validators(self, instance: Any, value: Any):
@@ -409,11 +411,11 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
         """Enforce a string length range"""
         match (a, b):
             case (int(a), None):
-                self._add(lambda it: a <= len(it), f'str length less than {a}: "%s"')
+                self._add(lambda it: a <= len(it), i18n.gettext("str length less than %d: '%%s'") % a)
             case (None, int(b)):
-                self._add(lambda it: len(it) <= b, f'str length over {b}: "%s"')
+                self._add(lambda it: len(it) <= b, i18n.gettext("str length over %d: '%%s'") % b)
             case (int(a), int(b)):
-                self._add(lambda it: a <= len(it) <= b, f'str length out of range [{a}, {b}]: "%s"')
+                self._add(lambda it: a <= len(it) <= b, i18n.gettext("str length out of range [%d, %d]: '%%s'") % (a, b))
             case _:
                 raise TypeError()
         return self
@@ -424,30 +426,31 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
             r = re.compile(r)
 
         rx: re.Pattern = r
-        self._add(lambda it: rx.match(it) is not None, f'str does not match to r"{r.pattern}": "%s"')
+        self._add(lambda it: rx.match(it) is not None, i18n.gettext("str does not match to r'%s': '%%s'") % r.pattern)
         return self
 
     def starts_with(self, prefix: str) -> StrValidatorBuilder:
         """Check if string values start with a substring"""
-        self._add(lambda it: it.startswith(prefix), f'str does not start with "{prefix}": "%s"')
+        self._add(lambda it: it.startswith(prefix), i18n.gettext("str does not start with '%s': '%%s'") % prefix)
         return self
 
     def ends_with(self, suffix: str) -> StrValidatorBuilder:
         """Check if string values end with a substring"""
-        self._add(lambda it: it.endswith(suffix), f'str does not end with "{suffix}": "%s"')
+        self._add(lambda it: it.endswith(suffix), i18n.gettext("str does not end with '%s': '%%s'") % suffix)
         return self
 
     def contains(self, *texts: str) -> StrValidatorBuilder:
         """Check if string values contain a substring"""
         if len(texts) == 0:
-            raise ValueError('empty text list')
+            raise ValueError(i18n.gettext('empty text list'))
 
-        self._add(lambda it: any([text in it for text in texts]), f'str does not contain one of {texts}: "%s"')
+        self._add(lambda it: any([text in it for text in texts]),
+                  i18n.gettext("str does not contain one of %s: '%%s'") % repr(list(texts)))
         return self
 
     def one_of(self, options: Sequence[str]) -> StrValidatorBuilder:
         """Check if string is one of the allow options"""
-        self._add(lambda it: it in options, f'str not in allowed set {options}: "%s"')
+        self._add(lambda it: it in options, i18n.gettext("str not in allowed set %s: '%%s'") % repr(list(options)))
         return self
 
     def upper(self, transform: bool = True) -> StrValidatorBuilder:
@@ -468,7 +471,7 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
             else:
                 return False
 
-        self._add(to_upper, 'not in UPPER case : "%s"')
+        self._add(to_upper, i18n.gettext("not in UPPER case : '%s'"))
         return self
 
     def lower(self, transform: bool = True) -> StrValidatorBuilder:
@@ -489,7 +492,7 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
             else:
                 return False
 
-        self._add(to_lower, 'not in lower case : "%s"')
+        self._add(to_lower, i18n.gettext("not in lower case : '%s'"))
         return self
 
 
@@ -514,11 +517,11 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
         """Enforce a numeric range for int values"""
         match (a, b):
             case (int(a), None):
-                self._add(lambda it: a <= it, f'value less than {a}: %d')
+                self._add(lambda it: a <= it, i18n.gettext("value less than %d: %%d") % a)
             case (None, int(b)):
-                self._add(lambda it: it <= b, f'value over {b}: %d')
+                self._add(lambda it: it <= b, i18n.gettext("value over %d: %%d") % b)
             case (int(a), int(b)):
-                self._add(lambda it: a <= it <= b, f'value out of range [{a}, {b}]: %d')
+                self._add(lambda it: a <= it <= b, i18n.gettext("value out of range [%d, %d]: %%d") % (a, b))
             case _:
                 raise TypeError()
 
@@ -527,17 +530,17 @@ class IntValidatorBuilder(AbstractTypeValidatorBuilder[int]):
     def positive(self, include_zero=True):
         """Check if an int value is positive or non-negative"""
         if include_zero:
-            self._add(lambda it: it >= 0, 'not a non-negative value : %d')
+            self._add(lambda it: it >= 0, i18n.gettext('not a non-negative value : %d'))
         else:
-            self._add(lambda it: it > 0, 'not a positive value : %d')
+            self._add(lambda it: it > 0, i18n.gettext('not a positive value : %d'))
         return self
 
     def negative(self, include_zero=True):
         """Check if an int value is negative or non-positive."""
         if include_zero:
-            self._add(lambda it: it <= 0, 'not a non-positive value : %d')
+            self._add(lambda it: it <= 0, i18n.gettext('not a non-positive value : %d'))
         else:
-            self._add(lambda it: it < 0, 'not a negative value : %d')
+            self._add(lambda it: it < 0, i18n.gettext('not a negative value : %d'))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -580,11 +583,11 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
         match (a, b):
             case (float(a), None):
-                self._add(lambda it: a < it, f'value less than {a}: %f')
+                self._add(lambda it: a < it, i18n.gettext("value less than %d: %%f") % a)
             case (None, float(b)):
-                self._add(lambda it: it < b, f'value over {b}: %f')
+                self._add(lambda it: it < b, i18n.gettext("value over %d: %%f") % b)
             case (float(a), float(b)):
-                self._add(lambda it: a < it < b, f'value out of range ({a}, {b}): %f')
+                self._add(lambda it: a < it < b, i18n.gettext("value out of range (%d, %d): %%f") % (a, b))
             case _:
                 raise TypeError()
 
@@ -597,11 +600,11 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
 
         match (a, b):
             case (float(a), None):
-                self._add(lambda it: a <= it, f'value less than {a}: %f')
+                self._add(lambda it: a <= it, i18n.gettext("value less than %d: %%f") % a)
             case (None, float(b)):
-                self._add(lambda it: it <= b, f'value over {b}: %f')
+                self._add(lambda it: it <= b, i18n.gettext("value over %d: %%f") % b)
             case (float(a), float(b)):
-                self._add(lambda it: a <= it <= b, f'value out of range [{a}, {b}]: %f')
+                self._add(lambda it: a <= it <= b, i18n.gettext("value out of range [%d, %d]: %%f") % (a, b))
             case _:
                 raise TypeError()
         return self
@@ -609,17 +612,17 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
     def positive(self, include_zero=True) -> Self:
         """Check if a float value is positive or non-negative"""
         if include_zero:
-            self._add(lambda it: it >= 0, 'not a non-negative value: %f')
+            self._add(lambda it: it >= 0, i18n.gettext('not a non-negative value: %f'))
         else:
-            self._add(lambda it: it > 0, 'not a positive value: %f')
+            self._add(lambda it: it > 0, i18n.gettext('not a positive value: %f'))
         return self
 
     def negative(self, include_zero=True) -> Self:
         """Check if a float value is negative or non-positive"""
         if include_zero:
-            self._add(lambda it: it <= 0, 'not a non-positive value : %f')
+            self._add(lambda it: it <= 0, i18n.gettext('not a non-positive value : %f'))
         else:
-            self._add(lambda it: it < 0, 'not a negative value : %f')
+            self._add(lambda it: it < 0, i18n.gettext('not a negative value : %f'))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -639,7 +642,7 @@ class FloatValidatorBuilder(AbstractTypeValidatorBuilder[float]):
             if self._allow_nan:
                 return True
             else:
-                raise ValidatorFailError('NaN')
+                raise ValidatorFailError(i18n.gettext('NaN'))
 
         return self._call_validators(value, instance)
 
@@ -649,7 +652,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
     def __init__(self, element_type: type[T] | None = None):
         if element_type is not None and not isinstance(element_type, type):
-            raise TypeError('not a type ' + str(element_type))
+            raise TypeError(i18n.gettext('not a type: %s') % str(element_type))
 
         super().__init__()
         self._element_type = element_type
@@ -685,13 +688,13 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         match (a, b):
             case (int(a), None):
                 self._add(lambda it: a <= len(it),
-                          lambda it: f'list length less than {a}: {len(it)}')
+                          lambda it: i18n.gettext("list length less than %d: %d") % (a, len(it)))
             case (None, int(b)):
                 self._add(lambda it: len(it) <= b,
-                          lambda it: f'list length over {b}: {len(it)}')
+                          lambda it: i18n.gettext("list length over %d: %d") % (b, len(it)))
             case (int(a), int(b)):
                 self._add(lambda it: a <= len(it) <= b,
-                          lambda it: f'list length out of range [{a}, {b}]: {len(it)}')
+                          lambda it: i18n.gettext("list length out of range [%d, %d]: %d") % (a, b, len(it)))
             case _:
                 raise TypeError()
 
@@ -716,7 +719,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
                 raise ValidatorFailOnTypeError(value, list)
 
         if not self._allow_empty and len(value) == 0:
-            raise ValidatorFailError(f'empty list : {value}')
+            raise ValidatorFailError(i18n.gettext('empty list : %s') % str(value))
 
         if (element_type := self._element_type) is not None:
             for i, element in enumerate(value):
@@ -747,7 +750,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
         for et in modified_element_type:
             if et is not None and et is not ... and not isinstance(et, type):
-                raise TypeError('not a type: ' + str(element_type))
+                raise TypeError(i18n.gettext('not a type: %s') % str(element_type))
 
         self._element_type: tuple[Any, ...] = modified_element_type
         self._auto_casting = False
@@ -776,18 +779,18 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
         """
         if self._element_type != (...,):
-            raise RuntimeError('not a vary-length tuple type')
+            raise RuntimeError(i18n.gettext('not a vary-length tuple type'))
 
         match (a, b):
             case (int(a), None):
                 self._add(lambda it: a <= len(it),
-                          lambda it: f'tuple length less than {a}: {len(it)}')
+                          lambda it: i18n.gettext("tuple length less than %d: %d") % (a, len(it)))
             case (None, int(b)):
                 self._add(lambda it: len(it) <= b,
-                          lambda it: f'tuple length over {b}: {len(it)}')
+                          lambda it: i18n.gettext("tuple length over %d: %d") % (b, len(it)))
             case (int(a), int(b)):
                 self._add(lambda it: a <= len(it) <= b,
-                          lambda it: f'tuple length out of range [{a}, {b}]: {len(it)}')
+                          lambda it: i18n.gettext("tuple length out of range [%d, %d]: %d") % (a, b, len(it)))
             case _:
                 raise TypeError()
 
@@ -816,7 +819,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
             if element_type[-1] is ...:
                 at_least_length = len(element_type) - 1
                 if len(value) < at_least_length:
-                    raise ValidatorFailError(f'length less than {at_least_length}: {value}')
+                    raise ValidatorFailError(i18n.gettext('length less than %d: %s') % (at_least_length, repr(value)))
 
                 for i, e, t in zip(range(at_least_length), value, element_type):
                     if t is not None and not element_isinstance(e, t):
@@ -830,7 +833,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
             else:
                 if len(value) != len(element_type):
-                    raise ValidatorFailError(f'length not match to {len(element_type)} : {value}')
+                    raise ValidatorFailError(i18n.gettext('length not match to %d : %s') % (len(element_type), repr(value)))
 
                 for i, e, t in zip(range(len(element_type)), value, element_type):
                     if t is not None and not element_isinstance(e, t):
@@ -844,7 +847,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
     def __init__(self, element_type: type[T] | None = None):
         if element_type is not None and not isinstance(element_type, type):
-            raise TypeError('not a type: ' + str(element_type))
+            raise TypeError(i18n.gettext('not a type: %s') % str(element_type))
 
         super().__init__()
         self._element_type = element_type
@@ -891,16 +894,16 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
         if keys is None:
             if self._key_type is None:
-                raise ValueError('keys not set')
+                raise ValueError(i18n.gettext('keys not set'))
             keys = self._key_type.candidate
             if keys is None:
-                raise ValueError('keys not set')
+                raise ValueError(i18n.gettext('keys not set'))
 
         key_type = literal_type(keys, complete=complete, case_sensitive=case_sensitive)
         if key_type.candidate is None or len(key_type.candidate) == 0:
-            raise ValueError('empty keys')
+            raise ValueError(i18n.gettext('empty keys'))
         if key_type.optional:
-            raise ValueError('None key')  # some bad key
+            raise ValueError(i18n.gettext('None key'))  # some bad key
 
         if self._key_type is None:
             self._key_type = key_type
@@ -928,7 +931,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
             raise ValidatorFailOnTypeError(value, dict)
 
         if not self._allow_empty and len(value) == 0:
-            raise ValidatorFailError(f'empty dict: {value}')
+            raise ValidatorFailError(i18n.gettext('empty dict: %s') % str(value))
 
         # check and remap keys
         if (key_type := self._key_type) is not None:
@@ -942,12 +945,12 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
                             backup = dict(value)
                         backup.pop(k)
                     else:
-                        raise ValidatorFailError(f'key "{k}" is not allowed') from e
+                        raise ValidatorFailError(i18n.gettext("key '%s' is not allowed") % k) from e
                 else:
                     assert n is not None
                     if n != k:
                         if n in value:
-                            raise ValidatorFailError(f'duplicated key: "{k}" and "{n}"')
+                            raise ValidatorFailError(i18n.gettext("duplicated key: '%s' and '%s'") % (k, n))
                         if backup is None:
                             backup = dict(value)
                         backup.pop(k)
@@ -973,9 +976,9 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
     def is_suffix(self, suffix: str | list[str] | tuple[str, ...]) -> Self:
         """Check path suffix or in a list of suffixes"""
         if isinstance(suffix, str):
-            self._add(lambda it: it.suffix == suffix, f'suffix != {suffix}: %s')
+            self._add(lambda it: it.suffix == suffix, i18n.gettext("not %s: %%s") % suffix)
         elif isinstance(suffix, (list, tuple)):
-            self._add(lambda it: it.suffix in suffix, f'suffix not in {suffix}: %s')
+            self._add(lambda it: it.suffix in suffix, i18n.gettext("not one of %s: %%s") % list(repr(suffix)))
         else:
             raise TypeError('')
 
@@ -983,17 +986,17 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
 
     def is_exists(self) -> Self:  # TODO rename to must_existed?
         """Check if path exists"""
-        self._add(lambda it: it.exists(), f'path does not exist: %s')
+        self._add(lambda it: it.exists(), i18n.gettext("path does not exist: %s"))
         return self
 
     def is_file(self) -> Self:
         """Check if path is a file"""
-        self._add(lambda it: it.is_file(), f'path is not a file: %s')
+        self._add(lambda it: it.is_file(), i18n.gettext("path is not a file: %s"))
         return self
 
     def is_dir(self) -> Self:
         """Check if path is a directory"""
-        self._add(lambda it: it.is_dir(), f'path is not a directory: %s')
+        self._add(lambda it: it.is_dir(), i18n.gettext("path is not a directory: %s"))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -1031,7 +1034,7 @@ class ListItemValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(i, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(i, f'validation failed: {value}')
+                    raise ValidatorFailOnIndexError(i, i18n.gettext('validation failed: %s') % str(value))
 
         if backup:
             raise ValidatorChangeValueRequest(backup)
@@ -1073,7 +1076,7 @@ class TupleItemValidatorBuilder(LambdaValidator):
         try:
             element = value[index]
         except IndexError as e:
-            raise ValidatorFailOnIndexError(index, f'out of size {len(value)}') from e
+            raise ValidatorFailOnIndexError(index, i18n.gettext('out of size %d') % len(value)) from e
 
         try:
             return super().__call__(instance, element)
@@ -1105,7 +1108,7 @@ class DictKeyValidatorBuilder(LambdaValidator):
 
                 n = str(e.value)
                 if n in backup:
-                    raise ValidatorFailOnIndexError(k, f'duplicated keys: {n}') from e
+                    raise ValidatorFailOnIndexError(k, i18n.gettext("duplicated keys: '%s'") % n) from e
 
                 backup[n] = backup.pop(k)
 
@@ -1115,7 +1118,7 @@ class DictKeyValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(k, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
+                    raise ValidatorFailOnIndexError(k, i18n.gettext('validation failed: %s') % str(value))
 
         if backup is not None:
             raise ValidatorChangeValueRequest(backup)
@@ -1142,7 +1145,7 @@ class DictItemValidatorBuilder(LambdaValidator):
                 raise ValidatorFailOnIndexError(k, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(k, f'validation failed: {value}')
+                    raise ValidatorFailOnIndexError(k, i18n.gettext('validation failed: %s') % str(value))
 
         if backup is not None:
             raise ValidatorChangeValueRequest(backup)

@@ -3,6 +3,7 @@ import warnings
 from typing import Callable, TypeVar, Generic, get_origin, Literal
 
 from .core import ARGCLZ_DISPATCH_COMMAND, DispatchCommand, DispatchGroup
+from .. import i18n
 from ..validator import Validator, argument_validating
 
 __all__ = ['DispatchCommandBuilder']
@@ -30,7 +31,7 @@ class DispatchCommandBuilder:
         elif isinstance(ret, DispatchCommandBuilder):
             pass
         elif isinstance(ret, DispatchCommand):
-            raise RuntimeError(f'{f.__name__} already frozen')
+            raise RuntimeError(i18n.gettext('%s already frozen') % f.__name__)
         else:
             raise TypeError()
         return ret
@@ -39,13 +40,13 @@ class DispatchCommandBuilder:
         try:
             p = self.signature.parameters[arg]
         except KeyError:
-            warnings.warn(f'unknown parameter name : {arg} for function {self.func.__name__}', RuntimeWarning)
+            warnings.warn(i18n.gettext('unknown parameter name : %s for function %s') % (arg, self.func.__name__), RuntimeWarning)
             return
 
         if caster is None:
             from .._types import caster_by_annotation
             if p.annotation is P.empty:
-                raise RuntimeError(f'unknown parameter type : {arg} for function {self.func.__name__}')
+                raise RuntimeError(i18n.gettext('unknown parameter type : %s for function %s') % (arg, self.func.__name__))
 
             caster = caster_by_annotation(arg, p.annotation)  # pyright: ignore[reportAssignmentType]
 
@@ -87,9 +88,9 @@ class TypeCasterWithValidator(Generic[T]):
                 result = self.caster(raw_value)
             except BaseException as e:
                 if isinstance(self.caster, type):
-                    raise ValueError(f'cannot cast "{raw_value}" to type {self.caster.__name__}') from e
+                    raise ValueError(i18n.gettext("cannot cast '%s' to type %s") % (raw_value, self.caster.__name__)) from e
                 else:
-                    raise ValueError(f'cannot cast "{raw_value}"') from e
+                    raise ValueError(i18n.gettext("cannot cast '%s'") % raw_value) from e
         else:
             result = raw_value  # pyright: ignore[reportAssignmentType]
 

@@ -45,7 +45,7 @@ class SubCommandGroup:
     def __set_name__(self, owner, name):
         if (prev := getattr(owner, ARGCLZ_SUB_COMMANDS, None)) is not None:
             assert isinstance(prev, SubCommandGroup)
-            raise RuntimeError(f'cannot have multiple sub-commands groups: {prev.attr} and {name}')
+            raise RuntimeError(i18n.gettext('cannot have multiple sub-commands groups: %s and %s') % (prev.attr, name))
 
         self.attr = name
         setattr(owner, ARGCLZ_SUB_COMMANDS, self)
@@ -115,14 +115,14 @@ class SubCommandGroup:
         def _sub_command(sub_parser: AbstractParser | Type[AbstractParser]):
             if isinstance(sub_parser, AbstractParser) or (isinstance(sub_parser, type) and issubclass(sub_parser, AbstractParser)):
                 if command in self.sub_parsers:
-                    raise RuntimeError(f'sub-command "{command}" has been used.')
+                    raise RuntimeError(i18n.gettext("sub-command '%s' has been used.") % command)
 
                 self.sub_parsers[command] = SubCommand(command, sub_parser, kwargs)
                 return sub_parser
             else:
                 if not isinstance(sub_parser, type):
                     sub_parser = type(sub_parser)
-                raise TypeError(f'{sub_parser.__name__} is not an AbstractParser')
+                raise TypeError(i18n.gettext('%s is not an AbstractParser') % sub_parser.__name__)
 
         return _sub_command
 

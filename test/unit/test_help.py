@@ -444,7 +444,7 @@ options:
         with self.assertRaises(TypeError) as capture:
             new_parser(Opt)
         self.assertRegex(capture.exception.args[0],
-                         r'USAGE is not a str or list\[str]:. *')
+                         r'USAGE is not a str or list\[str], but . *')
 
     def test_print_help_with_description(self):
         class Opt(AbstractParser):
@@ -483,7 +483,7 @@ options:
         with self.assertRaises(TypeError) as capture:
             new_parser(Opt)
         self.assertRegex(capture.exception.args[0],
-                         r'DESCRIPTION is not a str:. *')
+                         r'DESCRIPTION is not a str, but . *')
 
     def test_print_help_with_epilog(self):
         class Opt(AbstractParser):
@@ -522,7 +522,7 @@ text
         with self.assertRaises(TypeError) as capture:
             new_parser(Opt)
         self.assertRegex(capture.exception.args[0],
-                         r'EPILOG is not a str:. *')
+                         r'EPILOG is not a str, but . *')
 
     def test_wrong_epilog_method_rtype(self):
         class Opt(AbstractParser):
@@ -533,7 +533,7 @@ text
         with self.assertRaises(TypeError) as capture:
             new_parser(Opt)
         self.assertRegex(capture.exception.args[0],
-                         r'EPILOG is not a str:. *')
+                         r'EPILOG is not a str, but . *')
 
     def test_print_default_bool_value(self):
         class Opt(AbstractParser):

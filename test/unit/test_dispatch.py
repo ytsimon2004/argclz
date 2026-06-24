@@ -364,7 +364,7 @@ class TestDispatch(AbstractDispatchTester):
         with self.assertRaises(ValueError) as capture:
             opt.main(['A', '0'])
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : not a positive value : 0')
+                         "command 'A' argument 'a' : not a positive value : 0")
 
     def test_dispatch_command_argument_casting_and_validator(self):
         class Opt(SimpleDispatch):
@@ -387,7 +387,7 @@ class TestDispatch(AbstractDispatchTester):
 
         with self.assertRaises(ValueError) as capture:
             opt.main(['A', '0'])
-        self.assertEqual(capture.exception.args[0], 'command A argument "a" : not a positive value : 0')
+        self.assertEqual(capture.exception.args[0], "command 'A' argument 'a' : not a positive value : 0")
 
     def test_dispatch_command_argument_casting_fail(self):
         class Opt(SimpleDispatch):
@@ -399,7 +399,7 @@ class TestDispatch(AbstractDispatchTester):
         with self.assertRaises(ValueError) as capture:
             Opt().main(['A', 'a'])
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : cannot cast "a" to type int')
+                         "command 'A' argument 'a' : cannot cast 'a' to type int")
 
     def test_dispatch_command_argument_validator_fail(self):
         class Opt(SimpleDispatch):
@@ -411,7 +411,7 @@ class TestDispatch(AbstractDispatchTester):
         with self.assertRaises(ValueError) as capture:
             Opt().main(['A', 'b'])
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : validation failed')
+                         "command 'A' argument 'a' : validation failed")
 
     def test_dispatch_command_argument_validator_error_fail(self):
         class Opt(SimpleDispatch):
@@ -423,7 +423,7 @@ class TestDispatch(AbstractDispatchTester):
         with self.assertRaises(ValueError) as capture:
             Opt().main(['A', 'b'])
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : str does not start with "a": "b"')
+                         "command 'A' argument 'a' : str does not start with 'a': 'b'")
 
     def test_dispatch_command_argument_validator_misorder(self):
         with self.assertRaises(RuntimeError) as capture:
@@ -452,7 +452,7 @@ class TestDispatch(AbstractDispatchTester):
             main.main(['A', 'A'])
 
         self.assertEqual(capture.exception.args[0],
-                         'command A argument "a" : cannot cast "A"')
+                         "command 'A' argument 'a' : cannot cast 'A'")
 
     def test_dispatch_on_literal_parameter_complete(self):
         class Opt(SimpleDispatch):
@@ -956,7 +956,7 @@ A epilog text
         with self.assertRaises(TypeError) as capture:
             Opt.new_parser()
         self.assertRegex(capture.exception.args[0],
-                         r'COMMAND_HELP_DOC is not a str:. *')
+                         r'COMMAND_HELP_DOC is not a str, but . *')
 
     def test_wrong_chd_method_rtype(self):
         class Opt(SimpleDispatch):
@@ -967,7 +967,7 @@ A epilog text
         with self.assertRaises(TypeError) as capture:
             Opt.new_parser()
         self.assertRegex(capture.exception.args[0],
-                         r'COMMAND_HELP_DOC is not a str:. *')
+                         r'COMMAND_HELP_DOC is not a str, but . *')
 
 class UseCaseTest(unittest.TestCase):
     def test_example_1(self):

@@ -9,6 +9,7 @@ from collections.abc import Sequence, Iterable, Callable
 from contextvars import ContextVar
 from types import EllipsisType
 from typing import TYPE_CHECKING, Type, TypeVar, Literal, Any, TextIO, overload, get_type_hints, cast
+
 from typing_extensions import Self
 
 from . import i18n
@@ -217,13 +218,13 @@ class Argument(object):
         from .validator import Validator
         if len(options) > 0 and isinstance(options[-1], Validator):
             if validator is not None:
-                raise ValueError('multiple validators in both last position and keyword arguments.')
+                raise ValueError(i18n.gettext('multiple validators in both last position and keyword arguments.'))
             validator = options[-1]
             options = options[:-1]
 
         if not all([it.startswith('-') for it in options]):
             options_str = ', '.join(options)
-            raise ValueError(f"options should startswith '-': {options_str}")
+            raise ValueError(i18n.gettext("options should startswith '-': %s") % options_str)
 
         if isinstance(validator, Validator):
             validator = validator.freeze()
@@ -308,7 +309,7 @@ class Argument(object):
             pass
 
         if self.attr is None:
-            raise RuntimeError('Argument is not setup properly.')
+            raise RuntimeError(i18n.gettext('Argument is not setup properly.'))
 
         attr_type = self.attr_type
         if attr_type == bool:
@@ -327,7 +328,7 @@ class Argument(object):
 
     def __set_name__(self, owner: Type, name: str):
         if self.attr is not None:
-            raise RuntimeError(f'Argument reused by {self.attr} and {name}')
+            raise RuntimeError(i18n.gettext('Argument reused by %s and %s') % (self.attr, name))
 
         self.attr = name
         self.attr_type = get_type_hints(owner).get(name, Any)
@@ -513,17 +514,17 @@ class Argument(object):
             if len(options) == 0:
                 ret = cls(**kw)
                 if ret.metavar is None:
-                    raise ValueError('missing metavar')
+                    raise ValueError(i18n.gettext('missing metavar'))
                 return ret
             elif len(options) == 1 and 'metavar' not in kwargs:
                 option = options[0]
                 if option.startswith('-'):
-                    raise ValueError('cannot change positional argument to optional')
+                    raise ValueError(i18n.gettext('cannot change positional argument to optional'))
 
                 kw.pop('metavar', None)
                 return cls(metavar=option, **kw)
             else:
-                raise ValueError('cannot change positional argument to optional')
+                raise ValueError(i18n.gettext('cannot change positional argument to optional'))
 
     @classmethod
     def _copy_group(cls, group: str | argument_group | None):
@@ -659,7 +660,7 @@ def pos_argument(option: str, validator: Callable[[T], bool] | None = None, *, n
     :param help: help document for this argument.
     """
     if option.startswith('-'):
-        raise ValueError(f"positional argument startswith '-': {option}")
+        raise ValueError(i18n.gettext("positional argument startswith '-': %s") % option)
     if validator is not None:
         kwargs['validator'] = validator
     return Argument(metavar=option, nargs=nargs, **kwargs)
@@ -787,7 +788,7 @@ def as_argument(a) -> Argument:
     """cast argument attribute as an :class:`~argclz.core.Argument` for type checking framework/IDE."""
     if isinstance(a, Argument):
         return a
-    raise TypeError('not an argument')
+    raise TypeError(i18n.gettext('not an argument'))
 
 
 # noinspection PyPep8Naming
@@ -918,6 +919,7 @@ def new_parser(instance: T | Type[T], *,
 ARGCLZ_NEWPARSER_CONTEXT: ContextVar[set[Type[AbstractParser]]] = ContextVar('ARGCLZ_NEWPARSER_CONTEXT')
 EMPTY_SET = set()
 
+
 def new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
     """Create :class:`~argparse.ArgumentParser` for *instance*.
 
@@ -969,7 +971,7 @@ def _new_parser(instance: T | Type[T], **kwargs) -> ArgumentParser:
         # argument_default: we do some inferring on default value based on attribute type. To make consistent,
         #   we keep use ``None`` as default value.
         if unsupported in kwargs:
-            raise ValueError(f'unsupported keyword : {unsupported}')
+            raise ValueError(i18n.gettext('unsupported keyword : %s') % unsupported)
 
     if isinstance(instance, AbstractParser) or (isinstance(instance, type) and issubclass(instance, AbstractParser)):
         _parser_usage(instance, kwargs)
@@ -1016,7 +1018,7 @@ def _parser_usage(instance: AbstractParser | Type[AbstractParser], kwargs: dict[
         usage = '\n  ' + '\n  '.join(usage)
 
     if usage is not None and not isinstance(usage, str):
-        raise TypeError(f'USAGE is not a str or list[str]: {usage}')
+        raise TypeError(i18n.gettext('USAGE is not a str or list[str], but %s') % str(type(usage)))
 
     if usage is not None:
         usage = usage.replace('{PROG}', '%(prog)s')
@@ -1033,7 +1035,7 @@ def _parser_description(instance: AbstractParser | Type[AbstractParser], kwargs:
         description = cast(str, description())
 
     if description is not None and not isinstance(description, str):
-        raise TypeError(f'DESCRIPTION is not a str: {description}')
+        raise TypeError(i18n.gettext('DESCRIPTION is not a str, but %s') % str(type(description)))
 
     if description is not None:
         description = description.replace('{PROG}', '%(prog)s')
@@ -1050,7 +1052,7 @@ def _parser_epilog(instance: AbstractParser | Type[AbstractParser], kwargs: dict
         epilog = cast(str, epilog())
 
     if epilog is not None and not isinstance(epilog, str):
-        raise TypeError(f'EPILOG is not a str: {epilog}')
+        raise TypeError(i18n.gettext('EPILOG is not a str, but %s') % str(type(epilog)))
 
     if epilog is not None:
         epilog = epilog.replace('{PROG}', '%(prog)s')
@@ -1084,7 +1086,7 @@ def _parser_dispatch_commands(instance) -> str | None:
             command_help = command_help()
 
         if command_help is not None and not isinstance(command_help, str):
-            raise TypeError(f'COMMAND_HELP_DOC is not a str: {command_help}')
+            raise TypeError(i18n.gettext('COMMAND_HELP_DOC is not a str, but %s') % str(type(command_help)))
 
         if command_help is not None:
             command_help = command_help.replace('{PROG}', '%(prog)s')
@@ -1179,7 +1181,7 @@ def _iter_grouped_arguments_in_order(instance: T | Type[T],
                     yield group, groups[group]
 
         else:
-            raise TypeError('ARGUMENT_GROUP_LIST not a list')
+            raise TypeError(i18n.gettext('ARGUMENT_GROUP_LIST not a list, but %s') % str(type(argument_group_list)))
 
 
 def set_options(instance: T, result: argparse.Namespace) -> T:
@@ -1229,7 +1231,7 @@ def parse_args(instance: T, args: list[str] | None = None) -> T:
         argument type casting and validation.
     """
     if isinstance(instance, type):
-        raise TypeError('not an instance')
+        raise TypeError(i18n.gettext('not an instance'))
 
     ap = new_parser(instance)
     ot = ap.parse_args(args)

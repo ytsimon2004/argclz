@@ -116,7 +116,7 @@ class DispatchCommand(NamedTuple):
             try:
                 new_value = validator(val)
             except (ValueError, TypeError, IndexError, KeyError) as e:
-                raise ValueError(f'command {self.command} argument "{par}" : {e}') from e
+                raise ValueError(i18n.gettext("command '%s' argument '%s' : %s") % (self.command, par, str(e))) from e
 
             a.arguments[par] = new_value
 
@@ -141,7 +141,7 @@ class DispatchGroup(NamedTuple):
 
     def __set_name__(self, owner, name: str):
         if not issubclass(owner, Dispatch):
-            raise TypeError('owner not Dispatch')
+            raise TypeError(i18n.gettext('owner not Dispatch'))
 
     def __call__(self, command: str,
                  *alias: str,

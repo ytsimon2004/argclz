@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import get_origin, TYPE_CHECKING
 
+from . import i18n
 from .validator import ValidatorBuilder, LambdaValidator, ValidatorFailError, AbstractTypeValidatorBuilder
 
 __all__ = ['validator', 'validate']
@@ -33,12 +34,12 @@ def validate(*arg: Any) -> Decorator:
     from .core import Argument
 
     if any([not isinstance(it, Argument) for it in arg]):
-        raise TypeError('Not an argument')
+        raise TypeError(i18n.gettext('Not an argument'))
 
     def _validate_decorator(f: Method) -> Method:
         s = inspect.signature(f)
         if len(s.parameters) != 2:
-            raise RuntimeError(f"the signature of validate method '{f.__name__}' not (self, value)")
+            raise RuntimeError(i18n.gettext("the signature of validate method '%s' not (self, value)") % f.__name__)
 
         self_name, p_name = s.parameters
         p = s.parameters[p_name]
@@ -95,4 +96,4 @@ class MethodValidator(LambdaValidator):
             if success:
                 return True
             else:
-                raise ValidatorFailError(f'{self._method.__name__} validation failed')
+                raise ValidatorFailError(i18n.gettext('%s validation failed') % self._method.__name__)
