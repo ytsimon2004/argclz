@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import abc
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Sequence, Iterable
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
     from .types import literal_type
 
 T = TypeVar('T')
+C = TypeVar('C')  # collection
+K = TypeVar('K')  # collection key
+CC = TypeVar('CC')  # collection backup
 
 
 def argument_validating(instance: Any, value: T, validator: Validator | Callable[[T], bool]) -> T:
@@ -55,8 +59,20 @@ class ValidatorFailError(ValueError):
     A special ValueError used in this module.
     """
 
-    def __init__(self, message: str = i18n.gettext('validation failed')):
-        super().__init__(message)
+    def __init__(self, *message: str | ValidatorFailError):
+        if len(message) == 0:
+            super().__init__(i18n.gettext('validation failed'))
+        else:
+            m = []
+            for it in message:
+                if isinstance(it, str):
+                    m.append(it)
+                elif isinstance(it, ValidatorFailError):
+                    m.extend(it.args)
+                else:
+                    m.append(str(it))
+
+            super().__init__(*m)
 
 
 class ValidatorFailOnTypeError(ValidatorFailError):
@@ -70,7 +86,7 @@ class ValidatorFailOnTypeError(ValidatorFailError):
         self.expected_type = expected_type
         if message is None:
             name = expected_type.__name__ if isinstance(expected_type, type) else str(expected_type)
-            message = f'not {name}: {value}'
+            message = i18n.gettext('not %s: %s') % (name, repr(value))
         super().__init__(message)
 
     def on_index(self, index: int | str | tuple[int | str, ...]):
@@ -96,28 +112,32 @@ class ValidatorFailOnIndexError(ValidatorFailError):
     likes index in sequence, and key in dictionary.
     """
 
-    def __init__(self, index: int | str | tuple[int | str, ...], raw_message='validation failed'):
+    def __init__(self, index: int | str | tuple[int | str, ...], message: str = None):
         """
 
         :param index: index or key, use tuple to indicate a nested index.
-        :param raw_message: root cause message
+        :param message: root cause message
         """
         if isinstance(index, int):
             index = (index,)
         self.index = index
-        self.message = raw_message
+
+        if message is None:
+            message = i18n.gettext('validation failed')
+
+        self.message = message
 
         if len(index) == 1:
             if isinstance(index[0], int):
-                message = f'at index {str(index[0])}, {raw_message}'
+                m = i18n.gettext('at index %s, %s') % (str(index[0]), message)
             else:
-                message = f'at key {str(index[0])}, {raw_message}'
+                m = i18n.gettext('at key %s, %s') % (str(index[0]), message)
         else:
             if all([isinstance(it, int) for it in index]):
-                message = 'at index (' + ', '.join(map(str, index)) + '), ' + raw_message
+                m = i18n.gettext('at index (%s), %s') % (', '.join(map(str, index)), message)
             else:
-                message = 'at key (' + ', '.join(map(str, index)) + '), ' + raw_message
-        super().__init__(message)
+                m = i18n.gettext('at key (%s), %s') % (', '.join(map(str, index)), message)
+        super().__init__(m)
 
 
 class Validator:
@@ -841,6 +861,28 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
 
         return self._call_validators(value, instance)
 
+    def _call_validators(self, instance: Any, value: Any):
+        index_errors = []
+        for validator in self._validators:
+            if isinstance(validator, TupleItemValidatorBuilder):
+                try:
+                    if not validator(value, instance):
+                        return False
+                except ValidatorChangeValueRequest:
+                    raise
+                except ValidatorFailError as e:
+                    index_errors.append(e)
+
+            elif not validator(value, instance):
+                return False
+
+        if len(index_errors):
+            if len(index_errors) == 1:
+                raise index_errors[0]
+            raise ValidatorFailError(*index_errors)
+
+        return True
+
 
 class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
     """a dict validator"""
@@ -1009,47 +1051,84 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
         return self._call_validators(value, instance)
 
 
-class ListItemValidatorBuilder(LambdaValidator):
+class CollectionElementValidatorBuilder(LambdaValidator, Generic[C, K, CC], metaclass=abc.ABCMeta):
     def __call__(self, instance: Any, value: Any) -> bool:
-        assert isinstance(value, list)
-
         backup = None
+        index_errors = []
 
-        for i in range(len(value)):
-            element = value[i]
-
+        for k in self._iter_coll(value):
             try:
-                try:
-                    fail = not super().__call__(instance, element)
-                except ValidatorChangeValueRequest as e:
-                    if backup is None:
-                        backup = list(value)
-                    backup[i] = e.value
-                    # skip this index, it will try again after we raise ValidatorChangeValueRequest
-                    continue
-
+                fail = not self._check_at(instance, value, k)
+            except ValidatorChangeValueRequest as e:
+                backup = self._change_at(value, k, e, backup)
+                # skip this index, it will try again after we raise ValidatorChangeValueRequest
             except ValidatorFailOnIndexError as e:
-                raise ValidatorFailOnIndexError((i, *e.index), e.message) from e
+                index_errors.append(ValidatorFailOnIndexError((k, *e.index), e.message))
+            except ValidatorFailError as e:
+                index_errors.append(ValidatorFailOnIndexError(k, str(e)))
             except BaseException as e:
-                raise ValidatorFailOnIndexError(i, *e.args) from e
+                raise ValidatorFailOnIndexError(k, *e.args) from e
             else:
                 if fail:
-                    raise ValidatorFailOnIndexError(i, i18n.gettext('validation failed: %s') % str(value))
+                    raise ValidatorFailOnIndexError(k, i18n.gettext('validation failed: %s') % str(value))
 
         if backup:
-            raise ValidatorChangeValueRequest(backup)
+            raise ValidatorChangeValueRequest(self._freeze_changed(backup))
+
+        if len(index_errors):
+            if len(index_errors) == 1:
+                raise index_errors[0]
+            raise ValidatorFailError(*index_errors)
 
         return True
 
+    @abc.abstractmethod
+    def _iter_coll(self, value: C) -> Iterable[K]:
+        pass
 
-class TupleItemValidatorBuilder(LambdaValidator):
+    @abc.abstractmethod
+    def _check_at(self, instance: Any, value: C, index: K) -> bool:
+        pass
+
+    def _check_for(self, instance: Any, element: T) -> bool:
+        return super().__call__(instance, element)
+
+    @abc.abstractmethod
+    def _change_at(self, value: C, index: K, e: ValidatorChangeValueRequest, backup: CC | None) -> CC:
+        pass
+
+    def _freeze_changed(self, backup: CC) -> C:
+        return backup
+
+
+class ListItemValidatorBuilder(CollectionElementValidatorBuilder[list, int, list]):
+    def __call__(self, instance: Any, value: Any) -> bool:
+        assert isinstance(value, list)
+        return super().__call__(instance, value)
+
+    def _iter_coll(self, value: list) -> Iterable[K]:
+        return range(len(value))
+
+    def _check_at(self, instance, value: list, index: int) -> bool:
+        return self._check_for(instance, value[index])
+
+    def _change_at(self, value: list, index: int, e: ValidatorChangeValueRequest, backup: list | None) -> list:
+        if backup is None:
+            backup = list(value)
+        backup[index] = e.value
+        return backup
+
+
+class TupleItemValidatorBuilder(CollectionElementValidatorBuilder[tuple, int, list]):
     def __init__(self, item: int | list[int] | None, validator: Callable[[Any], bool]):
         super().__init__(validator)
         self._item = item
 
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, tuple)
+        return super().__call__(instance, value)
 
+    def _iter_coll(self, value: tuple) -> Iterable[int]:
         if self._item is None:
             index_seq = range(len(value))
         elif isinstance(self._item, int):
@@ -1057,35 +1136,24 @@ class TupleItemValidatorBuilder(LambdaValidator):
         else:
             index_seq = self._item
 
-        backup = None
-        for index in index_seq:
-            try:
-                if not self.__call_on_index__(index, instance, value):
-                    return False
-            except ValidatorChangeValueRequest as e:
-                if backup is None:
-                    backup = list(value)
-                backup[index] = e.value
+        return index_seq
 
-        if backup is not None:
-            raise ValidatorChangeValueRequest(tuple(backup))
-
-        return True
-
-    def __call_on_index__(self, index: int, instance: Any, value: Any) -> bool:
+    def _check_at(self, instance: Any, value: tuple, index: int) -> bool:
         try:
             element = value[index]
         except IndexError as e:
-            raise ValidatorFailOnIndexError(index, i18n.gettext('out of size %d') % len(value)) from e
+            raise ValidatorFailError(i18n.gettext('out of size %d') % len(value)) from e
 
-        try:
-            return super().__call__(instance, element)
-        except ValidatorChangeValueRequest:
-            raise
-        except ValidatorFailOnIndexError as e:
-            raise ValidatorFailOnIndexError((index, *e.index), e.message) from e
-        except BaseException as e:
-            raise ValidatorFailOnIndexError(index, *e.args) from e
+        return self._check_for(instance, element)
+
+    def _change_at(self, value: tuple, index: int, e: ValidatorChangeValueRequest, backup: list | None) -> list:
+        if backup is None:
+            backup = list(value)
+        backup[index] = e.value
+        return backup
+
+    def _freeze_changed(self, backup: list) -> tuple:
+        return tuple(backup)
 
     def freeze(self) -> Self:
         if isinstance(validator := self._validator, Validator):
@@ -1094,63 +1162,46 @@ class TupleItemValidatorBuilder(LambdaValidator):
         return TupleItemValidatorBuilder(self._item, validator)
 
 
-class DictKeyValidatorBuilder(LambdaValidator):
+class DictKeyValidatorBuilder(CollectionElementValidatorBuilder[dict, str, dict]):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
+        return super().__call__(instance, value)
 
-        backup = None
-        for k in value:
-            try:
-                fail = not super().__call__(instance, k)
-            except ValidatorChangeValueRequest as e:
-                if backup is None:
-                    backup = dict(value)
+    def _iter_coll(self, value: dict) -> Iterable[str]:
+        return value.keys()
 
-                n = str(e.value)
-                if n in backup:
-                    raise ValidatorFailOnIndexError(k, i18n.gettext("duplicated keys: '%s'") % n) from e
+    def _check_at(self, instance: Any, value: dict, index: str) -> bool:
+        return self._check_for(instance, index)
 
-                backup[n] = backup.pop(k)
+    def _change_at(self, value: dict, index: str, e: ValidatorChangeValueRequest, backup: dict | None) -> dict:
+        if backup is None:
+            backup = dict(value)
 
-            except ValidatorFailOnIndexError as e:
-                raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
-            except BaseException as e:
-                raise ValidatorFailOnIndexError(k, *e.args) from e
-            else:
-                if fail:
-                    raise ValidatorFailOnIndexError(k, i18n.gettext('validation failed: %s') % str(value))
+        n = str(e.value)
+        if n in backup:
+            raise ValidatorFailOnIndexError(index, i18n.gettext("duplicated keys: '%s'") % n) from e
 
-        if backup is not None:
-            raise ValidatorChangeValueRequest(backup)
-
-        return True
+        backup[n] = backup.pop(index)
+        return backup
 
 
-class DictItemValidatorBuilder(LambdaValidator):
+class DictItemValidatorBuilder(CollectionElementValidatorBuilder[dict, str, dict]):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
+        return super().__call__(instance, value)
 
-        backup = None
-        for k, element in value.items():
-            try:
-                fail = not super().__call__(instance, element)
-            except ValidatorChangeValueRequest as e:
-                if backup is None:
-                    backup = dict(value)
-                backup[k] = e.value
+    def _iter_coll(self, value: dict) -> Iterable[str]:
+        return value.keys()
 
-            except ValidatorFailOnIndexError as e:
-                raise ValidatorFailOnIndexError((k, *e.index), e.message) from e
-            except BaseException as e:
-                raise ValidatorFailOnIndexError(k, *e.args) from e
-            else:
-                if fail:
-                    raise ValidatorFailOnIndexError(k, i18n.gettext('validation failed: %s') % str(value))
+    def _check_at(self, instance: Any, value: dict, index: str) -> bool:
+        return self._check_for(instance, value[index])
 
-        if backup is not None:
-            raise ValidatorChangeValueRequest(backup)
+    def _change_at(self, value: dict, index: str, e: ValidatorChangeValueRequest, backup: dict | None) -> dict:
+        if backup is None:
+            backup = dict(value)
 
-        return True
+        backup[index] = e.value
+        return backup
 
 
 class OrValidatorBuilder(Validator):
@@ -1181,7 +1232,7 @@ class OrValidatorBuilder(Validator):
                 if len(e.args):
                     coll.append(e.args[0])
 
-        raise ValidatorFailError('; '.join(coll))
+        raise ValidatorFailError(*coll)
 
     def freeze(self) -> Self:
         return cast(Self, OrValidatorBuilder(*self.__validators))

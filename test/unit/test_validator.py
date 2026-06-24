@@ -793,11 +793,11 @@ class TestValidateBuilder(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'at index 3, value out of range [0, 10]: 100')
 
-        # TODO how to handle multiple failure?
         with self.assertRaises(ValueError) as capture:
             opt.a = ('', 1000, '1234', 1)  # validator.str comes first
-        self.assertEqual(capture.exception.args[0],
-                         "at index 2, str length over 2: '1234'")
+        self.assertTupleEqual(capture.exception.args,
+                              ("at index 2, str length over 2: '1234'",
+                               "at index 1, value out of range [0, 10]: 1000"))
 
     # noinspection PyTypeChecker
     def test_tuple_n_element_validating(self):
@@ -908,7 +908,7 @@ class TestValidateBuilder(unittest.TestCase):
         with self.assertRaises(ValueError) as capture:
             opt.a = {'a': '1'}
         self.assertEqual(capture.exception.args[0],
-                         'at key a, not int: 1')
+                         "at key a, not int: '1'")
 
     def test_dict_type(self):
         class Opt:
@@ -1480,8 +1480,8 @@ class TestValidateBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError) as capture:
             opt.a = ('0', '1')
-        self.assertEqual(capture.exception.args[0],
-                         'at index 0, not int: 0')
+        self.assertTupleEqual(capture.exception.args,
+                              ("at index 0, not int: '0'", "at index 1, not int: '1'"))
 
     # noinspection PyUnusedLocal
     def test_tuple_type_but_validator(self):
@@ -1859,6 +1859,7 @@ class TestValidatorDecorator(unittest.TestCase):
         opt.d = {'a': 'x', 'b': 'Y'}
 
         self.assertDictEqual(opt.d, {'a': 'X', 'b': 'Y'})
+
 
 if __name__ == '__main__':
     unittest.main()
