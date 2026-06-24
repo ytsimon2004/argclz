@@ -69,7 +69,7 @@ def validate(*arg: Any) -> Decorator:
 
         for a in arg:
             if a.validator is None:
-                a.validator = v.freeze()
+                a.validator = v
             else:
                 a.validator = validator.all(a.validator, v)
 

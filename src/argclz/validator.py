@@ -5,6 +5,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING
+
 from typing_extensions import Self
 
 if TYPE_CHECKING:
@@ -204,7 +205,11 @@ class LambdaValidator(Validator, Generic[T]):
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return cast(Self, LambdaValidator(validator, self._message))
+        return type(self)(validator, self._message)
+
+
+_int = int
+_str = str
 
 
 @final
@@ -225,11 +230,11 @@ class ValidatorBuilder:
         return FloatValidatorBuilder()
 
     @overload
-    def tuple(self, size: int, element_type: type[T]) -> TupleValidatorBuilder:
+    def tuple(self, size: _int, element_type: type[T]) -> TupleValidatorBuilder:
         pass
 
     @overload
-    def tuple(self, *element_type: int | EllipsisType) -> TupleValidatorBuilder:
+    def tuple(self, *element_type: _int | EllipsisType) -> TupleValidatorBuilder:
         pass
 
     @overload
@@ -305,7 +310,7 @@ class ValidatorBuilder:
         return LambdaValidator(lambda it: it is not None)
 
     def __call__(self, validator: Callable[[Any], bool],
-                 message: str | Callable[[Any], str] | None = None) -> LambdaValidator:
+                 message: _str | Callable[[Any], _str] | None = None) -> LambdaValidator:
         """
         Create a validator with a failure message.
 
@@ -417,7 +422,9 @@ class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
         """Check if string matches a regular expression"""
         if isinstance(r, str):
             r = re.compile(r)
-        self._add(lambda it: r.match(it) is not None, f'str does not match to r"{r.pattern}": "%s"')
+
+        rx: re.Pattern = r
+        self._add(lambda it: rx.match(it) is not None, f'str does not match to r"{r.pattern}": "%s"')
         return self
 
     def starts_with(self, prefix: str) -> StrValidatorBuilder:
@@ -1031,12 +1038,6 @@ class ListItemValidatorBuilder(LambdaValidator):
 
         return True
 
-    def freeze(self) -> Self:
-        if isinstance(validator := self._validator, Validator):
-            validator = validator.freeze()
-
-        return cast(Self, ListItemValidatorBuilder(validator, self._message))
-
 
 class TupleItemValidatorBuilder(LambdaValidator):
     def __init__(self, item: int | list[int] | None, validator: Callable[[Any], bool]):
@@ -1087,7 +1088,7 @@ class TupleItemValidatorBuilder(LambdaValidator):
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return cast(Self, TupleItemValidatorBuilder(self._item, validator))
+        return TupleItemValidatorBuilder(self._item, validator)
 
 
 class DictKeyValidatorBuilder(LambdaValidator):
@@ -1121,12 +1122,6 @@ class DictKeyValidatorBuilder(LambdaValidator):
 
         return True
 
-    def freeze(self) -> Self:
-        if isinstance(validator := self._validator, Validator):
-            validator = validator.freeze()
-
-        return cast(Self, DictKeyValidatorBuilder(validator, self._message))
-
 
 class DictItemValidatorBuilder(LambdaValidator):
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -1153,12 +1148,6 @@ class DictItemValidatorBuilder(LambdaValidator):
             raise ValidatorChangeValueRequest(backup)
 
         return True
-
-    def freeze(self) -> Self:
-        if isinstance(validator := self._validator, Validator):
-            validator = validator.freeze()
-
-        return cast(Self, DictItemValidatorBuilder(validator, self._message))
 
 
 class OrValidatorBuilder(Validator):
