@@ -2040,6 +2040,112 @@ class TestNumpyArrayValidator(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'ndim < 3: (2, 2)')
 
+    def test_shape_slice(self):
+        with self.subTest('slice[:]'):
+            class Opt:
+                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(None, None)))
+
+            opt = Opt()
+            opt.a = np.zeros((2, 0))
+            opt.a = np.zeros((2, 1))
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2,))
+            self.assertEqual(capture.exception.args[0],
+                             'ndim != 2: (2,)')
+
+        with self.subTest('slice[min:]'):
+            class Opt:
+                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(2, None)))
+
+            opt = Opt()
+            opt.a = np.zeros((2, 2))
+            opt.a = np.zeros((2, 3))
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2,))
+            self.assertEqual(capture.exception.args[0],
+                             'ndim != 2: (2,)')
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2, 1))
+            self.assertEqual(capture.exception.args[0],
+                             'shape[1] < 2: (2, 1)')
+
+        with self.subTest('slice[:max]'):
+            class Opt:
+                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(None, 5)))
+
+            opt = Opt()
+            opt.a = np.zeros((2, 3))
+            opt.a = np.zeros((2, 5))
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2,))
+            self.assertEqual(capture.exception.args[0],
+                             'ndim != 2: (2,)')
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2, 7))
+            self.assertEqual(capture.exception.args[0],
+                             'shape[1] > 5: (2, 7)')
+
+        with self.subTest('slice[min:max]'):
+            class Opt:
+                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(2, 5)))
+
+            opt = Opt()
+            opt.a = np.zeros((2, 2))
+            opt.a = np.zeros((2, 5))
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2,))
+            self.assertEqual(capture.exception.args[0],
+                             'ndim != 2: (2,)')
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2, 1))
+            self.assertEqual(capture.exception.args[0],
+                             'shape[1] not in [2, 5]: (2, 1)')
+
+            with self.assertRaises(ValueError) as capture:
+                opt.a = np.zeros((2, 7))
+            self.assertEqual(capture.exception.args[0],
+                             'shape[1] not in [2, 5]: (2, 7)')
+
+    def test_multiple_shapes(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().shapes(
+                (2, 2),
+                (3, 3),
+                (4, 4)
+            ))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2))
+        opt.a = np.zeros((3, 3))
+        opt.a = np.zeros((4, 4))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 1))
+        self.assertEqual(capture.exception.args[0],
+                         'shape[1] != 2: (2, 1)')
+
+    def test_squared_array(self):
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().ndim(2).squared())
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2))
+        opt.a = np.zeros((3, 3))
+        opt.a = np.zeros((4, 4))
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 1))
+        self.assertEqual(capture.exception.args[0],
+                         'not a squared array, which shape (2, 1)')
+
+
 
 if __name__ == '__main__':
     unittest.main()

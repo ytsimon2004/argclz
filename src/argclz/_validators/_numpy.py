@@ -60,6 +60,15 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         self._shape = NumpyArrayShapeOrValidator(validators)
         return self
 
+    # def diagonal(self) -> Self:
+    #     self._add(NumpyDiagonalArrayValidator())
+    #     return self
+
+    def squared(self) -> Self:
+        self._add(lambda it: len(np.unique(it.shape)) == 1,
+                  lambda it: i18n.gettext('not a squared array, which shape %s') % str(it.shape))
+        return self
+
     # noinspection PyOverloads,SpellCheckingInspection
     @overload  # this overload is used to show the actual keyword arguments.
     def binary(self, offset: int = 0, order: Literal['C', 'F'] = 'C') -> Self:
@@ -356,6 +365,37 @@ class NumpyArrayShapeOrValidator(Validator):
 
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, (np.ndarray, np.memmap))
+
+        errors = []
+
         for validator in self._validators:
-            validator._check_shape(value)
-        return True
+            try:
+                validator._check_shape(value)
+            except ValidatorFailError as e:
+                errors.append(e)
+            else:
+                return True
+
+        if len(errors):
+            if len(errors) == 1:
+                raise errors[0]
+            raise ValidatorFailError(*errors)
+
+        raise RuntimeError('unreachable')
+
+# class NumpyDiagonalArrayValidator(Validator):
+#     def __call__(self, instance: Any, value: Any) -> bool:
+#         assert isinstance(value, (np.ndarray, np.memmap))
+#
+#         if value.ndim == 1:
+#             raise ValidatorChangeValueRequest(np.diag(value))
+#
+#         elif value.ndim == 2:
+#             test = value - np.diag(np.diag(value))
+#             if np.count_nonzero(test) != 0:
+#                 raise ValidatorFailError(i18n.gettext('not a diagonal array'))
+#
+#         else:
+#             raise ValidatorFailError(i18n.gettext('"not an 1- or 2-d array"'))
+#
+#         return True
