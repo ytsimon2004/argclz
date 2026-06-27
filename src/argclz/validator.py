@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence, Iterable
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, TypeVar, Generic, final, overload, cast, TYPE_CHECKING, Literal
+
 from typing_extensions import Self
 
 from . import i18n
@@ -367,7 +368,7 @@ class ValidatorBuilder:
 class AbstractTypeValidatorBuilder(Validator, Generic[T]):
     def __init__(self, value_type: type[T] | tuple[type[T], ...] | None = None):
         self._value_type = value_type
-        self._validators: list[LambdaValidator[T]] = []
+        self._validators: list[Validator] = []
         self._allow_none = False
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -410,7 +411,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         # return self._value_type
 
     @overload
-    def _add(self, validator: LambdaValidator[T]) -> None:
+    def _add(self, validator: Validator) -> None:
         pass
 
     @overload
@@ -418,7 +419,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         pass
 
     def _add(self, validator, message=None):
-        if not isinstance(validator, LambdaValidator):
+        if not isinstance(validator, Validator):
             validator = LambdaValidator(validator, message)
         self._validators.append(validator)
 
@@ -739,7 +740,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
 
         :param validator: A callable that validates each item
         """
-        self._add(ListItemValidatorBuilder(validator))
+        self._add(ListItemValidator(validator))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -836,7 +837,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
         :param item: A single index, a list of indices, or None for all indices
         :param validator: The validation callable to apply
         """
-        self._add(TupleItemValidatorBuilder(item, validator))
+        self._add(TupleItemValidator(item, validator))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -878,7 +879,7 @@ class TupleValidatorBuilder(AbstractTypeValidatorBuilder[tuple]):
     def _call_validators(self, instance: Any, value: Any):
         index_errors = []
         for validator in self._validators:
-            if isinstance(validator, TupleItemValidatorBuilder):
+            if isinstance(validator, TupleItemValidator):
                 try:
                     if not validator(instance, value):
                         return False
@@ -972,11 +973,11 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
             return ret
 
     def on_key(self, validator: Callable[[str], bool]) -> Self:
-        self._add(DictKeyValidatorBuilder(validator))
+        self._add(DictKeyValidator(validator))
         return self
 
     def on_value(self, validator: Callable[[T], bool]) -> Self:
-        self._add(DictItemValidatorBuilder(validator))
+        self._add(DictItemValidator(validator))
         return self
 
     def __call__(self, instance: Any, value: Any) -> bool:
@@ -1115,7 +1116,7 @@ class CollectionElementValidatorBuilder(LambdaValidator, Generic[C, K, CC], meta
         return backup
 
 
-class ListItemValidatorBuilder(CollectionElementValidatorBuilder[list, int, list]):
+class ListItemValidator(CollectionElementValidatorBuilder[list, int, list]):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, list)
         return super().__call__(instance, value)
@@ -1133,7 +1134,7 @@ class ListItemValidatorBuilder(CollectionElementValidatorBuilder[list, int, list
         return backup
 
 
-class TupleItemValidatorBuilder(CollectionElementValidatorBuilder[tuple, int, list]):
+class TupleItemValidator(CollectionElementValidatorBuilder[tuple, int, list]):
     def __init__(self, item: int | list[int] | None, validator: Callable[[Any], bool]):
         super().__init__(validator)
         self._item = item
@@ -1173,10 +1174,10 @@ class TupleItemValidatorBuilder(CollectionElementValidatorBuilder[tuple, int, li
         if isinstance(validator := self._validator, Validator):
             validator = validator.freeze()
 
-        return TupleItemValidatorBuilder(self._item, validator)
+        return TupleItemValidator(self._item, validator)
 
 
-class DictKeyValidatorBuilder(CollectionElementValidatorBuilder[dict, str, dict]):
+class DictKeyValidator(CollectionElementValidatorBuilder[dict, str, dict]):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         return super().__call__(instance, value)
@@ -1199,7 +1200,7 @@ class DictKeyValidatorBuilder(CollectionElementValidatorBuilder[dict, str, dict]
         return backup
 
 
-class DictItemValidatorBuilder(CollectionElementValidatorBuilder[dict, str, dict]):
+class DictItemValidator(CollectionElementValidatorBuilder[dict, str, dict]):
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         return super().__call__(instance, value)

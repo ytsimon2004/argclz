@@ -1,17 +1,17 @@
 import functools
 from types import EllipsisType
 from typing import Any, NoReturn, overload, Literal
-from typing_extensions import Self
 
 import numpy as np
+from typing_extensions import Self
 
 from .. import i18n
-from ..validator import AbstractTypeValidatorBuilder, ValidatorChangeValueRequest, ValidatorFailOnTypeError, ValidatorFailError
+from ..validator import AbstractTypeValidatorBuilder, ValidatorChangeValueRequest, ValidatorFailOnTypeError, ValidatorFailError, Validator
 
 
 class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
 
-    def __init__(self, mode: Literal['r+', 'r', None] = None):
+    def __init__(self, mode: Literal['r+', 'r', 'w+', None] = None):
         """
 
         :param mode: memmap mode. It only affects the type caster that is used to read a numpy file from the disk.
@@ -20,7 +20,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         self._auto_casting = False
         self._dtype: np.dtype | None = None
         self._ndim: int | None = None
-        self._shape: tuple[int | str | tuple[str, ...] | list[str] | EllipsisType | None, ...] | None = None
+        self._shape: NumpyArrayShapeValidator | NumpyArrayShapeOrValidator | None = None
         self._mode = mode
         self._binary = None
 
@@ -42,30 +42,22 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         pass
 
     @overload
-    def shape(self, *shape: int | str | tuple[str, ...] | list[str] | EllipsisType | None) -> Self:
+    def shape(self, *shape: int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None) -> Self:
         pass
 
-    def shape(self, *shape: int | str | tuple[str, ...] | list[str] | EllipsisType | None) -> Self:
+    def shape(self, *shape) -> Self:
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
             shape = tuple(shape[0])
 
-        self._shape = shape
+        self._shape = NumpyArrayShapeValidator(shape)
+        return self
 
-        try:
-            i = shape.index(...)
-        except ValueError:
-            pass
-        else:
-            try:
-                shape.index(..., i + 1)
-            except ValueError:
-                pass
-            else:
-                raise ValueError(i18n.gettext('multiple ...: %s') % str(shape))
+    def shapes(self, *shapes: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]) -> Self:
+        validators = []
+        for shape in shapes:
+            validators.append(NumpyArrayShapeValidator(shape))
 
-        if len(shape):
-            self._check_shape(None)
-
+        self._shape = NumpyArrayShapeOrValidator(validators)
         return self
 
     # noinspection PyOverloads,SpellCheckingInspection
@@ -94,42 +86,51 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         ret._auto_casting = self._auto_casting
         ret._dtype = self._dtype
         ret._ndim = self._ndim
-        ret._shape = self._shape
+        ret._shape = self._shape.freeze() if self._shape is not None else None
         ret._binary = dict(self._binary) if self._binary is not None else None
         return ret
 
     # noinspection SpellCheckingInspection
     def type_caster(self):
         if self._binary is None:
-            # TODO allow_pickle?
-            # TODO fix_imports?
-            return functools.partial(np.load, mmap_mode=self._mode)
+            return self._type_caster_npy()
         else:
-            mode = self._mode if self._mode is not None else 'r+'
-            dtype = self._dtype if self._dtype is not None else np.uint8
-            shape = self._fix_shape()
+            return self._type_caster_bin()
 
-            if shape is None:
+    def _type_caster_npy(self):
+        # TODO allow_pickle?
+        # TODO fix_imports?
+        return functools.partial(np.load, mmap_mode=self._mode)
+
+    def _type_caster_bin(self):
+        if self._shape is None:
+            return None
+
+        mode = self._mode if self._mode is not None else 'r+'
+        dtype = self._dtype if self._dtype is not None else np.uint8
+        shape = self._shape.fix_shape()
+
+        if shape is None:
+            return functools.partial(np.memmap, mode=mode, dtype=dtype, shape=shape, **self._binary)
+
+        else:
+            total = 1
+            for length in shape:
+                total *= length
+
+            if total > 0:
                 return functools.partial(np.memmap, mode=mode, dtype=dtype, shape=shape, **self._binary)
-
             else:
-                total = 1
-                for length in shape:
-                    total *= length
+                neg_index = shape.index(-1)
 
-                if total > 0:
-                    return functools.partial(np.memmap, mode=mode, dtype=dtype, shape=shape, **self._binary)
-                else:
-                    neg_index = shape.index(-1)
+                def memmap(file):
+                    ret = np.memmap(file, mode=mode, dtype=dtype, shape=None, **self._binary)
+                    _shape = list(shape)
+                    _total = -total
+                    _shape[neg_index] = ret.size // _total
+                    return ret.reshape(_shape)
 
-                    def memmap(file):
-                        ret = np.memmap(file, mode=mode, dtype=dtype, shape=None, **self._binary)
-                        _shape = list(shape)
-                        _total = -total
-                        _shape[neg_index] = ret.size // _total
-                        return ret.reshape(_shape)
-
-                    return memmap
+                return memmap
 
     def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
@@ -146,14 +147,42 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                 raise ValidatorFailError(i18n.gettext('ndim is not %d, but shape : %s') % (self._ndim, str(value.shape)))
 
         if self._shape is not None:
-            self._check_shape(value)
+            self._shape(instance, value)
 
         return self._call_validators(value, value)
 
-    def _fix_shape(self) -> tuple[int, ...] | None:
+
+class NumpyArrayShapeValidator(Validator):
+    def __init__(self, shape: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]):
+        self._shape = shape
+
+        if shape is not None:  # internal case.
+            try:
+                i = shape.index(...)
+            except ValueError:
+                pass
+            else:
+                try:
+                    shape.index(..., i + 1)
+                except ValueError:
+                    pass
+                else:
+                    raise ValueError(i18n.gettext('multiple ...: %s') % str(shape))
+
+            self._check_shape(None)
+
+    def freeze(self) -> Self:
+        ret = NumpyArrayShapeValidator(None)  # internal case.
+        ret._shape = self._shape
+        return ret
+
+    def __call__(self, instance: Any, value: Any) -> bool:
+        assert isinstance(value, (np.ndarray, np.memmap))
+        self._check_shape(value)
+        return True
+
+    def fix_shape(self) -> tuple[int, ...]:
         shape = self._shape
-        if shape is None:
-            return None
 
         ret = []
         neg_count = 0
@@ -166,35 +195,42 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                         neg_count += 1
                     else:
                         raise ValueError(i18n.gettext('unspecific length at shape[%d]: %s') % (i, str(shape)))
+
                 case int(length):
                     assert length >= 0
                     ret.append(length)
+
                 case tuple(labels) | list(labels):
                     ret.append(len(labels))
+
+                case slice():
+                    raise ValueError(i18n.gettext('unspecific dimension at shape[%d]: %s') % (i, str(shape)))
+
                 case e if e is ...:
                     raise ValueError(i18n.gettext('unspecific dimension at shape[%d]: %s') % (i, str(shape)))
+
                 case _:
                     raise ValueError(i18n.gettext('illegal length expression in shape[%d] : %s') % (i, str(shape[i])))
 
         return tuple(ret)
 
-    def _check_shape(self, arr: np.ndarray | None):
+    def _check_shape(self, value: np.ndarray):
         assert self._shape is not None
-        shape = self._shape
-
-        if len(shape) == 0:
-            if arr is None:
+        if len(self._shape) == 0:
+            if value is None:
                 return
-            if len(arr.shape) != 0:
+
+            if len(value.shape) != 0:
                 raise ValidatorFailError(i18n.gettext('not a scalar'))
 
         else:
             index = (0, 0)
-            arr_shape = None if arr is None else arr.shape
+            arr_shape = None if value is None else value.shape
             while index != (None, None):
-                index = self._check_shape_at(arr_shape, index[0], shape, index[1])
+                index = self._check_shape_at(arr_shape, index[0], self._shape, index[1])
 
-    def _check_shape_at(self, shape: tuple[int] | None, i: int, test: tuple, j: int) -> tuple[int, int] | tuple[None, None]:
+    @classmethod
+    def _check_shape_at(cls, shape: tuple[int] | None, i: int, test: tuple, j: int) -> tuple[int, int] | tuple[None, None]:
         assert j < len(test)
 
         match test[j]:
@@ -203,7 +239,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                     try:
                         shape[i]
                     except IndexError as e:
-                        self._raise_ndim_not_enough(shape, test, e)
+                        cls.raise_ndim_not_enough(shape, test, e)
 
             case int(expect_length):
                 if expect_length < 0:
@@ -213,7 +249,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                     try:
                         actual_length = shape[i]
                     except IndexError as e:
-                        self._raise_ndim_not_enough(shape, test, e)
+                        cls.raise_ndim_not_enough(shape, test, e)
 
                     if actual_length != expect_length:
                         raise ValidatorFailError(i18n.gettext('shape[%d] != %d: %s') % (i, expect_length, str(shape)))
@@ -226,10 +262,39 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                     try:
                         actual_length = shape[i]
                     except IndexError as e:
-                        self._raise_ndim_not_enough(shape, test, e)
+                        cls.raise_ndim_not_enough(shape, test, e)
 
                     if actual_length != len(labels):
                         raise ValidatorFailError(i18n.gettext('shape[%d] != %d: %s') % (i, len(labels), str(shape)))
+
+            case slice() as _slice:
+                if _slice.step is not None and _slice.step != 1:
+                    raise ValueError(i18n.gettext('slice.step should 1: %s') % repr(_slice))
+
+                if shape is not None:
+                    try:
+                        actual_length = shape[i]
+                    except IndexError as e:
+                        cls.raise_ndim_not_enough(shape, test, e)
+
+                    match (_slice.start, _slice.stop):
+                        case (None, None):
+                            pass
+
+                        case (int(start), None) if start >= 0:
+                            if actual_length < start:
+                                raise ValidatorFailError(i18n.gettext('shape[%d] < %d: %s') % (i, start, str(shape)))
+
+                        case (None, int(stop)) if stop >= 0:
+                            if stop < actual_length:
+                                raise ValidatorFailError(i18n.gettext('shape[%d] > %d: %s') % (i, stop, str(shape)))
+
+                        case (int(start), int(stop)) if start <= stop:
+                            if not (start <= actual_length <= stop):
+                                raise ValidatorFailError(i18n.gettext('shape[%d] not in [%d, %d]: %s') % (i, start, stop, str(shape)))
+
+                        case _:
+                            raise ValueError(i18n.gettext('illegal length expression in shape[%d]: %s') % (j, str(test[j])))
 
             case e if e is ...:
                 if shape is not None:
@@ -240,7 +305,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                     i = next_i
 
             case _:
-                raise ValueError(i18n.gettext('illegal length expression in shape[%d] : %s') % (j, str(test[j])))
+                raise ValueError(i18n.gettext('illegal length expression in shape[%d]: %s') % (j, str(test[j])))
 
         if shape is None:
             if j + 1 < len(test):
@@ -257,7 +322,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         raise ValidatorFailError(i18n.gettext('ndim != %d: %s') % (len(test), str(shape)))
 
     @classmethod
-    def _raise_ndim_not_enough(cls, shape: tuple[int], test: tuple[int], e: IndexError) -> NoReturn:
+    def raise_ndim_not_enough(cls, shape: tuple[int], test: tuple[int], e: IndexError) -> NoReturn:
         try:
             test.index(...)
         except ValueError:
@@ -269,3 +334,28 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
             raise ValidatorFailError(i18n.gettext('ndim < %d: %s') % (len(test) - 1, str(shape))) from e
         else:
             raise ValidatorFailError(i18n.gettext('ndim != %d: %s') % (len(test), str(shape))) from e
+
+
+class NumpyArrayShapeOrValidator(Validator):
+    def __init__(self, validators: list[NumpyArrayShapeValidator]):
+        if len(validators) == 0:
+            raise ValueError(i18n.gettext('empty shape allow list'))
+
+        self._validators = validators
+
+    def fix_shape(self) -> tuple[int, ...]:
+        if len(self._validators) == 1:
+            return self._validators[0].fix_shape()
+        else:
+            raise ValueError(i18n.gettext('unspecific shape'))
+
+    def freeze(self) -> Self:
+        return NumpyArrayShapeOrValidator([
+            it.freeze() for it in self._validators
+        ])
+
+    def __call__(self, instance: Any, value: Any) -> bool:
+        assert isinstance(value, (np.ndarray, np.memmap))
+        for validator in self._validators:
+            validator._check_shape(value)
+        return True

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import get_origin, TYPE_CHECKING
 
 from . import i18n
-from .validator import ValidatorBuilder, LambdaValidator, ValidatorFailError, AbstractTypeValidatorBuilder
+from .validator import ValidatorBuilder, Validator, ValidatorFailError, AbstractTypeValidatorBuilder
 
 __all__ = ['validator', 'validate']
 
@@ -79,15 +79,14 @@ def validate(*arg: Any) -> Decorator:
     return _validate_decorator
 
 
-class MethodValidator(LambdaValidator):
+class MethodValidator(Validator):
     def __init__(self, method: Method):
-        super().__init__(self, None)
         self._method = method
 
     def freeze(self) -> Self:
         return MethodValidator(self._method)
 
-    def _call_validator(self, instance: Any, value: Any) -> bool:
+    def __call__(self, instance: Any, value: Any) -> bool:
         try:
             success = self._method(instance, value)
         except BaseException as e:
