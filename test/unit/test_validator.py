@@ -1991,6 +1991,25 @@ class TestNumpyArrayValidator(unittest.TestCase):
     def test_numpy_memmap_with_unbounded_length(self):
         from numpy.testing import assert_array_equal
 
+        arr = np.empty((3, 0, 3), dtype=int)
+
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(arr.dtype).shape((3, None, 3)).binary())
+
+        with tempfile.NamedTemporaryFile('w+', dir='.', suffix='.bin', delete_on_close=False) as tf:
+            with open(tf.name):
+                pass
+
+            opt = parse_args(Opt(), ['-a', tf.name])
+
+            self.assertIsInstance(opt.a, np.memmap)
+            self.assertTupleEqual(opt.a.shape, (3, 0, 3))
+            assert_array_equal(opt.a, arr)
+
+    @unittest.skipIf(sys.version_info < (3, 12), 'delete_on_close added since 3.12')
+    def test_numpy_memmap_with_zero_length(self):
+        from numpy.testing import assert_array_equal
+
         arr = np.empty((3, 3, 3), dtype=int)
 
         class Opt:
@@ -2005,6 +2024,19 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
             self.assertIsInstance(opt.a, np.memmap)
             assert_array_equal(opt.a, arr)
+
+    def test_numpy_casting_array(self):
+        from numpy.testing import assert_array_equal
+
+        arr = np.arange(3, dtype=int)
+
+        class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(int).auto_casting())
+
+        opt = Opt()
+        opt.a = [0, 1, 2]
+        self.assertIsInstance(opt.a, np.ndarray)
+        assert_array_equal(arr, opt.a)
 
     def test_dtype(self):
         class Opt:
@@ -2031,10 +2063,19 @@ class TestNumpyArrayValidator(unittest.TestCase):
             validator.numpy().shape()
             validator.numpy().shape(1)
             validator.numpy().shape(1, 2, 3)
+            validator.numpy().shape(1, slice(5, 10), 3)
+            validator.numpy().shape(1, slice(5, None), 3)
+            validator.numpy().shape(1, slice(None, 10), 3)
+            validator.numpy().shape(1, slice(None, None), 3)
             validator.numpy().shape('TIME', 'DATA')
             validator.numpy().shape('TIME', 'DATA', ...)
+            validator.numpy().shape(None, ('TIME', 'DATA'))  # (N, 2)
             validator.numpy().shape(None, ['TIME', 'DATA'])  # (N, 2)
             validator.numpy().shape('TIME', ..., 'DATA')
+
+        with self.subTest('negative length'):
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(2, -2)
 
         with self.subTest('multiple ...'):
             with self.assertRaises(ValueError):
@@ -2043,6 +2084,18 @@ class TestNumpyArrayValidator(unittest.TestCase):
         with self.subTest('wrong type'):
             with self.assertRaises(ValueError):
                 validator.numpy().shape(1, 2.5)
+
+        with self.subTest('wrong slice'):
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(1, slice(1, 10, 2))
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(1, slice(1, -1))
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(1, slice(10, 2))
+
+        with self.subTest('wrong label type'):
+            with self.assertRaises(ValueError):
+                validator.numpy().shape(1, (1, 2, 3))
 
     def test_shape_fixed(self):
         class Opt:

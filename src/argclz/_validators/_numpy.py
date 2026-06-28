@@ -124,19 +124,25 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
 
         else:
             total = 1
-            for length in shape:
+            neg_index = -1
+            for index, length in enumerate(shape):
+                if length < 0:
+                    neg_index = index
                 total *= length
 
-            if total > 0:
+            if neg_index == -1:
+                assert total >= 0
                 return functools.partial(np.memmap, mode=mode, dtype=dtype, shape=shape, **self._binary)
             else:
-                neg_index = shape.index(-1)
-
+                assert total <= 0
                 def memmap(file):
                     ret = np.memmap(file, mode=mode, dtype=dtype, shape=None, **self._binary)
                     _shape = list(shape)
-                    _total = -total
-                    _shape[neg_index] = ret.size // _total
+                    if total < 0:
+                        _shape[neg_index] = ret.size // -total
+                    else:
+                        _shape[neg_index] = 0
+
                     return ret.reshape(_shape)
 
                 return memmap
@@ -280,30 +286,32 @@ class NumpyArrayShapeValidator(Validator):
                 if _slice.step is not None and _slice.step != 1:
                     raise ValueError(i18n.gettext('slice.step should 1: %s') % repr(_slice))
 
+                actual_length: int | None = None
                 if shape is not None:
                     try:
                         actual_length = shape[i]
+                        assert actual_length is not None
                     except IndexError as e:
                         cls.raise_ndim_not_enough(shape, test, e)
 
-                    match (_slice.start, _slice.stop):
-                        case (None, None):
-                            pass
+                match (_slice.start, _slice.stop):
+                    case (None, None):
+                        pass
 
-                        case (int(start), None) if start >= 0:
-                            if actual_length < start:
-                                raise ValidatorFailError(i18n.gettext('shape[%d] < %d: %s') % (i, start, str(shape)))
+                    case (int(start), None) if start >= 0:
+                        if actual_length is not None and actual_length < start:
+                            raise ValidatorFailError(i18n.gettext('shape[%d] < %d: %s') % (i, start, str(shape)))
 
-                        case (None, int(stop)) if stop >= 0:
-                            if stop < actual_length:
-                                raise ValidatorFailError(i18n.gettext('shape[%d] > %d: %s') % (i, stop, str(shape)))
+                    case (None, int(stop)) if stop >= 0:
+                        if actual_length is not None and stop < actual_length:
+                            raise ValidatorFailError(i18n.gettext('shape[%d] > %d: %s') % (i, stop, str(shape)))
 
-                        case (int(start), int(stop)) if start <= stop:
-                            if not (start <= actual_length <= stop):
-                                raise ValidatorFailError(i18n.gettext('shape[%d] not in [%d, %d]: %s') % (i, start, stop, str(shape)))
+                    case (int(start), int(stop)) if start <= stop:
+                        if actual_length is not None and not (start <= actual_length <= stop):
+                            raise ValidatorFailError(i18n.gettext('shape[%d] not in [%d, %d]: %s') % (i, start, stop, str(shape)))
 
-                        case _:
-                            raise ValueError(i18n.gettext('illegal length expression in shape[%d]: %s') % (j, str(test[j])))
+                    case _:
+                        raise ValueError(i18n.gettext('illegal length expression in shape[%d]: %s') % (j, str(test[j])))
 
             case e if e is ...:
                 if shape is not None:
