@@ -1194,6 +1194,92 @@ class TestValidateBuilder(unittest.TestCase):
         opt.b = None
         opt.c = None
 
+    def test_not(self):
+        class Opt:
+            a: int = argument('-a', validator.not_(validator.int.in_range(None, -1),
+                                                   message='not positive'))
+
+        opt = Opt()
+        opt.a = 0
+        opt.a = 10
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = -1
+        self.assertEqual(capture.exception.args[0],
+                         'not positive')
+
+    def test_not_not(self):
+        class Opt:
+            a: int = argument('-a', validator.not_(
+                validator.not_(validator.int.in_range(None, -1), message='not positive')
+            ))
+
+        opt = Opt()
+        opt.a = -10
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = 10
+        self.assertEqual(capture.exception.args[0],
+                         'validation failed')
+
+    def test_not_triple(self):
+        class Opt:
+            a: int = argument('-a', ~~validator.not_(validator.int.in_range(None, -1), message='not positive'))
+
+        opt = Opt()
+        opt.a = 10
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = -10
+        self.assertEqual(capture.exception.args[0],
+                         'not positive')
+
+    def test_not_oper(self):
+        class Opt:
+            a: int = argument('-a', ~validator.int.in_range(None, -1))
+
+        opt = Opt()
+        opt.a = 0
+        opt.a = 10
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = -1
+        self.assertEqual(capture.exception.args[0],
+                         'validation failed')
+
+    def test_not_not_oper(self):
+        class Opt:
+            a: int = argument('-a', ~~validator.int.in_range(None, -1))
+
+        opt = Opt()
+        opt.a = -10
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = 10
+        self.assertEqual(capture.exception.args[0],
+                         'validation failed')
+
+    def test_not_all(self):
+        class Opt:
+            a: str = argument('-a', validator.not_(
+                validator.str.starts_with('A'),
+                validator.str.starts_with('B'),
+                message='not start from A or B'
+            ))
+
+        opt = Opt()
+        opt.a = 'C'
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = 'A'
+        self.assertEqual(capture.exception.args[0],
+                         'not start from A or B')
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = 'B'
+        self.assertEqual(capture.exception.args[0],
+                         'not start from A or B')
+
     def test_any(self):
         class Opt:
             a: int | str = argument('-a', validator.any(
@@ -2144,7 +2230,6 @@ class TestNumpyArrayValidator(unittest.TestCase):
             opt.a = np.zeros((2, 1))
         self.assertEqual(capture.exception.args[0],
                          'not a squared array, which shape (2, 1)')
-
 
 
 if __name__ == '__main__':

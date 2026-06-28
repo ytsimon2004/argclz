@@ -165,6 +165,17 @@ class Validator:
     def type_caster(self) -> Callable[[str], Any] | None:
         return None
 
+    def __invert__(self) -> Validator:
+        return NotValidatorBuilder(self)
+
+    def __and__(self, validator: Callable[[Any], bool]) -> Validator:
+        """``validator & validator``"""
+        return AndValidatorBuilder([self, validator])
+
+    def __or__(self, validator: Callable[[Any], bool]) -> Validator:
+        """``validator | validator``"""
+        return OrValidatorBuilder([self, validator])
+
 
 class LambdaValidator(Validator, Generic[T]):
     """
@@ -221,14 +232,6 @@ class LambdaValidator(Validator, Generic[T]):
         if callable(message):
             return message(value)
         return str(message)  # fallback
-
-    def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
-        """``validator & validator``"""
-        return AndValidatorBuilder(self) & validator
-
-    def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
-        """``validator | validator``"""
-        return OrValidatorBuilder(self) | validator
 
     def freeze(self) -> Self:
         if isinstance(validator := self._validator, Validator):
@@ -312,20 +315,31 @@ class ValidatorBuilder:
         return PathValidatorBuilder()
 
     @classmethod
-    def all(cls, *validator: Validator | Callable[[T], bool]) -> AndValidatorBuilder:
+    def not_(cls, *validator: Validator | Callable[[T], bool],
+             message: _str | None = None) -> Validator:
+        if len(validator) == 1:
+            if message is None and isinstance(ret := validator[0], NotValidatorBuilder):
+                return ~ret
+
+            return NotValidatorBuilder(validator[0], message)
+        else:
+            return NotValidatorBuilder(OrValidatorBuilder(validator), message)
+
+    @classmethod
+    def all(cls, *validator: Validator | Callable[[T], bool]) -> Validator:
         """
         return a validator that ensure all combined *validator* are satisfied.
         return an always-true validator if *validator* is empty.
         """
-        return AndValidatorBuilder(*validator)
+        return AndValidatorBuilder(validator)
 
     @classmethod
-    def any(cls, *validator: Validator | Callable[[T], bool]) -> OrValidatorBuilder:
+    def any(cls, *validator: Validator | Callable[[T], bool]) -> Validator:
         """
         return a validator that ensure at least one combined validator is satisfied.
         return an always-true validator if *validator* is empty.
         """
-        return OrValidatorBuilder(*validator)
+        return OrValidatorBuilder(validator)
 
     @classmethod
     def optional(cls) -> Validator:
@@ -426,14 +440,6 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
     def optional(self) -> Self:
         self._allow_none = True
         return self
-
-    def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
-        """``validator & validator``"""
-        return AndValidatorBuilder(self) & validator
-
-    def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
-        """``validator | validator``"""
-        return OrValidatorBuilder(self) | validator
 
 
 class StrValidatorBuilder(AbstractTypeValidatorBuilder[str]):
@@ -1219,10 +1225,25 @@ class DictItemValidator(CollectionElementValidatorBuilder[dict, str, dict]):
         return backup
 
 
+class NotValidatorBuilder(LambdaValidator):
+    def _call_validator(self, instance: Any, value: Any) -> bool:
+        try:
+            return not super()._call_validator(instance, value)
+        except ValidatorFailError:
+            return True
+
+    def __invert__(self) -> Validator:
+        validator = self._validator
+        if isinstance(validator, NotValidatorBuilder):
+            return validator
+        else:
+            return NotValidatorBuilder(self)
+
+
 class OrValidatorBuilder(Validator):
-    def __init__(self, *validator: Callable[[Any], bool]):
+    def __init__(self, validators: list[Callable[[Any], bool] | Validator]):
         self.__validators: list[Validator] = []
-        for v in validator:
+        for v in validators:
             if isinstance(v, OrValidatorBuilder):
                 self.__validators.extend([it.freeze() for it in v.__validators])
             elif isinstance(v, Validator):
@@ -1250,12 +1271,12 @@ class OrValidatorBuilder(Validator):
         raise ValidatorFailError(*coll)
 
     def freeze(self) -> Self:
-        return cast(Self, OrValidatorBuilder(*self.__validators))
+        return cast(Self, OrValidatorBuilder(self.__validators))
 
-    def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
-        return AndValidatorBuilder(self, validator)
+    def __and__(self, validator: Callable[[Any], bool]) -> Validator:
+        return AndValidatorBuilder([self, validator])
 
-    def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
+    def __or__(self, validator: Callable[[Any], bool]) -> Validator:
         if isinstance(validator, OrValidatorBuilder):
             self.__validators.extend(validator.__validators)
         elif isinstance(validator, Validator):
@@ -1266,9 +1287,9 @@ class OrValidatorBuilder(Validator):
 
 
 class AndValidatorBuilder(Validator):
-    def __init__(self, *validator: Callable[[Any], bool]):
+    def __init__(self, validators: list[Callable[[Any], bool] | Validator]):
         self.__validators: list[Validator] = []
-        for v in validator:
+        for v in validators:
             if isinstance(v, AndValidatorBuilder):
                 self.__validators.extend([it.freeze() for it in v.__validators])
             elif isinstance(v, Validator):
@@ -1287,9 +1308,9 @@ class AndValidatorBuilder(Validator):
         return True
 
     def freeze(self) -> Self:
-        return cast(Self, AndValidatorBuilder(*self.__validators))
+        return cast(Self, AndValidatorBuilder(self.__validators))
 
-    def __and__(self, validator: Callable[[Any], bool]) -> AndValidatorBuilder:
+    def __and__(self, validator: Callable[[Any], bool]) -> Validator:
         if isinstance(validator, AndValidatorBuilder):
             self.__validators.extend(validator.__validators)
         elif isinstance(validator, Validator):
@@ -1298,8 +1319,8 @@ class AndValidatorBuilder(Validator):
             self.__validators.append(LambdaValidator(validator))
         return self
 
-    def __or__(self, validator: Callable[[Any], bool]) -> OrValidatorBuilder:
-        return OrValidatorBuilder(self, validator)
+    def __or__(self, validator: Callable[[Any], bool]) -> Validator:
+        return OrValidatorBuilder([self, validator])
 
 
 def element_isinstance(e, t) -> bool:
