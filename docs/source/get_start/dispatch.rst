@@ -152,14 +152,30 @@ The following code do the same thing.
    * - **Method**
      - **Description**
    * - :meth:`list_commands() <argclz.dispatch.core.BoundDispatchGroup.list_commands>`
-     - todo
+     - Return the dispatch commands registered in this group. Use it to build help text, or command choices.
    * - :meth:`find_command(command) <argclz.dispatch.core.BoundDispatchGroup.find_command>`
-     - todo
+     - Return the command metadata for a command name or alias, or ``None`` if no command matches.
 
 Validation
 ----------
 
-TODO
+Dispatch arguments are plain function arguments. Use :func:`~argclz.dispatch.validator_for` when command-line
+values should be converted or validated before the dispatch method runs.
+
+.. code-block:: python
+
+    from argclz.dispatch import Dispatch, dispatch, validator_for
+
+    class Main(Dispatch):
+        @dispatch('repeat')
+        @validator_for('count')
+        def repeat(self, count: int, text: str):
+            print(text * count)
+
+    Main().invoke_command('repeat', '3', 'ha')
+
+The annotation on ``count`` tells ``validator_for`` to cast the raw string ``'3'`` into an ``int``. You can also pass
+an explicit caster or validator when the annotation is not enough.
 
 Help Document
 -------------

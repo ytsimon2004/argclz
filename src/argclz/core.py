@@ -571,11 +571,6 @@ def argument(*options: str,
 def argument(*options, **kwargs) -> Any:
     r"""create an argument attribute
 
-    **Usage**
-
-    >>> class Example:
-    ...     a: str = argument('-a')
-
     **Type (caster)**
 
     The parameter ``type`` usually can be inferred via the annotation of target attribute,
@@ -598,10 +593,6 @@ def argument(*options, **kwargs) -> Any:
 
     The parameter ``validator`` has been treated specially when use :attr:`~argclz.validator`, which it
     can put at lastest position of ``options``
-
-    >>> from argclz import argument, validator
-    >>> class Example:
-    ...     a: str = argument('-a', validator.str.match(r'\d+'))
 
     :param options: options strings
     :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
@@ -640,11 +631,6 @@ def pos_argument(option: str,
 def pos_argument(option: str, validator: Callable[[T], bool] | None = None, *, nargs=None, **kwargs) -> Any:
     """create a positional (non-flag) command-line argument attribute.
 
-    **Usage**
-
-    >>> class Example:
-    ...     a: str = pos_argument('A')
-
     shorten for ``argument(metavar=option, nargs=nargs, validator=validator, **kwargs)``
 
     :param option: The name for the positional argument shown in usage messages
@@ -680,11 +666,6 @@ def var_argument(option: str,
 def var_argument(option: str, validator: Callable[[T], bool] | None = None, *, nargs='*', action='extend', **kwargs) -> Any:
     """
     create a variable-length positional argument, suitable for capturing multiple values into a list.
-
-    **Usage**
-
-    >>> class Example:
-    ...     a: list[str] = var_argument('A')
 
     shorten for ``argument(metavar=option, nargs='*', action='extend', validator=validator, **kwargs)`` by default.
 
@@ -752,19 +733,6 @@ def aliased_argument(*options: str, aliases: dict[str, T], **kwargs) -> Any:
     """
     create an argument that supports shorthand aliases for specific constant values.
 
-    **Usage**
-
-    >>> class Example:
-    ...     level: str = aliased_argument(
-    ...         '--level',
-    ...         aliases={
-    ...             '--low': 'low',
-    ...             '--mid': 'middle',
-    ...             '--high': 'high',
-    ...         },
-    ...         choices=('low', 'middle', 'high')
-    ...     )
-
     :param options: options strings
     :param aliases: a dictionary maps options to value.
     :param action: argument action. Please see ``argparse.ArgumentParser.add_argument(action)`` for detailed.
@@ -818,8 +786,8 @@ class argument_group:
     """
     __match_args__ = 'name', 'description', 'exclusive', 'required'
 
-    def __init__(self, name: str = None, description: str = None, *,
-                 exclusive=False, required: bool = False):
+    def __init__(self, name: str | None = None, description: str | None = None, *,
+                 exclusive: bool = False, required: bool = False):
         """
 
         :param name: The name of this group.

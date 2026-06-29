@@ -24,7 +24,7 @@ This is useful for developer-only flags, debugging tools, or deprecated options.
 
     usage: my_script.py [OPTIONS]
 
-    optional arguments:
+    options:
       -h, --help  show this help message and exit
 
     # --debug is not shown

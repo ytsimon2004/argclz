@@ -101,7 +101,7 @@ refer to :class:`~argclz.validator.StrValidatorBuilder`
      - Checks if the string ends with ``suffix``.
    * - :meth:`contains(substring) <argclz.validator.StrValidatorBuilder.contains>`
      - Checks if the string contains the given substring.
-   * - :meth:`is_in(options) <argclz.validator.StrValidatorBuilder.is_in>`
+   * - :meth:`one_of(options) <argclz.validator.StrValidatorBuilder.one_of>`
      - Checks if the string is in the provided collection of allowed options.
 
 

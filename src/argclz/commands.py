@@ -165,12 +165,6 @@ def sub_command_group(title: str = None, description: str = None, *, required: b
     """
     Create a sub-commands group.
 
-    >>> class Example(AbstractParser):
-    ...     command_group = sub_command_group()
-    ...     @command_group('a')
-    ...     class SubCommand(AbstractParser):
-    ...         ...
-
     The type of ``sub_command_group()`` as an instance-attribute is ``Type[AbstractParser]|None``, and
     its value is handled by :func:`~argclz.core.set_options()` when parsing the command-line arguments.
 
@@ -199,12 +193,6 @@ def sub_command_group(title: str = None, description: str = None, *, required: b
     When :meth:`~argclz.core.AbstractParser.main` is invoked and sub command is called,
     the method will return instance of the corresponding sub command and the command group
     (``command_group`` in above example) will be set to the class of the corresponding sub command.
-
-    >>> main = Example()
-    ... ret = main.main(['a'])
-    ... assert isinstance(main, Example)
-    ... assert isinstance(ret, Example.SubCommand)
-    ... assert main.command_group is Example.SubCommand
 
     :param title: group title
     :param description: group description

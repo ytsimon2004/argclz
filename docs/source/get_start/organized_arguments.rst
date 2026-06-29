@@ -53,6 +53,7 @@ Each ``group`` name creates a new labeled section in the ``--help`` output.
 
 There is another way to group arguments by using :class:`~argclz.core.argument_group`.
 
+
 .. code-block:: python
 
     class MyArgs(AbstractParser): # [1]
@@ -95,7 +96,7 @@ There is another way to group arguments by using :class:`~argclz.core.argument_g
 mutually exclusive grouping
 ------------------------------------
 
-Use the ``ex_group=...`` keyword to group arguments into a **mutually exclusive group**,
+Use ``argument_group(exclusive=True)`` to group arguments into a **mutually exclusive group**,
 meaning that only one of the arguments in the group can be specified at a time.
 
 This is useful when two or more options conflict and cannot be used together.
@@ -103,9 +104,10 @@ This is useful when two or more options conflict and cannot be used together.
 .. code-block:: python
 
     class MyArgs(AbstractParser):
+        OUTPUT_GROUP = argument_group(exclusive=True)
 
-        output_json: bool = argument('--json', ex_group='output', help='Output as JSON')
-        output_yaml: bool = argument('--yaml', ex_group='output', help='Output as YAML')
+        output_json: bool = argument('--json', group=OUTPUT_GROUP, help='Output as JSON')
+        output_yaml: bool = argument('--yaml', group=OUTPUT_GROUP, help='Output as YAML')
 
 
 - **run the script with mutually exclusive options**
@@ -120,12 +122,11 @@ This is useful when two or more options conflict and cannot be used together.
     usage: test.py [-h] [--json | --yaml]
     argument --yaml: not allowed with argument --json
 
-**Deprecated** ``ex_group=...`` keyword is deprecated, use ``argument_group(exclusive=True)`` instead.
+The older ``ex_group=...`` keyword is deprecated. Existing code may still use it, but new code should prefer
+``argument_group(exclusive=True)``.
 
 .. code-block:: python
 
     class MyArgs(AbstractParser):
-        OUTPUT_GROUP = argument_group(exclusive=True)
-
-        output_json: bool = argument('--json', group=OUTPUT_GROUP, help='Output as JSON')
-        output_yaml: bool = argument('--yaml', group=OUTPUT_GROUP, help='Output as YAML')
+        output_json: bool = argument('--json', ex_group='output', help='Output as JSON')
+        output_yaml: bool = argument('--yaml', ex_group='output', help='Output as YAML')

@@ -26,6 +26,7 @@ argclz.core
    var_argument
    aliased_argument
    as_argument
+   argument_group
    foreach_arguments
    with_defaults
    set_options

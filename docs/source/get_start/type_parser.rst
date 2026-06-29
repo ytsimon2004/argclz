@@ -180,7 +180,7 @@ With ``complete=True`` it additionally supports unique prefix matching.
 
     class MyArgs(AbstractParser):
 
-        mode: Literal['fast', 'show', 'auto'] = argument('--mode')
+        mode: Literal['fast', 'slow', 'auto'] = argument('--mode')
         # Equivalent to
         mode: str = argument('--mode', type=literal_type(['fast', 'slow', 'auto']))
 
@@ -196,7 +196,7 @@ With prefix completion:
 
 .. code-block:: python
 
-    mode: Literal['fast', 'show', 'auto'] = argument('--mode', type=literal_type(complete=True))
+    mode: Literal['fast', 'slow', 'auto'] = argument('--mode', type=literal_type(complete=True))
     # or
     mode: str = argument('--mode', type=literal_type(['fast', 'slow', 'auto'], complete=True))
     # --mode f  →  "fast"

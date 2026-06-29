@@ -112,7 +112,7 @@ class ValidatorFailError(ValueError):
 class ValidatorFailOnTypeError(ValidatorFailError):
     """
     A special ValidatorFailError that is raised when type validation failure.
-    It is used for :meth:`~argclz.validator.ValidatorBuilder.any()` to exclude some error message.
+    It is used for :meth:`~argclz.validator.ValidatorBuilder.any` to exclude some error message.
     """
 
     def __init__(self, value, expected_type, message: str = None):
@@ -223,7 +223,7 @@ class LambdaValidator(Validator, Generic[T]):
 
         :param validator: callable
         :param message: failure message.
-            It could be a str message that contains one %-formating expression (for example: '%s'),
+            It could be a str message that contains one ``%``-formating expression (for example: ``%s``),
             or a callable ``(T)->str``.
         """
         if validator is None:
@@ -321,7 +321,7 @@ class ValidatorBuilder:
         overloading element_type example:
 
         * ``2``: 2-length tuple
-        * ``2, type`: 2-length type-tuple
+        * ``2, type``: 2-length type-tuple
         * ``type1, type2``: 2-length tuple with type1 at pos 0 and type2 at pos 1.
         * ``type1, None``: 2-length tuple with type1 at pos 0 and any type at pos 1.
         * ``type1, ...``: at-least-1-length tuple with type1 from pos 0 to remaining pos.

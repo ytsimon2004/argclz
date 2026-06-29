@@ -38,14 +38,15 @@ refer to :func:`~argclz.core.argument()`
 1. :class:`~argclz.core.AbstractParser` provides the base class that defines :meth:`~argclz.core.AbstractParser.main()`
    and :meth:`~argclz.core.AbstractParser.run()` methods,
    and manages automatic argument parsing and attribute injection.
-2. When type annotation with ``bool``, the argument automatically becomes a flag, which inferred a storing action (``action='store_true'``),
-   which is used in :meth:`~argparse.ArgumentParser.add_argument()`.
+2. A ``bool`` annotation makes ``--verbose`` behave like a flag. It is ``False`` by default and becomes ``True``
+   when the option appears.
 3. :func:`~argclz.core.argument()` creates a command-line argument bound to this attribute.
-   Its parameters, including user provided and inferred, are passed to :meth:`~argparse.ArgumentParser.add_argument()`.
-4. The ``run()`` method is invoked after arguments are parsed and set on the instance.
+   Common keyword arguments such as ``required``, ``default``, ``metavar`` and ``help`` behave like their
+   ``argparse`` counterparts.
+4. The :meth:`~argclz.core.AbstractParser.run()` method is invoked after arguments are parsed and set on the instance.
    It serves as the main entry point for your script’s logic.
-5. This calls ``.main()``, which first parses command-line arguments
-   and then automatically calls ``.run()`` if parsing succeeds.
+5. This calls :meth:`~argclz.core.AbstractParser.main()`, which first parses command-line arguments
+   and then automatically calls :meth:`~argclz.core.AbstractParser.run()` if parsing succeeds.
 
 - **run the script with -h**
 
@@ -59,13 +60,13 @@ refer to :func:`~argclz.core.argument()`
       -n NAME, --name NAME  Name of the user
       --count COUNT         Number of times to greet
 
-**run the script with**
+- **run the script with**
 
 .. code-block:: bash
 
    $ python my_script.py --name Alice --count 3 --verbose
 
-**output**
+- **output**
 
 .. code-block:: text
 
@@ -93,8 +94,7 @@ refer to :func:`~argclz.core.pos_argument()`
 
     MyArgs().main()
 
-1. This creates a required positional argument. The ``FILENAME`` string is used as the ``metavar``
-   in :meth:`~argparse.ArgumentParser.add_argument()`.
+1. This creates a required positional argument. The ``FILENAME`` string is shown in usage and help output.
 
 - **run the script with -h**
 
@@ -138,9 +138,8 @@ refer to :func:`~argclz.core.var_argument()`
         #      ^^^^^^^^^[1]  ^^^^^^^^^^^^[2]
 
 1. ``list[str]`` tells the parser that it expects multiple values and collects them into a list.
-2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple values.
-   Internally, it sets ``nargs='*'`` and ``action='extend'`` in  :meth:`~argparse.ArgumentParser.add_argument()`
-   to gather values into a list.
+2. :func:`~argclz.core.var_argument()` creates a positional argument that accepts multiple values and stores them
+   in a list.
 
 - **run the script with -h**
 
@@ -179,11 +178,11 @@ Help Document
         DESCRIPTION = 'Process one or more files.'      # [2]
         EPILOG = 'For more information, see our docs.'  # [3]
 
-1. ``USAGE`` overrides the default usage string shown at the top of the help message. You can
+1. :attr:`~argclz.core.AbstractParser.USAGE` overrides the default usage string shown at the top of the help message. You can
    specify a custom format to explain the expected input layout.
-2. ``DESCRIPTION`` sets the introductory description text shown before the list of arguments.
+2. :attr:`~argclz.core.AbstractParser.DESCRIPTION` sets the introductory description text shown before the list of arguments.
    It is displayed in the help output after the usage line.
-3. ``EPILOG`` appears at the end of the help message. It’s useful for additional notes, links,
+3. :attr:`~argclz.core.AbstractParser.EPILOG` appears at the end of the help message. It’s useful for additional notes, links,
    or examples that don't belong in the main description.
 4. ``-h`` help argument is added automatically.
 

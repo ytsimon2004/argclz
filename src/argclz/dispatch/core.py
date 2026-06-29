@@ -388,37 +388,10 @@ class Dispatch:
 
     ``Dispatch`` can find and run target methods by command name or alias.
 
-    **Example**
-
-    >>> from argclz import *
-    ... from argclz.dispatch import Dispatch, dispatch
-    ... class Main(Dispatch):
-    ...     @dispatch('A')
-    ...     def run_a(self): ...
-    ... Main().invoke_command('A') # invoke run_a
-
     **Grouping**
 
-    Dispatch functions can be grouped with a given name.
-
-    Usage case: put commandline related dispatch functions into default group (with a ``None`` name),
-    and put a categories parameter into another group. For Example
-
-    >>> class Main(AbstractParser, Dispatch):
-    ...     mode : Literal['A', 'B'] = argument('--mode')
-    ...     command: str = pos_argument('CMD')
-    ...     @dispatch('A', group='mode') # command A is associated under group mode
-    ...     def get_mode_a(self): ...
-    ...     @dispatch('B', group='mode') # command B is associated under group mode
-    ...     def get_mode_b(self): ...
-    ...     @dispatch('run')
-    ...     def run_command(self):
-    ...         mode = self.invoke_group_command('mode', self.mode)
-    ...     def run(self):
-    ...         self.invoke_command(self.command)
-
-
-    TODO more content
+    Dispatch functions can be grouped with a given name. ``None`` is the default group,
+    and named groups can be used for separate command families.
 
     **Help Doc**
 
@@ -426,31 +399,8 @@ class Dispatch:
     The content of the class attribute ``COMMAND_HELP_DOC`` will be joined in front of the
     epilog text.
 
-    There are
-
-    1. By default, just like above example ``Main`` class, it works as same as below:
-
-        >>> class Main(Dispatch):
-        ...     COMMAND_HELP_DOC = Main.build_command_usages()
-
-        Although the above code has name resolution issue (use ``Main``), you get the meaning.
-
-    2. For static content:
-
-        >>> class Main(Dispatch):
-        ...     COMMAND_HELP_DOC = 'My help text'
-
-        Note that the content will not following the changes of the dispatch commands.
-
-    3. For dynamic content:
-
-        >>> class Main(Dispatch):
-        ...     @classmethod
-        ...     def COMMAND_HELP_DOC(cls):
-        ...         return cls.build_command_usages()
-
-        With this approach, you can use the result of ``build_command_usages`` and add
-        the extra content you like.
+    ``COMMAND_HELP_DOC`` may be ``None`` to use :meth:`build_command_usages`, a static string,
+    or a callable that returns a string.
 
     """
 

@@ -24,7 +24,7 @@ This enables **modular** and **maintainable** CLI definitions.
     class MyOptions(IOOptions, LoggingOptions): # [2]
         # [3]
         input_path = as_argument(IOOptions.input_path).with_options(
-            validator.is_file().is_suffix('.csv'),
+            validator.path.is_file().is_suffix('.csv'),
             required=True,
             help='(required) Input file'
         )
@@ -33,10 +33,10 @@ This enables **modular** and **maintainable** CLI definitions.
         log_level = 'debug'
 
         # [5]
-        other_option = argument(...)
+        cache_dir: str = argument('--cache-dir', default='.cache')
 
 1. reusable options classes, which might be put at different files or modules.
 2. class ``MyOptions`` inherit arguments from ``IOOptions`` and ``LoggingOptions``.
 3. overwrite ``IOOptions.input_path`` by adding a file validator that only accept ``.csv`` suffix, and setting ``required=True``
 4. overwrite ``LoggingOptions.log_level`` by forcing logging level to ``debug``. The corresponding argument is disappeared.
-5. class ``MyOptions`` specific arguments.
+5. add arguments that only belong to ``MyOptions``.

@@ -30,19 +30,7 @@ def dispatch(command: str,
     A decorator that mark a function as a dispatch target function.
 
     Functions decorated in the same dispatch group should have compatible
-    signatures, at least for required parameters. For example:
-
-    **Example**
-
-    >>> class D(Dispatch):
-    ...     @dispatch('A')
-    ...     def function_a(self, a, b, c=None):
-    ...         pass
-    ...     @dispatch('B')
-    ...     def function_b(self, a, b, d=None):
-    ...         pass
-    ...     def run_function(self, a, b):
-    ...         self.invoke_command('A', a, b)
+    signatures, at least for required parameters.
 
     :param command: primary command name
     :param alias: secondary command names
@@ -81,14 +69,6 @@ def validator_for(arg: str, caster: Callable[[str], R], validator: Validator) ->
 def validator_for(arg: str, caster: Callable[[str], R] | None = None, validator: Validator | None = None) -> Decorator:
     """
     A decorator that do the caster and validation on dispatch arguments.
-
-    **Example**
-
-    >>> class D(Dispatch):
-    ...     @dispatch('cmd')
-    ...     @validator_for('a') # indicating to cast 'a' to int from command-line input
-    ...     def run_cmd(self, a: int):
-    ...         assert isinstance(a, int)
 
     **Type (caster)**
 

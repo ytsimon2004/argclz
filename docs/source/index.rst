@@ -31,20 +31,20 @@ Quick Example
 .. code-block:: python
 
     class MyTool(AbstractParser):
-            verbose: bool = argument('-v', '--verbose', help='Enable verbose logging')
-            name:    str  = argument('-n', '--name', required=True, help='User name')
-            count:   int  = argument('-c', '--count', default=1, help='Repeat count (1–5)')
-            mode:    Literal['fast', 'slow'] = argument('--mode', default='fast', help='Operating mode')
-            output:  Path | None = argument('-o', '--output', default=None, help='Output directory')
-            input_file: Path     = pos_argument('INPUT', help='Input file to process')
-            tags:       list[str] = var_argument('TAG', help='Tags to attach')
+        verbose: bool = argument('-v', '--verbose', help='Enable verbose logging')
+        name:    str  = argument('-n', '--name', required=True, help='User name')
+        count:   int  = argument('-c', '--count', default=1, help='Repeat count (1–5)')
+        mode:    Literal['fast', 'slow'] = argument('--mode', default='fast', help='Operating mode')
+        output:  Path | None = argument('-o', '--output', default=None, help='Output directory')
+        input_file: Path     = pos_argument('INPUT', help='Input file to process')
+        tags:       list[str] = var_argument('TAG', help='Tags to attach')
 
-            def run(self):
-                for i in range(self.count):
-                    print(f"Hello {self.name}! ({i + 1}/{self.count})")
+        def run(self):
+            for i in range(self.count):
+                print(f"Hello {self.name}! ({i + 1}/{self.count})")
 
-        if __name__ == '__main__':
-            MyTool().main()
+    if __name__ == '__main__':
+        MyTool().main()
 
 Help output:
 
@@ -91,4 +91,4 @@ API Reference
    api/argclz.commands
    api/argclz.dispatch
    api/argclz.clone
-
+   api/argclz._validators
