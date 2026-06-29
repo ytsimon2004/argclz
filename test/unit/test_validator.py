@@ -2040,11 +2040,24 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
     def test_dtype(self):
         class Opt:
+            a: np.ndarray = argument('-a', validator.numpy().dtype(float))
+
+        opt = Opt()
+        opt.a = np.zeros((2, 2), dtype=float)
+        self.assertEqual(opt.a.dtype, np.float64)
+
+        with self.assertRaises(ValueError) as capture:
+            opt.a = np.zeros((2, 2), dtype=int)
+        self.assertEqual(capture.exception.args[0],
+                         'dtype is not float64, but int64')
+
+    def test_dtype_auto_casting(self):
+        class Opt:
             a: np.ndarray = argument('-a', validator.numpy().dtype(float).auto_casting())
 
         opt = Opt()
         opt.a = np.zeros((2, 2), dtype=int)
-        self.assertEqual(opt.a.dtype, np.int64)
+        self.assertEqual(opt.a.dtype, np.float64)
 
     def test_ndim(self):
         class Opt:

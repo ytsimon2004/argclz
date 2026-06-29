@@ -10,6 +10,13 @@ from ..validator import AbstractTypeValidatorBuilder, ValidatorChangeValueReques
 
 
 class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
+    """Validator builder for :class:`numpy.ndarray` and :class:`numpy.memmap`.
+
+    This validator can check array dtype, number of dimensions, shape, and
+    additional predicates. It can also provide a type caster for ``.npy`` filepath
+    via :func:`numpy.load`, or for raw binary files via :class:`numpy.memmap`
+    when :meth:`binary` is enabled.
+    """
 
     def __init__(self, mode: Literal['r+', 'r', 'w+', None] = None):
         """
@@ -25,15 +32,21 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         self._binary = None
 
     def auto_casting(self, value: bool = True) -> Self:
-        """Allow the validator try to cast input into tuple first."""
+        """Allow non-array inputs to be converted with :func:`numpy.asarray`."""
         self._auto_casting = value
         return self
 
     def dtype(self, t: np.dtype) -> Self:
-        self._dtype = t
+        """Require or use a NumPy dtype.
+
+        The dtype is checked for input arrays and is also used for auto-casting
+        and binary memmap loading.
+        """
+        self._dtype = np.dtype(t)
         return self
 
     def ndim(self, n: int) -> Self:
+        """Require an array to have exactly ``n`` dimensions."""
         self._ndim = n
         return self
 
@@ -46,6 +59,12 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         pass
 
     def shape(self, *shape) -> Self:
+        """Require an array shape pattern.
+
+        Shape elements may be exact lengths, strings or ``None`` as wildcard
+        dimensions, slices as length ranges, label lists/tuples whose length is
+        checked, and ``...`` to match a variable number of dimensions.
+        """
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
             shape = tuple(shape[0])
 
@@ -53,6 +72,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         return self
 
     def shapes(self, *shapes: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]) -> Self:
+        """Allow any one of multiple shape patterns."""
         validators = []
         for shape in shapes:
             validators.append(NumpyArrayShapeValidator(shape))
@@ -65,6 +85,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
     #     return self
 
     def squared(self) -> Self:
+        """Require all dimensions of the array to have the same length."""
         self._add(lambda it: len(np.unique(it.shape)) == 1,
                   lambda it: i18n.gettext('not a squared array, which shape %s') % str(it.shape))
         return self
@@ -101,6 +122,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
 
     # noinspection SpellCheckingInspection
     def type_caster(self):
+        """Return a file-path caster for ``.npy`` or binary arrays."""
         if self._binary is None:
             return self._type_caster_npy()
         else:
@@ -157,6 +179,12 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
             else:
                 raise ValidatorFailOnTypeError(value, np.ndarray)
 
+        if self._dtype is not None and value.dtype != self._dtype:
+            if self._auto_casting:
+                raise ValidatorChangeValueRequest(np.asarray(value, self._dtype))
+            else:
+                raise ValidatorFailError(i18n.gettext('dtype is not %s, but %s') % (str(self._dtype), str(value.dtype)))
+
         if self._ndim is not None:
             if value.ndim != self._ndim:
                 raise ValidatorFailError(i18n.gettext('ndim is not %d, but shape : %s') % (self._ndim, str(value.shape)))
@@ -168,7 +196,18 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
 
 
 class NumpyArrayShapeValidator(Validator):
+    """Validator for one NumPy array shape pattern.
+
+    Shape patterns support exact integer dimensions, wildcard dimensions
+    represented by ``None`` or a string label, length ranges represented by
+    :class:`slice`, label collections whose length is checked, and ``...`` for
+    variable-dimensional matching.
+    """
+
     def __init__(self, shape: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]):
+        """
+        :param shape: shape pattern to validate.
+        """
         self._shape = shape
 
         if shape is not None:  # internal case.
@@ -197,6 +236,11 @@ class NumpyArrayShapeValidator(Validator):
         return True
 
     def fix_shape(self) -> tuple[int, ...]:
+        """Return a concrete shape tuple suitable for :class:`numpy.memmap`.
+
+        Wildcard dimensions are represented as ``-1``. Patterns with ranges or
+        ``...`` cannot be converted and raise :class:`ValueError`.
+        """
         shape = self._shape
 
         ret = []
@@ -340,6 +384,7 @@ class NumpyArrayShapeValidator(Validator):
 
     @classmethod
     def raise_ndim_not_enough(cls, shape: tuple[int], test: tuple[int], e: IndexError) -> NoReturn:
+        """Raise a shape validation error for too few dimensions."""
         try:
             test.index(...)
         except ValueError:
@@ -354,13 +399,19 @@ class NumpyArrayShapeValidator(Validator):
 
 
 class NumpyArrayShapeOrValidator(Validator):
+    """Validator that accepts any one of several shape validators."""
+
     def __init__(self, validators: list[NumpyArrayShapeValidator]):
+        """
+        :param validators: candidate shape validators. At least one is required.
+        """
         if len(validators) == 0:
             raise ValueError(i18n.gettext('empty shape allow list'))
 
         self._validators = validators
 
     def fix_shape(self) -> tuple[int, ...]:
+        """Return the concrete shape when there is exactly one candidate."""
         if len(self._validators) == 1:
             return self._validators[0].fix_shape()
         else:
