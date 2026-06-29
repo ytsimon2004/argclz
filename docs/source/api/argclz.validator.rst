@@ -20,9 +20,14 @@ argclz.validator
    ListValidatorBuilder
    TupleValidatorBuilder
    PathValidatorBuilder
-   ListItemValidatorBuilder
-   TupleItemValidatorBuilder
+   ListItemValidator
+   TupleItemValidator
+   DictKeyValidator
+   DictItemValidator
    OrValidatorBuilder
+   NotValidatorBuilder
    AndValidatorBuilder
    ValidatorFailError
    ValidatorFailOnTypeError
+   ValidatorFailOnIndexError
+   ValidatorChangeValueRequest

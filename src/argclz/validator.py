@@ -17,9 +17,27 @@ if TYPE_CHECKING:
 __all__ = [
     'argument_validating',
     'ValidatorFailError',
+    'ValidatorFailOnTypeError',
     'ValidatorChangeValueRequest',
+    'ValidatorFailOnIndexError',
     'Validator',
     'LambdaValidator',
+    'ValidatorBuilder',
+    'AbstractTypeValidatorBuilder',
+    'StrValidatorBuilder',
+    'IntValidatorBuilder',
+    'FloatValidatorBuilder',
+    'ListValidatorBuilder',
+    'TupleValidatorBuilder',
+    'DictValidatorBuilder',
+    'PathValidatorBuilder',
+    'ListItemValidator',
+    'TupleItemValidator',
+    'DictKeyValidator',
+    'DictItemValidator',
+    'NotValidatorBuilder',
+    'OrValidatorBuilder',
+    'AndValidatorBuilder',
 ]
 
 T = TypeVar('T')

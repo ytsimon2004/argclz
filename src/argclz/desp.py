@@ -1,5 +1,10 @@
 from typing import Protocol
 
+__all__ = [
+    'ArgumentDescriptor',
+    'DefaultArgumentDescriptor'
+]
+
 ARGCLZ_NAMESPACE = '__argclz_namespace__'
 
 
