@@ -140,15 +140,15 @@ class AbstractParser(metaclass=abc.ABCMeta):
     def main(self, args: list[str] | None = None, *,
              parse_only=False,
              system_exit: Type[BaseException] = SystemExit) -> AbstractParser:
-        """parsing the commandline input *args* and call :meth:`~argclz.core.ArgumentParser.run()`.
+        """Parse command-line input and call :meth:`run`.
 
-        :param args: command-line arguments. If omitted, use ``sys.args``.
-        :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
-        :param system_exit: error raised when commandline parsed fail. default raise ``SystemExit``.
+        :param args: command-line arguments. If omitted, use ``sys.argv[1:]``.
+        :param parse_only: parse command-line arguments only, do not raise parsing errors and do not invoke :meth:`~argclz.core.AbstractParser.run`
+        :param system_exit: exception type raised when command-line parsing fails. Defaults to ``SystemExit``.
         :return: parser itself. If it has sub command, return sub parser when used.
         :raise argparse.ArgumentError: error during parser initialization.
         :raise SystemExit: error during parsing. It can be changed by using *system_exit* parameter.
-        :raise: any error during :meth:`AbstractParser.run`, if *parse_only* is ``False``.
+        :raise: any error raised by :meth:`AbstractParser.run`, if *parse_only* is ``False``.
         """
         parser = self.new_parser()
 
@@ -185,8 +185,7 @@ class AbstractParser(metaclass=abc.ABCMeta):
         return pp
 
     def run(self):
-        """called after :meth:`~argclz.core.ArgumentParser.main()`.
-        Used for runs the main execution logic of the object"""
+        """Run parser-specific application logic after :meth:`main` parses arguments."""
         pass
 
 
@@ -383,7 +382,7 @@ class Argument(object):
 
         :param value:
         :param omit_value:
-        :return:
+        :return: a new argument instance with updated defaults.
         """
         if omit_value is missing:
             return self.with_options(
@@ -482,7 +481,7 @@ class Argument(object):
 
         :param options: change option flags
         :param kwargs: change keyword parameters, use `...` to unset parameter
-        :return:
+        :return: a new argument instance with updated option strings or keyword options.
         """
         kw = dict(self._kwargs)  # use original kwargs
         kw['group'] = self._copy_group(self.group)
@@ -785,7 +784,18 @@ def aliased_argument(*options: str, aliases: dict[str, T], **kwargs) -> Any:
 
 
 def as_argument(a) -> Argument:
-    """cast argument attribute as an :class:`~argclz.core.Argument` for type checking framework/IDE."""
+    """Cast an argument instance for type checkers and IDEs.
+
+    Use this when overriding an inherited argument attribute with
+    :meth:`Argument.with_options`, because the class attribute is annotated as
+    the parsed value type rather than as :class:`Argument`.
+
+    >>> class Parent:
+    ...     a: int = argument('-a')
+    ... class Example(Parent):
+    ...     a: int = as_argument(Parent.a).with_options(...)
+    ...     #        ^^^^^^^^^^^^^^^^^^^^^ interpreted as Argument instead of int
+    """
     if isinstance(a, Argument):
         return a
     raise TypeError(i18n.gettext('not an argument'))
@@ -877,7 +887,7 @@ def foreach_arguments(instance: T | Type[T]) -> Iterable[Argument]:
     """iterating all argument attributes in instance.
 
     :param instance: any instance that contains ``argument``.
-    :return:
+    :return: argument instances.
     """
     if isinstance(instance, type):
         clazz = instance
@@ -1188,7 +1198,7 @@ def set_options(instance: T, result: argparse.Namespace) -> T:
     """set argument to ``instance``'s attributes from ``argparse.Namespace`` .
 
     :param instance: any instance that contains ``argument``.
-    :param result:
+    :param result: parsed namespace returned by :meth:`argparse.ArgumentParser.parse_args`.
     :return: *instance* itself.
     """
     for arg in foreach_arguments(instance):
@@ -1249,13 +1259,12 @@ def print_help(instance, file: Literal[None], prog: str | None = None) -> str:
 
 
 def print_help(instance, file: TextIO | None = sys.stdout, prog: str | None = None):
-    """
-    print help document.
+    """Print or return the generated help document.
 
     :param instance: any instance that contains ``argument``.
-    :param file: output stream.
-    :param prog: program name.
-    :return: help document string if ``file`` is ``None``. Otherwise, nothing return.
+    :param file: output stream. Use ``None`` to return the help text as a string.
+    :param prog: program name used in the generated parser.
+    :return: help document string if *file* is ``None``. Otherwise, ``None``.
     """
     buf = None
     if file is None:
@@ -1304,8 +1313,8 @@ def as_dict(instance: T) -> dict[str, Any]:
 
 
 def as_dict(instance):
-    """
-    Collect all argument attributes into a dictionary with attribute name to its value.
+    """Collect all argument attributes into a dictionary.
+
     If *instance* is a list, it works like ``list(map(as_dict, instance))``.
 
     If ``instance`` is an :class:`~argclz.core.AbstractParser` and has sub commands,
@@ -1313,7 +1322,7 @@ def as_dict(instance):
     maps to the corresponding to the class of the sub command.
 
     :param instance: any instance that contains ``argument``.
-    :return: A dictionary mapping argument attribute names to their values
+    :return: a dictionary mapping argument attribute names to their values, or a list of such dictionaries.
     """
     if isinstance(instance, list):
         if len(instance) == 0:
@@ -1350,12 +1359,12 @@ def as_dict(instance):
 
 
 def copy_argument(opt: T, ref, **kwargs) -> T:
-    """copy argument from ``ref`` to ``opt``.
+    """Copy argument values from *ref* to .
 
     :param opt: any instance that contains ``argument``.
-    :param ref: any instance that contains ``argument``.
-    :param kwargs: overwrite argument value mapping.
-    :return: ``opt`` itself.
+    :param ref: any instance that contains ``argument``. ``None`` means only values from ``kwargs`` are copied.
+    :param kwargs: argument values that override values read from ``ref``.
+    :return: *opt* itself.
     """
     shadow = ShadowOption(ref, **kwargs)
 

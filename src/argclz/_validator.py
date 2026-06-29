@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     Decorator: TypeAlias = Callable[[Method], Method]
 
 validator = ValidatorBuilder()
+"""Default fluent validator builder. """
 
 
 def validate(*arg: Any) -> Decorator:
@@ -24,10 +25,12 @@ def validate(*arg: Any) -> Decorator:
     >>> class Opt:
     ...     a: str = argument('-a')
     ...     @validate(a)
-    ...     def check_a(self, value: str): return True
+    ...     def check_a(self, value: str):
+    ...         # validating logic
+    ...         return True # *value* passed the validation
 
-    :param arg:
-    :return:
+    :param arg: one or more :func:`argclz.core.argument` descriptors to validate with the decorated method.
+    :return: decorator that attaches the method as an assignment-time validator.
     """
     import inspect
     from pathlib import Path

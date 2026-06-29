@@ -26,7 +26,13 @@ T = TypeVar('T')
 
 
 def literal_value_type(arg: str) -> bool | int | float | str:
-    """Parse a string into its literal Python value"""
+    """Parse a string into a simple literal value.
+
+    * ``TRUE`` and ``FALSE`` are converted to booleans,
+    * integer strings are converted to :class:`int`,
+    * floating-point strings are converted to :class:`float`, and
+    * all other strings are returned unchanged.
+    """
     if not isinstance(arg, str):
         raise TypeError()
 
@@ -56,7 +62,8 @@ def bool_type(value: str) -> bool:
     ...     value: bool = argument(...) # using ``type=bool_type``.
 
     :param value: the input string to evaluate
-    :return: False for ('-', '0', 'f', 'false', 'n', 'no', 'x'), True for ('', '+', '1', 't', 'true', 'yes', 'y')
+    :return: ``False`` for ``-``, ``0``, ``f``, ``false``, ``n``, ``no``, ``x``, ``off`` and ``disable``;
+        ``True`` for ``+``, ``1``, ``t``, ``true``, ``yes``, ``y``, ``on`` and ``enable``
     :raises ValueError: if the string is not recognized as a boolean
     """
     if not isinstance(value, str):
@@ -74,7 +81,7 @@ def bool_type(value: str) -> bool:
 def tuple_type(*value_type: Type[T] | Callable[[str], T] | EllipsisType, split: str = ','):
     """Create a caster that splits a comma-separated string into a tuple of typed values.
 
-    :param value_type: converter functions for each tuple position; use ``...`` to repeat last
+    :param value_type: converter functions for each tuple position. Put ``...`` last to repeat the previous converter.
     :param split: value splitter
     :return: a function that converts a comma-separated string into a typed tuple
     """
@@ -132,7 +139,7 @@ def list_type(value_type: Type[T] | Callable[[str], T] = str, *, split=',', prep
 
     :param value_type: function to convert each element (default: str)
     :param split: delimiter character (default: ',')
-    :param prepend: list of values to prepend when string starts with '+' + split
+    :param prepend: values to prepend when the input starts with ``+`` or ``+`` (could followed by *split*)
     :return: function that converts a delimited string into a list
     """
     if len(split) != 1:
@@ -164,7 +171,7 @@ def union_type(*t: Callable[[str], T]):
 
     :param t: converter functions to attempt
     :return: function that returns first successful conversion
-    :raises TypeError: if all converters fail
+    :raises ValueError: if all converters fail
     """
     none_type = type(None)
 
@@ -300,10 +307,12 @@ class dict_type:
 
 
 def slice_type(arg: str) -> slice:
-    """Convert a 'start:end' string into a slice object.
+    """Convert a ``start:end`` or ``start:end:step`` string into a slice object.
 
-    :param arg: string in 'start:end' format
-    :return: slice(start, end)
+    Empty fields are converted to ``None``.
+
+    :param arg: string in ``start:end[:step]`` format
+    :return: ``slice(start, end, step)``
     :raises ValueError: if format is invalid or parts are not integers
     """
     start, _, remaining = arg.partition(':')
@@ -318,7 +327,8 @@ def try_int_type(arg: str) -> int | str | None:
     """Attempt to convert a string to int, returning original or None on failure.
 
     :param arg: the input string
-    :return: int if parsing succeeds, original string if fails, or None if empty"""
+    :return: int if parsing succeeds, original string if fails, or None if empty
+    """
     if len(arg) == 0:
         return None
     try:
@@ -331,7 +341,8 @@ def try_float_type(arg: str) -> float | str | None:
     """Attempt to convert a string to float, returning original or None on failure.
 
     :param arg: the input string
-    :return: float if parsing succeeds, original string if fails, or None if empty"""
+    :return: float if parsing succeeds, original string if fails, or None if empty
+    """
     if len(arg) == 0:
         return None
     try:

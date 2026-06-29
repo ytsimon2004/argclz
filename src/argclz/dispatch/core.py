@@ -12,7 +12,10 @@ from argclz import i18n
 
 __all__ = [
     'DispatchCommand',
+    'CommandParameter',
     'DispatchCommandNotFound',
+    'DispatchGroup',
+    'BoundDispatchGroup',
     'dispatch_group',
     'Dispatch',
 ]
@@ -260,14 +263,21 @@ def dispatch_group(group: str) -> DispatchGroup:
 
 
 class CommandParameter(NamedTuple):
+    """Information about one callable parameter in a dispatch command."""
+
     name: str
+    """Parameter name."""
+
     para: inspect.Parameter
+    """parameter information"""
 
     @property
     def is_optional(self) -> bool:
+        """Whether the parameter has a default value."""
         return self.para.default is not inspect.Parameter.empty
 
     def usage(self):
+        """Return the parameter token used by dispatch command help."""
         name = self.name.upper()
 
         is_literal = get_origin(self.para.annotation) is Literal
@@ -295,7 +305,13 @@ class CommandParameter(NamedTuple):
 
 
 class DispatchCommandNotFound(RuntimeError):
+    """Raised when a dispatch command cannot be found."""
+
     def __init__(self, command: str, group: str | DispatchGroup | BoundDispatchGroup | None = None):
+        """
+        :param command: command name or alias that was requested.
+        :param group: dispatch group searched for the command. ``None`` means the default group.
+        """
         if group is None:
             message = f'command {command} not found'
         else:
@@ -368,8 +384,9 @@ class CommandHelps(NamedTuple):
 
 class Dispatch:
     """
-    A :func:`~argclz.dispatch.annotations.dispatch` functions container that
-    it is able to find and run the target function by corresponding name (``command`` here).
+    Container for :func:`~argclz.dispatch.annotations.dispatch` functions.
+
+    ``Dispatch`` can find and run target methods by command name or alias.
 
     **Example**
 
@@ -382,7 +399,7 @@ class Dispatch:
 
     **Grouping**
 
-    Dispatch functions can be grouped with a giving name.
+    Dispatch functions can be grouped with a given name.
 
     Usage case: put commandline related dispatch functions into default group (with a ``None`` name),
     and put a categories parameter into another group. For Example
@@ -390,9 +407,9 @@ class Dispatch:
     >>> class Main(AbstractParser, Dispatch):
     ...     mode : Literal['A', 'B'] = argument('--mode')
     ...     command: str = pos_argument('CMD')
-    ...     @dispatch('A', group='mode')
+    ...     @dispatch('A', group='mode') # command A is associated under group mode
     ...     def get_mode_a(self): ...
-    ...     @dispatch('B', group='mode')
+    ...     @dispatch('B', group='mode') # command B is associated under group mode
     ...     def get_mode_b(self): ...
     ...     @dispatch('run')
     ...     def run_command(self):
@@ -405,8 +422,7 @@ class Dispatch:
 
     **Help Doc**
 
-    Dispatch class can be cooperated with :func:`~argclz.dispatch.core.AbstractPatser`, as
-    well as cooperated with the help text generating.
+    ``Dispatch`` can cooperate with :class:`argclz.core.AbstractParser` help text generation.
     The content of the class attribute ``COMMAND_HELP_DOC`` will be joined in front of the
     epilog text.
 
@@ -443,6 +459,7 @@ class Dispatch:
 
     @classmethod
     def list_groups(cls) -> set[str]:
+        """Return all non-default dispatch group names defined on this class."""
         ret = set()
         for attr in dir(cls):
             attr_value = getattr(cls, attr)

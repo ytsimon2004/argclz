@@ -29,8 +29,8 @@ def dispatch(command: str,
     """
     A decorator that mark a function as a dispatch target function.
 
-    All functions decorated in same dispatch group should have save
-    function signature (at least for non-default parameters). For example:
+    Functions decorated in the same dispatch group should have compatible
+    signatures, at least for required parameters. For example:
 
     **Example**
 
@@ -41,8 +41,8 @@ def dispatch(command: str,
     ...     @dispatch('B')
     ...     def function_b(self, a, b, d=None):
     ...         pass
-    ...     def run_function(self):
-    ...         self.invoke_command(self, 'A', a, b)
+    ...     def run_function(self, a, b):
+    ...         self.invoke_command('A', a, b)
 
     :param command: primary command name
     :param alias: secondary command names
@@ -86,7 +86,7 @@ def validator_for(arg: str, caster: Callable[[str], R] | None = None, validator:
 
     >>> class D(Dispatch):
     ...     @dispatch('cmd')
-    ...     @validator_for('a') # indicating to cast 'a' to int from command parameter
+    ...     @validator_for('a') # indicating to cast 'a' to int from command-line input
     ...     def run_cmd(self, a: int):
     ...         assert isinstance(a, int)
 
@@ -98,6 +98,7 @@ def validator_for(arg: str, caster: Callable[[str], R] | None = None, validator:
     :param arg: name of the parameter.
     :param caster: type caster with the signature ``(str) -> R``.
     :param validator: validator with the signature ``(R) -> bool``.
+    :return: decorator that attaches conversion and validation to a dispatch function parameter.
     :raise RuntimeError: if any parameter is not annotated its type.
     :raise RuntimeWarning: if ``arg`` does not match to any parameter.
     """

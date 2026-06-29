@@ -14,6 +14,14 @@ from . import i18n
 if TYPE_CHECKING:
     from .types import literal_type
 
+__all__ = [
+    'argument_validating',
+    'ValidatorFailError',
+    'ValidatorChangeValueRequest',
+    'Validator',
+    'LambdaValidator',
+]
+
 T = TypeVar('T')
 C = TypeVar('C')  # collection
 K = TypeVar('K')  # collection key
@@ -31,6 +39,7 @@ def argument_validating(instance: Any, value: T, validator: Validator | Callable
     """
     Top level argument value validating function.
 
+    :param instance:
     :param value: input value
     :param validator: validator.
     :return: validated input.
@@ -148,6 +157,13 @@ class ValidatorFailOnIndexError(ValidatorFailError):
 
 
 class Validator:
+    """Base class for validators used by :func:`argclz.core.argument`.
+
+    Subclasses return ``True`` for valid values, return ``False`` for generic
+    validation failure, or raise :class:`ValidatorFailError` for a failure with
+    a specific message.
+    """
+
     def __call__(self, instance: Any, value: Any) -> bool:
         """
 
@@ -163,6 +179,7 @@ class Validator:
         return self
 
     def type_caster(self) -> Callable[[str], Any] | None:
+        """Return a command-line string caster associated with this validator, if any."""
         return None
 
     def __invert__(self) -> Validator:
@@ -246,6 +263,11 @@ _str = str
 
 @final
 class ValidatorBuilder:
+    """Factory for fluent validator builders.
+
+    Users normally access a shared instance as ``argclz.validator``.
+    """
+
     @property
     def str(self) -> StrValidatorBuilder:
         """a str validator"""
@@ -317,6 +339,14 @@ class ValidatorBuilder:
     @classmethod
     def not_(cls, *validator: Validator | Callable[[T], bool],
              message: _str | None = None) -> Validator:
+        """Return a validator that passes when the given validators fail.
+
+        Multiple validators are combined as ``any`` before negation.
+
+        :param validator: validators to negate.
+        :param message: optional failure message used when negation fails.
+        :return: negated validator.
+        """
         if len(validator) == 1:
             if message is None and isinstance(ret := validator[0], NotValidatorBuilder):
                 return ~ret
@@ -350,6 +380,7 @@ class ValidatorBuilder:
 
     @classmethod
     def non_none(cls) -> Validator:
+        """Return a validator that passes when the value is not ``None``."""
         return LambdaValidator(lambda it: it is not None)
 
     def __call__(self, validator: Callable[[Any], bool],
@@ -373,6 +404,10 @@ class ValidatorBuilder:
     if check_import('numpy'):
         @classmethod
         def numpy(cls, mode: Literal['r+', 'r', None] = None):
+            """Return a NumPy array validator when NumPy is installed.
+
+            :param mode: optional memory-map mode used by NumPy-backed loading.
+            """
             from ._validators import _numpy
             return _numpy.NumpyArrayValidator(mode)
 
@@ -380,6 +415,8 @@ class ValidatorBuilder:
 
 
 class AbstractTypeValidatorBuilder(Validator, Generic[T]):
+    """Base class for type-specific fluent validators."""
+
     def __init__(self, value_type: type[T] | tuple[type[T], ...] | None = None):
         self._value_type = value_type
         self._validators: list[Validator] = []
@@ -438,6 +475,7 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
         self._validators.append(validator)
 
     def optional(self) -> Self:
+        """Allow ``None`` to pass validation."""
         self._allow_none = True
         return self
 
@@ -701,7 +739,7 @@ class ListValidatorBuilder(AbstractTypeValidatorBuilder[list[T]]):
         self._auto_casting = False
 
     def allow_empty(self, allow: bool = True) -> Self:
-        """Allow or disallow empty lists"""
+        """Allow or disallow empty lists."""
         self._allow_empty = allow
         return self
 
@@ -931,7 +969,7 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
         return dict_type(self._element_type)
 
     def allow_empty(self, allow: bool = True) -> Self:
-        """Allow or disallow empty lists"""
+        """Allow or disallow empty dictionaries."""
         self._allow_empty = allow
         return self
 
@@ -948,10 +986,10 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
 
         :param keys: a list of str or a :class:`typing.Literal`.
             Use ``None`` to keep previous allowing keyset (to overwrite other settings).
-        :param complete: complete the key
-        :param case_sensitive:
+        :param complete: enable unique prefix completion for keys.
+        :param case_sensitive: match keys case-sensitively.
         :param drop_key: drop the unexpected keys (not in the *keys*)
-        :return:
+        :return: this validator
         """
         from .types import literal_type
 
@@ -979,10 +1017,12 @@ class DictValidatorBuilder(AbstractTypeValidatorBuilder[dict[str, T]]):
             return ret
 
     def on_key(self, validator: Callable[[str], bool]) -> Self:
+        """Apply an additional validator to every key."""
         self._add(DictKeyValidator(validator))
         return self
 
     def on_value(self, validator: Callable[[T], bool]) -> Self:
+        """Apply an additional validator to every value."""
         self._add(DictItemValidator(validator))
         return self
 
@@ -1073,6 +1113,8 @@ class PathValidatorBuilder(AbstractTypeValidatorBuilder[Path]):
 
 
 class CollectionElementValidatorBuilder(LambdaValidator, Generic[C, K, CC], metaclass=abc.ABCMeta):
+    """Base class for validators that apply another validator to collection elements."""
+
     def __call__(self, instance: Any, value: Any) -> bool:
         backup = None
         index_errors = []
@@ -1123,6 +1165,8 @@ class CollectionElementValidatorBuilder(LambdaValidator, Generic[C, K, CC], meta
 
 
 class ListItemValidator(CollectionElementValidatorBuilder[list, int, list]):
+    """Validator that applies another validator to each item in a list."""
+
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, list)
         return super().__call__(instance, value)
@@ -1141,6 +1185,8 @@ class ListItemValidator(CollectionElementValidatorBuilder[list, int, list]):
 
 
 class TupleItemValidator(CollectionElementValidatorBuilder[tuple, int, list]):
+    """Validator that applies another validator to selected tuple items."""
+
     def __init__(self, item: int | list[int] | None, validator: Callable[[Any], bool]):
         super().__init__(validator)
         self._item = item
@@ -1184,6 +1230,8 @@ class TupleItemValidator(CollectionElementValidatorBuilder[tuple, int, list]):
 
 
 class DictKeyValidator(CollectionElementValidatorBuilder[dict, str, dict]):
+    """Validator that applies another validator to each dictionary key."""
+
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         return super().__call__(instance, value)
@@ -1207,6 +1255,8 @@ class DictKeyValidator(CollectionElementValidatorBuilder[dict, str, dict]):
 
 
 class DictItemValidator(CollectionElementValidatorBuilder[dict, str, dict]):
+    """Validator that applies another validator to each dictionary value."""
+
     def __call__(self, instance: Any, value: Any) -> bool:
         assert isinstance(value, dict)
         return super().__call__(instance, value)
@@ -1226,6 +1276,8 @@ class DictItemValidator(CollectionElementValidatorBuilder[dict, str, dict]):
 
 
 class NotValidatorBuilder(LambdaValidator):
+    """Validator that negates another validator."""
+
     def _call_validator(self, instance: Any, value: Any) -> bool:
         try:
             return not super()._call_validator(instance, value)
@@ -1241,6 +1293,8 @@ class NotValidatorBuilder(LambdaValidator):
 
 
 class OrValidatorBuilder(Validator):
+    """Validator that passes when any child validator passes."""
+
     def __init__(self, validators: list[Callable[[Any], bool] | Validator]):
         self.__validators: list[Validator] = []
         for v in validators:
@@ -1287,6 +1341,8 @@ class OrValidatorBuilder(Validator):
 
 
 class AndValidatorBuilder(Validator):
+    """Validator that passes only when all child validators pass."""
+
     def __init__(self, validators: list[Callable[[Any], bool] | Validator]):
         self.__validators: list[Validator] = []
         for v in validators:

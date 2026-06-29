@@ -172,7 +172,7 @@ def sub_command_group(title: str = None, description: str = None, *, required: b
     ...         ...
 
     The type of ``sub_command_group()`` as an instance-attribute is ``Type[AbstractParser]|None``, and
-    its value is handled by :func:`~argclz.core.set_options()` when paring the command-line arguments.
+    its value is handled by :func:`~argclz.core.set_options()` when parsing the command-line arguments.
 
     **Sub command class**
 
@@ -215,7 +215,7 @@ def sub_command_group(title: str = None, description: str = None, *, required: b
 
 
 def get_sub_command_group(instance) -> SubCommandGroup | None:
-    """(internal function)"""
+    """(internal function) Return the sub-command group descriptor defined on ``instance`` or its class."""
     if not isinstance(instance, type):
         instance = type(instance)
 
@@ -257,7 +257,8 @@ def new_command_parser(parsers: dict[str, AbstractParser | Type[AbstractParser]]
     :param parsers: dict of command to :class:`~argclz.core.AbstractParser`.
     :param usage: parser usage
     :param description: parser description
-    :return:
+    :param kwargs: additional keyword arguments passed to :class:`argparse.ArgumentParser`.
+    :return: configured parser with one subparser for each command in ``parsers``.
     """
     ap = ArgumentParser(
         usage=i18n.gettext(usage),
@@ -288,8 +289,8 @@ def parse_command_args(parsers: ArgumentParser | dict[str, AbstractParser | Type
     :param args: List of strings representing the command-line input (e.g. `sys.argv[1:]`). If ``None``, defaults to current process args
     :param usage: Optional usage string to override the auto-generated help
     :param description: Optional description for the main parser
-    :param parse_only: parse command-line arguments only, do not raise error and invoke :meth:`~argclz.core.ArgumentParser.run()`
-    :param system_exit: exit when commandline parsed fail.
+    :param parse_only: parse command-line arguments only, do not raise parsing errors and do not invoke :meth:`~argclz.core.AbstractParser.run`
+    :param system_exit: exception type raised when command-line parsing fails. Defaults to ``SystemExit``.
     :return: parser itself. If it has sub command, return sub parser when used.
     """
     if isinstance(parsers, ArgumentParser):

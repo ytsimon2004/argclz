@@ -12,7 +12,22 @@ __all__ = ['Cloneable']
 
 
 class Cloneable:
+    """Mixin that initializes argument attributes from another object.
+
+    ``Cloneable`` copies matching :func:`argclz.core.argument` attributes from:
+
+    * another parser-like object,
+    * another ``Cloneable`` instance,
+    * a mapping, or
+    * a single-row ``polars.DataFrame`` when Polars is installed.
+    * Keyword arguments override values have the highest priority.
+    """
+
     def __init__(self, ref: ArgumentParser | Cloneable | dict[str, Any] | pl.DataFrame | None = None, /, **kwargs):
+        """
+        :param ref: source object to copy values from. ``None`` means only keyword overrides are used.
+        :param kwargs: values that override or supply copied argument attributes.
+        """
         if ref is not None or len(kwargs):
             _copy_argument(self, ref, kwargs)
 
