@@ -458,24 +458,27 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
     def __init__(self, value_type: type[T] | tuple[type[T], ...] | None = None):
         self._value_type = value_type
         self._validators: list[Validator] = []
-        self._allow_none = False
+        self._allow_none: Literal['accept', 'bypass', 'reject'] = 'reject'
 
     def __call__(self, instance: Any, value: Any) -> bool:
         if self._check_none(value):
             return True
 
         # noinspection PyTypeHints
-        if self._value_type is not None and not isinstance(value, self._value_type):
+        if self._value_type is not None and value is not None and not isinstance(value, self._value_type):
             raise ValidatorFailOnTypeError(value, self._value_type)
 
         return self._call_validators(instance, value)
 
-    def _check_none(self, value):
+    def _check_none(self, value) -> bool:
         if value is None:
-            if self._allow_none:
-                return True
-            else:
-                raise ValidatorFailError(i18n.gettext('None value'))
+            match self._allow_none:
+                case 'accept':
+                    return True
+                case 'bypass':
+                    return False
+                case _:
+                    raise ValidatorFailError(i18n.gettext('None value'))
         return False
 
     def _call_validators(self, instance: Any, value: Any):
@@ -512,9 +515,13 @@ class AbstractTypeValidatorBuilder(Validator, Generic[T]):
             validator = LambdaValidator(validator, message)
         self._validators.append(validator)
 
-    def optional(self) -> Self:
-        """Allow ``None`` to pass validation."""
-        self._allow_none = True
+    def optional(self, *, bypass: bool = False) -> Self:
+        """Allow ``None`` to pass validation.
+
+        :param bypass: allow ``None`` pass to remaining validators.
+        :return: self
+        """
+        self._allow_none = 'bypass' if bypass else 'accept'
         return self
 
 

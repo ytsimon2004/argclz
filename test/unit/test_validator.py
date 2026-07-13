@@ -1680,6 +1680,54 @@ class TestValidatorDecorator(unittest.TestCase):
             opt.a = ''
         self.assertListEqual(callback, ['1', ''])
 
+    def test_any_type_validator(self):
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            def check_a(self, value):
+                return True
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+        self.assertEqual('1', argument_validating(Opt.a, '1'))
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        self.assertEqual(1.23, argument_validating(Opt.a, 1.23))
+        self.assertEqual(True, argument_validating(Opt.a, True))
+        # parameter without type annotation are considered optional
+        self.assertEqual(None, argument_validating(Opt.a, None))
+
+    def test_on_staticmethod(self):
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            @staticmethod
+            def check_a(value: int):
+                return value > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, 0)
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, '123')
+
+    def test_on_classmethod(self):
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            @classmethod
+            def check_a(cls, value: int):
+                return value > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, 0)
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, '123')
+
     def test_validator_error(self):
         callback = []
 
@@ -1702,6 +1750,19 @@ class TestValidatorDecorator(unittest.TestCase):
         self.assertEqual(capture.exception.args[0],
                          'custom fail message')
 
+    def test_validator_warning(self):
+        with self.assertWarns(RuntimeWarning) as capture:
+            class Opt:
+                a: str = argument('-a')
+
+                @validate(a)
+                def check_a(self, value: str | int):
+                    return True
+
+        self.assertEqual(1, len(capture.warnings))
+        self.assertEqual('Unsupported parameter type : str | int',
+                         capture.warnings[0].message.args[0])
+
     def test_not_an_argument(self):
         with self.assertRaises(TypeError) as capture:
             class Opt:
@@ -1723,6 +1784,36 @@ class TestValidatorDecorator(unittest.TestCase):
                     return True
         self.assertEqual(capture.exception.args[0],
                          "the signature of validate method 'check_a' not (self, value)")
+
+    def test_validator_str(self):
+        callback = []
+
+        class Opt:
+            a: str = argument('-a')
+
+            @validate(a)
+            def check_a(zelf, value: str):
+                self.assertIsInstance(value, str)
+                callback.append(value)
+                return len(value) > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = '1'
+        self.assertEqual('1', opt.a)
+        self.assertListEqual(callback, ['1'])
+
+        with self.assertRaises(ValueError):
+            opt.a = ''
+        self.assertEqual('1', opt.a)  # not changed
+        self.assertListEqual(callback, ['1', ''])
+
+        with self.assertRaises(ValueError):
+            opt.a = None
+        self.assertEqual('1', opt.a)  # not changed
+        self.assertListEqual(callback, ['1', ''])  # None value won't pass to chack_a
 
     def test_validator_int(self):
         callback = []
@@ -1797,6 +1888,66 @@ class TestValidatorDecorator(unittest.TestCase):
         opt.a = 'a'
         self.assertEqual(opt.a, Path('a'))
         self.assertListEqual(callback, [Path('a')])
+
+    def test_validator_optional(self):
+        callback = []
+
+        class Opt:
+            a: str | None = argument('-a')
+
+            @validate(a)
+            def check_a(zelf, value: str | None):
+                if value is not None:
+                    self.assertIsInstance(value, str)
+                callback.append(value)
+                return value is None or len(value) > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = '1'
+        self.assertEqual('1', opt.a)
+        self.assertListEqual(callback, ['1'])
+
+        with self.assertRaises(ValueError):
+            opt.a = ''
+        self.assertEqual('1', opt.a)
+        self.assertListEqual(callback, ['1', ''])
+
+        with self.assertRaises(ValueError):
+            opt.a = 1
+        self.assertEqual('1', opt.a)
+        self.assertListEqual(callback, ['1', ''])
+
+        opt.a = None
+        self.assertIsNone(opt.a)
+        self.assertListEqual(callback, ['1', '', None])
+
+    def test_validator_optional_2(self):
+        callback = []
+
+        class Opt:
+            a: str | None = argument('-a', validator.str.optional())
+
+            @validate(a)
+            def check_a(zelf, value: str | None):
+                if value is not None:
+                    self.assertIsInstance(value, str)
+                callback.append(value)
+                return value is None or len(value) > 0
+
+        self.assertIsNotNone(as_argument(Opt.a).validator)
+
+        opt = Opt()
+        self.assertListEqual(callback, [])
+        opt.a = '1'
+        self.assertEqual('1', opt.a)
+        self.assertListEqual(callback, ['1'])
+
+        opt.a = None
+        self.assertIsNone(opt.a)
+        self.assertListEqual(callback, ['1', None])
 
     def test_validator_additional(self):
         class Opt:
