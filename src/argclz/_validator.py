@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import get_origin, TYPE_CHECKING
+import warnings
+from typing import TYPE_CHECKING
 
 from . import i18n
-from .validator import ValidatorBuilder, Validator, ValidatorFailError, AbstractTypeValidatorBuilder
+from .validator import argument_validating, ValidatorBuilder, Validator, ValidatorFailError, AbstractTypeValidatorBuilder
 
-__all__ = ['validator', 'validate']
+__all__ = ['validator', 'validate', 'argument_validating']
 
 if TYPE_CHECKING:
     from typing import Any, TypeAlias, Self

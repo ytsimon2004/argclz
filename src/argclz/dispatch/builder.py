@@ -95,6 +95,6 @@ class TypeCasterWithValidator(Generic[T]):
             result = raw_value  # pyright: ignore[reportAssignmentType]
 
         if self.validator is not None:
-            argument_validating(None, result, self.validator)
+            argument_validating(self.validator, result, None)
 
         return result

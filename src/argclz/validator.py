@@ -13,6 +13,7 @@ from . import i18n
 
 if TYPE_CHECKING:
     from .types import literal_type
+    from .core import Argument
 
 __all__ = [
     'argument_validating',
@@ -53,7 +54,17 @@ def check_import(name: str):
         return None
 
 
-def argument_validating(instance: Any, value: T, validator: Validator | Callable[[T], bool]) -> T:
+@overload
+def argument_validating(validator: Argument | Any, value: T, instance: Any = None) -> T:
+    pass
+
+
+@overload
+def argument_validating(validator: Validator | Callable[[T], bool], value: T, instance: Any = None) -> T:
+    pass
+
+
+def argument_validating(validator, value: T, instance: Any = None) -> T:
     """
     Top level argument value validating function.
 
@@ -63,6 +74,15 @@ def argument_validating(instance: Any, value: T, validator: Validator | Callable
     :return: validated input.
     :raise ValueError: when validation fail.
     """
+    from .core import Argument
+    if isinstance(validator, Argument):
+        arg = validator
+        if (validator := validator.validator) is None:
+            raise RuntimeError(i18n.gettext('NoneType validator for attribute %s') % arg.attr)
+
+    if not (isinstance(validator, Validator) or callable(validator)):
+        raise TypeError(i18n.gettext('Not a callable nor validator'))
+
     try:
         fail = True
 

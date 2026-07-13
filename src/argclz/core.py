@@ -230,7 +230,7 @@ class Argument(object):
 
         if ex_group is not None and group is None:
             # Deprecated parameter
-            warnings.warn('ex_group is deprecated', DeprecationWarning)
+            warnings.warn(i18n.gettext('ex_group is deprecated'), DeprecationWarning)
             group = argument_group(ex_group, exclusive=True)
 
         if (choices := kwargs.get('choices', None)) is not None:
@@ -346,7 +346,7 @@ class Argument(object):
     def __set__(self, instance, value):
         if (validator := self.validator) is not None:
             from .validator import argument_validating
-            value = argument_validating(instance, value, validator)
+            value = argument_validating(validator, value, instance)
 
         self.descriptor.__set_arg__(instance, self.attr, value)
 

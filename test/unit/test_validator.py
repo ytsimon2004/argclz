@@ -1613,6 +1613,50 @@ class TestValidateBuilderOnOtherArgument(unittest.TestCase):
             parse_args(Opt(), ['1', '0'])
 
 
+class TestArgumentValidating(unittest.TestCase):
+    def test_argument_validating(self):
+        class Opt:
+            a: int = pos_argument('A', validator.int.positive(include_zero=False))
+
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, 0)
+
+    def test_validator_not_set(self):
+        class Opt:
+            a: int = pos_argument('A')
+
+        with self.assertRaises(RuntimeError):
+            argument_validating(Opt.a, 1)
+
+    def test_static_validator(self):
+        class Opt:
+            a: int = pos_argument('A')
+
+            @validate(a)
+            @staticmethod
+            def check(value):
+                return value > 0
+
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, 0)
+
+    def test_class_validator(self):
+        class Opt:
+            a: int = pos_argument('A')
+
+            @validate(a)
+            @classmethod
+            def check(cls, value):
+                self.assertIsNone(cls)
+                return value > 0
+
+        self.assertEqual(1, argument_validating(Opt.a, 1))
+        with self.assertRaises(ValueError):
+            argument_validating(Opt.a, 0)
+
+
 class TestValidatorDecorator(unittest.TestCase):
     def test_validator(self):
         callback = []
