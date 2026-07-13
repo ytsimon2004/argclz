@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 from types import EllipsisType
 from typing import Any, NoReturn, overload, Literal
@@ -50,26 +52,15 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
         self._ndim = n
         return self
 
-    @overload
-    def shape(self, shape: tuple[int, ...] | list[int]) -> Self:
-        pass
-
-    @overload
-    def shape(self, *shape: int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None) -> Self:
-        pass
-
-    def shape(self, *shape) -> Self:
+    @property
+    def shape(self) -> NumpyArrayShapeBuilder:
         """Require an array shape pattern.
 
         Shape elements may be exact lengths, strings or ``None`` as wildcard
         dimensions, slices as length ranges, label lists/tuples whose length is
         checked, and ``...`` to match a variable number of dimensions.
         """
-        if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
-            shape = tuple(shape[0])
-
-        self._shape = NumpyArrayShapeValidator(shape)
-        return self
+        return NumpyArrayShapeBuilder(self)
 
     def shapes(self, *shapes: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]) -> Self:
         """Allow any one of multiple shape patterns."""
@@ -157,6 +148,7 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
                 return functools.partial(np.memmap, mode=mode, dtype=dtype, shape=shape, **self._binary)
             else:
                 assert total <= 0
+
                 def memmap(file):
                     ret = np.memmap(file, mode=mode, dtype=dtype, shape=None, **self._binary)
                     _shape = list(shape)
@@ -193,6 +185,59 @@ class NumpyArrayValidator(AbstractTypeValidatorBuilder[np.ndarray]):
             self._shape(instance, value)
 
         return self._call_validators(value, value)
+
+
+class NumpyArrayShapeBuilder:
+    def __init__(self, validator: NumpyArrayValidator):
+        self._validator = validator
+
+    @overload
+    def __call__(self, shape: tuple[int, ...] | list[int]) -> NumpyArrayValidator:
+        pass
+
+    @overload
+    def __call__(self, *shape: int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None) -> NumpyArrayValidator:
+        pass
+
+    def __call__(self, *shape) -> NumpyArrayValidator:
+        """
+        Require an array shape pattern.
+
+        Shape elements may be exact lengths, strings or ``None`` as wildcard
+        dimensions, slices as length ranges, label lists/tuples whose length is
+        checked, and ``...`` to match a variable number of dimensions.
+
+        This method has no difference from :meth:`__getitem__`, except `slice` expression.
+        Use `slice(START, STOP)` in `(...)` instead of `START:STOP` in `[...]`
+        """
+        if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
+            shape = tuple(shape[0])
+
+        self._validator._shape = NumpyArrayShapeValidator(shape)
+        return self._validator
+
+    def __getitem__(self, item: int | str | slice |
+                                tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None]) -> NumpyArrayValidator:
+        """
+        Require an array shape pattern.
+
+        Shape elements may be exact lengths, strings or ``None`` as wildcard
+        dimensions, slices as length ranges, label lists/tuples whose length is
+        checked, and ``...`` to match a variable number of dimensions.
+        """
+        if not isinstance(item, tuple):
+            item = (item,)
+        self._validator._shape = NumpyArrayShapeValidator(item)
+        return self._validator
+
+    def one_of(self, *shapes: tuple[int | str | slice | tuple[str, ...] | list[str] | EllipsisType | None, ...]) -> NumpyArrayValidator:
+        """Allow any one of multiple shape patterns."""
+        validators = []
+        for shape in shapes:
+            validators.append(NumpyArrayShapeValidator(shape))
+
+        self._validator._shape = NumpyArrayShapeOrValidator(validators)
+        return self._validator
 
 
 class NumpyArrayShapeValidator(Validator):

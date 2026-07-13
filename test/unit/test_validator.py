@@ -2110,6 +2110,44 @@ class TestNumpyArrayValidator(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validator.numpy().shape(1, (1, 2, 3))
 
+    def test_shape_declare_getitem(self):
+        with self.subTest('success case'):
+            _ = validator.numpy().shape[1]
+            _ = validator.numpy().shape[1, 2, 3]
+            _ = validator.numpy().shape[1, 5:10, 3]
+            _ = validator.numpy().shape[1, 5:, 3]
+            _ = validator.numpy().shape[1, :10, 3]
+            _ = validator.numpy().shape[1, :, 3]
+            _ = validator.numpy().shape['TIME', 'DATA']
+            _ = validator.numpy().shape['TIME', 'DATA', ...]
+            _ = validator.numpy().shape[None, ('TIME', 'DATA')]  # (N, 2)
+            _ = validator.numpy().shape[None, ['TIME', 'DATA']]  # (N, 2)
+            _ = validator.numpy().shape['TIME', ..., 'DATA']
+
+        with self.subTest('negative length'):
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[2, -2]
+
+        with self.subTest('multiple ...'):
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape['TIME', ..., 'DATA', ...]
+
+        with self.subTest('wrong type'):
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[1, 2.5]
+
+        with self.subTest('wrong slice'):
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[1, 1:10: 2]
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[1, 1:-1]
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[1, 10:2]
+
+        with self.subTest('wrong label type'):
+            with self.assertRaises(ValueError):
+                _ = validator.numpy().shape[1, (1, 2, 3)]
+
     def test_shape_fixed(self):
         class Opt:
             a: np.ndarray = argument('-a', validator.numpy().shape(2, 2))
@@ -2195,7 +2233,7 @@ class TestNumpyArrayValidator(unittest.TestCase):
     def test_shape_slice(self):
         with self.subTest('slice[:]'):
             class Opt:
-                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(None, None)))
+                a: np.ndarray = argument('-a', validator.numpy().shape[2, :])
 
             opt = Opt()
             opt.a = np.zeros((2, 0))
@@ -2208,7 +2246,7 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
         with self.subTest('slice[min:]'):
             class Opt:
-                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(2, None)))
+                a: np.ndarray = argument('-a', validator.numpy().shape[2, 2:])
 
             opt = Opt()
             opt.a = np.zeros((2, 2))
@@ -2226,7 +2264,7 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
         with self.subTest('slice[:max]'):
             class Opt:
-                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(None, 5)))
+                a: np.ndarray = argument('-a', validator.numpy().shape[2, :5])
 
             opt = Opt()
             opt.a = np.zeros((2, 3))
@@ -2244,7 +2282,7 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
         with self.subTest('slice[min:max]'):
             class Opt:
-                a: np.ndarray = argument('-a', validator.numpy().shape(2, slice(2, 5)))
+                a: np.ndarray = argument('-a', validator.numpy().shape[2, 2:5])
 
             opt = Opt()
             opt.a = np.zeros((2, 2))
@@ -2267,7 +2305,7 @@ class TestNumpyArrayValidator(unittest.TestCase):
 
     def test_multiple_shapes(self):
         class Opt:
-            a: np.ndarray = argument('-a', validator.numpy().shapes(
+            a: np.ndarray = argument('-a', validator.numpy().shape.one_of(
                 (2, 2),
                 (3, 3),
                 (4, 4)
